@@ -70,7 +70,8 @@ test("office request actions move into a shared modal opened by the Parts More m
 test("pricing controls pin displayed labor rates and respect read-only Workorders", () => {
   assert.match(laborPrice, /expectedRateVersionId/);
   assert.match(laborPrice, /if \(compact\)/);
-  assert.match(laborPrice, /<ModalFrame[^>]*overlayClassName="workorder-rate-overlay"/);
+  assert.match(laborPrice, /<LaborRatesDialog/);
+  assert.match(source("../LaborRatesDialog.jsx"), /<SetRatesDialog/);
   assert.match(editor, /usageKind="serialized"[^\n]*disabled=\{!partsEditable\}/);
   assert.match(editor, /<LaborPriceCell[^\n]*disabled=\{!laborEditable\}/);
   assert.match(measuredUsage, /usageKind="aggregate"[^\n]*disabled=\{!editable\}/);

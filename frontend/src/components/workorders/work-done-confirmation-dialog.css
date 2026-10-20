@@ -1,0 +1,20 @@
+.work-done-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(16 24 40 / 45%);
+}
+.work-done-confirm-modal { width: min(460px, 100%); max-height: calc(100dvh - 40px); overflow: auto; border-radius: 12px; background: #fff; box-shadow: 0 20px 50px rgb(16 24 40 / 20%); }
+.work-done-confirm-dialog { padding: 24px; outline: none; }
+.work-done-confirm-dialog h2 { margin: 0 0 12px; font-size: 20px; }
+.work-done-confirm-dialog p { color: var(--text-secondary, #475467); line-height: 1.5; }
+.work-done-confirm-dialog [role="alert"] { color: var(--text-error, #b42318); }
+.work-done-confirm-dialog footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+@media (max-width: 480px) {
+  .work-done-confirm-dialog { padding: 20px; }
+  .work-done-confirm-dialog footer > .button { width: 100%; }
+}

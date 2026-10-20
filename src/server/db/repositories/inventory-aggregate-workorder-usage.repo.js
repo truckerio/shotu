@@ -36,7 +36,7 @@ export async function listAggregateWorkorderUsages({
      )
      select usage.id, usage.evidence_id, usage.workorder_id, usage.location_id,
             usage.catalog_part_id, usage.quantity, usage.adjustment_total,
-            usage.uom_code, usage.status, usage.repair_order,
+            usage.uom_code, usage.tracking_mode, usage.status, usage.repair_order,
             catalog.part_number, catalog.description,
             source.source_position_path,
             price.id price_snapshot_id,price.selection price_selection,price.unit_price price_unit_price,price.quantity price_quantity,price.total_price price_total,price.currency price_currency,
@@ -120,6 +120,7 @@ export async function listAggregateWorkorderUsages({
     originalQuantity: Number(row.quantity),
     effectiveQuantity: Number(row.quantity) + Number(row.adjustment_total),
     uomCode: row.uom_code,
+    trackingMode: row.tracking_mode,
     status: row.status,
     repairOrder: row.repair_order,
     partNumber: row.part_number,
@@ -139,6 +140,7 @@ function publicUsage(row) {
     locationId: row.location_id,
     quantity: Number(row.quantity),
     uomCode: row.uom_code,
+    trackingMode: row.tracking_mode,
     status: row.status,
     repairOrder: row.repair_order,
   };
@@ -308,7 +310,31 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
     let movementType = null;
     let movementDelta = 0;
     let eventDelta = 0;
-    if (["reserved", "installed_pending_approval"].includes(usage.status) && input.action === "release") {
+    if (input.action === "install" && usage.tracking_mode !== "quantity") {
+      await client.query("rollback"); return { kind: "unsupported_tracking" };
+    }
+    if (input.action === "install" && usage.status === "reserved") {
+      if (!["accepted", "in_progress", "waiting_office", "parts_requested"].includes(usage.workorder_status)) {
+        await client.query("rollback"); return { kind: "inactive_workorder" };
+      }
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: usage.company_id,
+        workorderId: usage.workorder_id,
+      });
+      await pickAggregateInventoryPositions(client, { companyId: usage.company_id, locationId: usage.location_id,
+        catalogPartId: usage.catalog_part_id, uomCode: usage.uom_code, usageId: usage.id, actorId: input.actorId,
+        workorderId: usage.workorder_id, reason: input.reason || "Quantity part marked installed on workorder" });
+      await pickAggregateCostLayers(client, { companyId: usage.company_id, usageId: usage.id });
+      await client.query(
+        `update workorder_aggregate_part_usages
+         set status='installed_pending_approval', pending_at=now(), updated_at=now()
+         where company_id=$1 and id=$2 and status='reserved'`,
+        [usage.company_id, usage.id],
+      );
+      eventType = "installed_pending_approval";
+    } else if (input.action === "release" && usage.status === "installed_pending_approval" && usage.tracking_mode === "quantity") {
+      await client.query("rollback"); return { kind: "physical_return_required" };
+    } else if (["reserved", "installed_pending_approval"].includes(usage.status) && input.action === "release") {
       await releaseAggregateInventoryPositions(client, { companyId: usage.company_id, usageId: usage.id,
         actorId: input.actorId, workorderId: usage.workorder_id, reason: input.reason });
       await releaseAggregateCostLayers(client, { companyId: usage.company_id, usageId: usage.id });
@@ -387,12 +413,22 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
   finally { client.release(); }
 }
 
-export async function markAggregateUsagesPending(client, { workorderId, companyId, actorId }) {
+export async function markAggregateUsagesPending(client, {
+  workorderId,
+  companyId,
+  actorId,
+  includeQuantity = false,
+}) {
   const rows = await client.query(
     `update workorder_aggregate_part_usages set status='installed_pending_approval', pending_at=now(), updated_at=now()
      where company_id=$1 and workorder_id=$2 and status='reserved'
+       and (
+         tracking_mode='measured_bulk'
+         or tracking_mode is null
+         or ($3::boolean and tracking_mode='quantity')
+       )
      returning id,quantity,location_id,catalog_part_id,uom_code,workorder_id`,
-    [companyId, workorderId],
+    [companyId, workorderId, includeQuantity],
   );
   for (const row of rows.rows) {
     await pickAggregateInventoryPositions(client, { companyId, locationId: row.location_id,
@@ -410,6 +446,7 @@ export async function resetAggregateUsagesForRevision(client, { workorderId, com
     `update workorder_aggregate_part_usages
      set status='reserved', pending_at=null, updated_at=now()
      where company_id=$1 and workorder_id=$2 and status='installed_pending_approval'
+       and (tracking_mode='measured_bulk' or tracking_mode is null)
      returning id`, [companyId, workorderId],
   );
   for (const row of rows.rows) await client.query(
@@ -426,6 +463,11 @@ export async function releaseAggregateUsagesForCancelledWorkorder(client, { work
      where company_id=$1 and workorder_id=$2 and status in ('reserved','installed_pending_approval')
      order by id for update`, [companyId, workorderId],
   );
+  if (usages.rows.some((usage) => usage.status === "installed_pending_approval" && usage.tracking_mode === "quantity")) {
+    const error = new Error("Installed quantity parts require a physical removal or return before cancellation.");
+    error.code = "AGGREGATE_QUANTITY_PHYSICAL_RETURN_REQUIRED";
+    throw error;
+  }
   for (const usage of usages.rows) {
     await releaseAggregateInventoryPositions(client, { companyId, usageId: usage.id, actorId,
       workorderId: usage.workorder_id, reason: reason || "Workorder cancelled" });

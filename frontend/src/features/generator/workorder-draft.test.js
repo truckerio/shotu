@@ -438,3 +438,14 @@ test("no-stock internal cost survives draft serialization without a physical sou
   assert.equal(Object.hasOwn(payload.formData.parts[0], "priceSelection"), false);
   assert.equal(payload.inventoryPositionSelections.length, 0);
 });
+
+test("saved drafts restore configured internal prices and overrides on physical rows", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "office", companyIds: ["company"], locationIds: ["shop"] },
+    form: { locationId: "shop", parts: [{ catalogPartId: "part", partNo: "FILTER", trackingMode: "quantity",
+      sourcePositionId: "bin", qty: "2", uomCode: "ea", priceSelection: "internal_cost", customUnitPrice: "17.25" }] },
+  });
+  const restored = formValuesFromWorkorderDraft(payload, { parts: [] });
+  assert.equal(restored.parts[0].priceSelection, "internal_cost");
+  assert.equal(restored.parts[0].customUnitPrice, "17.25");
+});

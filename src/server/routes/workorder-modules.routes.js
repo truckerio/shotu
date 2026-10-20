@@ -23,10 +23,12 @@ import {
   readWorkorderUnitHistory,
   runWorkorderModuleAction,
   createWorkorderRuntime,
+  createMechanicCustomerIntake,
   workorderCreateContext,
   previewCreateWorkorderPricing,
 } from "../modules/workorders/workorder-module-runtime.service.js";
 import { createWorkorderSchema } from "../modules/workorders/workorder.schemas.js";
+import { handleWorkorderWorkLogApi } from "./workorder-work-log.routes.js";
 
 const missingInfoSchema = z.object({
   note: z.string().trim().min(1).max(1000),
@@ -68,6 +70,7 @@ function unitHistoryRoute(pathname) {
 
 export async function handleWorkorderModulesApi(req, res, url, helpers, dependencies = {}) {
   const { sendJson, readBody, requestContext } = helpers;
+  if (await handleWorkorderWorkLogApi(req, res, url, helpers, dependencies.workLog || dependencies)) return true;
   if (req.method === "POST" && url.pathname === "/api/workorders/create-pricing-preview") {
     const rawInput = await readBody(req);
     const input = validated(createWorkorderSchema, { ...rawInput, concern: rawInput.concern || "Pricing preview" });
@@ -77,6 +80,13 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
   if (req.method === "GET" && url.pathname === "/api/workorders/create-context") {
     const loadCreateContext = dependencies.createContext || workorderCreateContext;
     sendJson(res, 200, await loadCreateContext(requestContext));
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/api/workorders/customer-intake") {
+    const rawInput = await readBody(req);
+    const input = validated(createWorkorderSchema, rawInput);
+    const draft = await (dependencies.createCustomerIntake || createMechanicCustomerIntake)(requestContext, input, rawInput);
+    sendJson(res, 201, { draft });
     return true;
   }
   if (req.method === "POST" && url.pathname === "/api/workorders") {

@@ -472,3 +472,29 @@ body:has(.auth-shell) {
 @media (prefers-reduced-motion: reduce) {
   .auth-loading { animation-duration: 1400ms; }
 }
+
+/* The sign-in form remains the foreground while lazy workspace code resolves. */
+.auth-entry-workspace {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  outline: none;
+  width: 100%;
+}
+.auth-entry:not([data-phase="complete"]) > .auth-entry-workspace {
+  inset: 0;
+  overflow: hidden;
+  position: fixed;
+  visibility: hidden;
+}
+.auth-entry[data-phase="revealing"] > .auth-entry-login {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 1000;
+  background: var(--workspace-background);
+}
+.auth-entry[data-phase="revealing"] > .auth-entry-workspace {
+  opacity: 0;
+  visibility: visible;
+  z-index: 1001;
+}

@@ -21,10 +21,15 @@ test("document locale effect does not return the locale string as a React cleanu
   assert.doesNotMatch(router, /useEffect\(\(\) => setDocumentLocale\(/);
 });
 
-test("mechanic home and detail share the locale selector and static dictionary owner", () => {
-  assert.match(home, /<LocaleSelector/);
+test("mechanic profile owns the locale selector across workspace routes", () => {
+  const profile = readSource("../components/account/ProfileMenu.jsx");
+  const outlet = readSource("../app/routes/RoleWorkspaceOutlet.jsx");
+  assert.match(profile, /actor\?\.role === "mechanic" && interfacePreferences/);
+  assert.match(profile, /<LocaleSelector/);
+  assert.match(outlet, /InterfacePreferencesContext.Provider value=\{props.interfacePreferences\}/);
+  assert.doesNotMatch(home, /LocaleSelector/);
   assert.match(home, /interfaceText\(locale, key\)/);
-  assert.match(detail, /<LocaleSelector/);
+  assert.doesNotMatch(detail, /LocaleSelector/);
   assert.match(detail, /localizedMechanicHelpActions\(locale\)/);
   assert.match(detail, /interfaceText\(locale, "mechanic\.myWork"\)/);
   assert.match(detail, /activeWorkorder\.workorder\.serial \|\| t\("detail\.workorder"\)/);

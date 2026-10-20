@@ -1,3 +1,4 @@
+import { canViewWorkorderPrices } from "../../../../shared/workorder-pricing-access.js";
 import { WORKORDER_ACCESS_MODES } from "../../../../shared/workorder-modules.js";
 
 const FORM_KEYS = Object.freeze({
@@ -122,7 +123,7 @@ function moduleData(detail, moduleKey, { viewerRole = null, canReadCustomerFinan
     case "diagnosisRepair": return {
       ...pick(workorder, ["diagnosis", "workPerformed"]),
       formData: formSlice(workorder, moduleKey),
-      ...(["office", "admin"].includes(viewerRole) ? {
+      ...(canViewWorkorderPrices(viewerRole) ? {
         laborPrice: detail.laborPrice || null,
         currentLaborRates: detail.currentLaborRates || {},
       } : {}),
@@ -135,7 +136,7 @@ function moduleData(detail, moduleKey, { viewerRole = null, canReadCustomerFinan
       })),
     };
     case "parts": {
-      const canReadFinancials = ["office", "admin"].includes(viewerRole);
+      const canReadFinancials = canViewWorkorderPrices(viewerRole);
       const withoutPrice = (entry) => {
         if (canReadFinancials) return entry;
         const { price: _price, costAllocations: _costAllocations, ...safe } = entry || {};
@@ -155,7 +156,8 @@ function moduleData(detail, moduleKey, { viewerRole = null, canReadCustomerFinan
       };
     }
     case "chat": return { messages: detail.messages || [] };
-    case "activity": return { timeline: detail.timeline || [] };
+    case "activity": return { timeline: (detail.timeline || []).filter((event) =>
+      canViewWorkorderPrices(viewerRole) || !String(event.field_key || "").startsWith("pricing.")) };
     case "preview": return { available: true };
     case "completion": return pick(workorder, [
       "mechanicDoneAt", "closedAt", "approvedByUserId", "approvedByName", "approvedBy",
@@ -231,7 +233,7 @@ export function projectProtectedWorkorderDetail(detail, moduleDecisions, options
   if (detail.policy) output.policy = {
     mechanicCanRecordParts: detail.policy.mechanicCanRecordParts === true,
   };
-  if (["office", "admin"].includes(viewerRole)
+  if (canViewWorkorderPrices(viewerRole)
     && output.modules.parts && output.modules.diagnosisRepair
     && detail.workorderPricing) {
     output.workorderPricing = detail.workorderPricing;

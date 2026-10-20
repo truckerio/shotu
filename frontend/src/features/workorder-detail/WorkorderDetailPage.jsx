@@ -9,8 +9,8 @@ import { localizedMechanicHelpActions } from "../../components/workorders/mechan
 import { ChatThread } from "../../components/workorders/ChatThread.jsx";
 import { WorkorderToolsPanel } from "../../components/workorders/WorkorderToolsPanel.jsx";
 import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
-import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { WorkDoneButton } from "../../components/workorders/WorkDoneButton.jsx";
+import { WorkDoneConfirmationDialog } from "../../components/workorders/WorkDoneConfirmationDialog.jsx";
 import { ApproveButton } from "../../components/workorders/ApproveButton.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
@@ -19,9 +19,9 @@ import { BrowserPrintDocument, Field, PrintModal } from "../generator/GeneratorU
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
 import { mainWorkorderSections, requestedWorkorderTool } from "./workorder-tools-model.js";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
-import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { interfaceText, localizedUnitType } from "../../i18n/index.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
+import { MechanicProgressStatus } from "../mechanic/progress/MechanicProgressStatus.jsx";
 import {
   buildCompactPhoneDetailSections,
   coerceAllowedDetailSection,
@@ -42,6 +42,9 @@ import {
   WORKORDER_MODULE_IDS,
   WORKORDER_SURFACES,
 } from "../workorder-modules/workorder-module-registry.js";
+import { WorkorderActivityStatus } from "./WorkorderActivityStatus.jsx";
+import { useWorkorderWorkLog } from "./useWorkorderWorkLog.js";
+import "./workorder-work-log.css";
 
 function MechanicActionMessage({ action, validationActive = false }) {
   if (!action?.message || (action.validationField && !validationActive)) return null;
@@ -103,8 +106,6 @@ export function WorkorderDetailPage({
   isOfficeDetail,
   isPhone,
   locale = "en",
-  localeError = "",
-  localeReady = true,
   mapsConfig,
   mechanicAction,
   mechanicAsset,
@@ -126,6 +127,7 @@ export function WorkorderDetailPage({
   policyOverrides,
   printState,
   primaryActionLabel,
+  request,
   range,
   selectedVehicle,
   showEmbeddedPreview,
@@ -140,7 +142,6 @@ export function WorkorderDetailPage({
   printRevisedCopy,
   openOfficeCancel,
   openOfficeReturn,
-  onLocaleChange,
   reloadActiveWorkorder,
   returnToRoleWorkspace,
   saveActiveUsedParts,
@@ -173,13 +174,25 @@ export function WorkorderDetailPage({
 }) {
   const viewport = useVisualViewport();
   const onePageDetail = isOfficeDetail || isMechanicDetail;
+  const workLog = useWorkorderWorkLog({
+    request,
+    syncToken: activeWorkorder.workorder.updatedAt || activeWorkorder.workorder.updated_at || "",
+    workorderId: activeWorkorder.workorder.id,
+  });
+  useEffect(() => {
+    if (!isOfficeDetail || officeDetailState.busy || officeDetailState.error || !officeDetailState.message) return;
+    const feedback = officeDetailState;
+    const timer = setTimeout(() => {
+      setOfficeDetailState((current) => current === feedback ? { ...current, message: "" } : current);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isOfficeDetail, activeWorkorder.workorder.id, officeDetailState, setOfficeDetailState]);
+
   const [officeToolsOpen, setOfficeToolsOpen] = useState(false);
   const [officeToolView, setOfficeToolView] = useState("chat");
-  const openOfficeTool = (view) => { setOfficeToolView(view); setOfficeToolsOpen(true); };
   useEffect(() => {
     if (!onePageDetail) return;
-    const requestedTool = isMechanicDetail && detailSection === "photos"
-      ? "photos" : requestedWorkorderTool(detailSection);
+    const requestedTool = requestedWorkorderTool(detailSection);
     if (requestedTool) {
       setOfficeToolView(requestedTool);
       setOfficeToolsOpen(true);
@@ -297,12 +310,17 @@ export function WorkorderDetailPage({
     if (!await serializedRepairFlushRef.current()) return false;
     return action();
   }
-  const markWorkDone = () => runAfterSerializedRepairFlush(isOfficeDetail
-    ? markOfficeWorkorderDone
-    : () => {
-      setOfficeToolsOpen(false);
-      setMechanicFinish({ open: true, name: "", message: "" });
-    });
+  const markWorkDone = () => {
+    setOfficeToolsOpen(false);
+    setMechanicFinish({ open: true, name: "", message: "" });
+  };
+  async function confirmWorkDone() {
+    const finished = await runAfterSerializedRepairFlush(isOfficeDetail
+      ? () => markOfficeWorkorderDone({ confirmPartsInstalled: true })
+      : () => submitMechanicFinish(undefined, { confirmPartsInstalled: true }));
+    if (finished) setMechanicFinish({ open: false, name: "", message: "" });
+    return finished;
+  }
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
   const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
 
@@ -432,7 +450,7 @@ export function WorkorderDetailPage({
             vehicleModelText={vehicleModelText}
             acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
             openMechanicFinish={markWorkDone}
-            markOfficeWorkorderDone={() => runAfterSerializedRepairFlush(markOfficeWorkorderDone)}
+            markOfficeWorkorderDone={markWorkDone}
             openOfficeClose={() => {
               setOfficeToolsOpen(false);
               setOfficeDetailState((current) => ({ ...current, message: "" }));
@@ -462,12 +480,11 @@ export function WorkorderDetailPage({
         <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); printWorkorders(); }}>{primaryActionLabel}</Button>
       </div>,
     }] : []),
-    ...[...(isMechanicDetail ? ["photos"] : []), "activity", "completion", "odoo"].flatMap((id) => {
+    ...["activity", "completion", "odoo"].flatMap((id) => {
       const section = visibleDetailSections.find((entry) => entry.id === id);
       return section ? [{ id, label: isMechanicDetail ? section.label : id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
     }),
   ];
-  const documentActionLabel = detailStatus === "mechanic_done" ? "Review invoice" : "View estimate";
 
   return (
     <main
@@ -492,15 +509,15 @@ export function WorkorderDetailPage({
             ? activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || t("detail.workorder")
             : t("detail.workorder"),
           subtitle: activeWorkorder.workorder.serial,
-          status: <WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />,
+          status: <>
+              {isMechanicDetail && mechanicProgress && (
+                (concernPolicy.canWrite && activeWorkorder.allowedActions?.saveConcern)
+                || (diagnosisRepairPolicy.canWrite && activeWorkorder.allowedActions?.saveNotes)
+              ) ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={t} iconOnly /> : null}
+              <WorkorderActivityStatus controller={workLog} lifecycleStatus={detailStatus} lifecycleLabel={currentStatusLabel} />
+            </>,
           actions: (
             <>
-              {isMechanicDetail ? (
-                <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} compact />
-              ) : null}
-              {canReadCustomerDocuments ? (
-                <Button variant="secondary" type="button" onClick={() => openOfficeTool("customer-documents")}>{documentActionLabel}</Button>
-              ) : null}
               {isOfficeDetail && concernPolicy.canWrite && activeWorkorder.allowedActions?.update ? (
                 <button
                   className="detail-save-button"
@@ -514,17 +531,7 @@ export function WorkorderDetailPage({
                 </button>
               ) : null}
               {isOfficeDetail && !officeDetailState.error && officeDetailState.message ? (
-                <span className="sr-only" role="status">{officeDetailState.message}</span>
-              ) : null}
-              {isOfficeDetail && completionPolicy.canWrite && activeWorkorder.allowedActions?.approve ? (
-                <ApproveButton
-                  className="detail-close-workorder-button"
-                  type="button"
-                  onClick={() => openOfficeTool("completion")}
-                  busy={officeDetailState.busy}
-                  aria-label="Approve workorder"
-                  title="Approve workorder"
-                />
+                <span className="detail-action-feedback" role="status">{officeDetailState.message}</span>
               ) : null}
               {isMechanicDetail && assignmentPolicy.canWrite && activeWorkorder.allowedActions?.accept ? (
                 <button
@@ -538,8 +545,7 @@ export function WorkorderDetailPage({
                   <span>{mechanicAction.busy === "accept" ? t("detail.accepting") : t("detail.acceptWork")}</span>
                 </button>
               ) : null}
-              {onePageDetail && canMarkWorkDone ? <WorkDoneButton type="button" onClick={isMechanicDetail ? markWorkDone : () => openOfficeTool("completion")} busy={markWorkDoneBusy} disabled={Boolean(mechanicAction.busy) || officeDetailState.busy} label={t("completion.workDone")} busyLabel={t("completion.submitting")} /> : null}
-              {isOfficeDetail && !canMarkWorkDone && !activeWorkorder.allowedActions?.approve && officeToolViews.some((view) => view.id === "completion") ? <Button variant="secondary" type="button" onClick={() => openOfficeTool("completion")}>Review</Button> : null}
+              {onePageDetail && canMarkWorkDone ? <WorkDoneButton type="button" onClick={markWorkDone} busy={markWorkDoneBusy} disabled={Boolean(mechanicAction.busy) || officeDetailState.busy} label={t("completion.workDone")} busyLabel={t("completion.submitting")} /> : null}
               {onePageDetail && officeToolViews.length > 0 ? <PreviewToggle open={officeToolsOpen} onToggle={() => setOfficeToolsOpen((open) => !open)} controls="workorder-preview-panel" openLabel={t("preview.openWorkorderTools")} closeLabel={t("preview.closeWorkorderTools")} /> : null}
               {!onePageDetail && !isPhone && supportingPaneVisible ? (
                 <PreviewToggle
@@ -633,44 +639,12 @@ export function WorkorderDetailPage({
 
       {canPrint ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onCreateRevision={printRevisedCopy} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
 
-      {completionPolicy.canWrite && mechanicFinish.open ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !mechanicAction.busy) {
-              setMechanicFinish({ open: false, name: "", message: "" });
-            }
-          }}
-        >
-          <form className="mechanic-completion-modal" role="dialog" aria-modal="true" aria-label={t("completion.dialogLabel")} onSubmit={submitMechanicFinish}>
-            <button
-              className="close-button"
-              type="button"
-              onClick={() => setMechanicFinish({ open: false, name: "", message: "" })}
-              disabled={Boolean(mechanicAction.busy)}
-              aria-label={t("completion.cancelLabel")}
-            >
-              <XClose />
-            </button>
-            <h2>{t("completion.workDone")}?</h2>
-            <p>{t("completion.confirm")}</p>
-            {mechanicFinish.message ? <p className="mechanic-completion-message" role="alert">{mechanicFinish.message}</p> : null}
-            <div className="mechanic-completion-actions">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => setMechanicFinish({ open: false, name: "", message: "" })}
-                disabled={Boolean(mechanicAction.busy)}
-              >
-                {t("completion.keepWorking")}
-              </Button>
-              <Button variant="primary" type="submit" disabled={Boolean(mechanicAction.busy)} autoFocus>
-                {mechanicAction.busy === "done" ? t("completion.submitting") : t("completion.yes")}
-              </Button>
-            </div>
-          </form>
-        </div>
+      {completionPolicy.canWrite && canMarkWorkDone && mechanicFinish.open ? (
+        <WorkDoneConfirmationDialog key={activeWorkorder.workorder.id} locale={locale}
+          busy={markWorkDoneBusy}
+          message={isOfficeDetail ? officeDetailState.message : mechanicAction.message}
+          onCancel={() => setMechanicFinish({ open: false, name: "", message: "" })}
+          onConfirm={confirmWorkDone} />
       ) : null}
 
       {completionPolicy.canWrite && officeCloseOpen ? (
@@ -682,7 +656,7 @@ export function WorkorderDetailPage({
             <Field label="Approval note (optional)">
               <NarrativeField rows="3" value={officeCloseNote} onChange={(event) => setOfficeCloseNote(event.target.value)} placeholder="Add an approval note" />
             </Field>
-            {officeDetailState.message ? <p className="mechanic-completion-message" role="status">{officeDetailState.message}</p> : null}
+            {officeDetailState.message ? <p className="mechanic-completion-message" role={officeDetailState.error ? "alert" : "status"}>{officeDetailState.message}</p> : null}
             <div className="mechanic-completion-actions">
               <Button variant="secondary" type="button" onClick={() => setOfficeCloseOpen(false)}>Cancel</Button>
               <ApproveButton type="submit" busy={officeDetailState.busy} label="Approve workorder" />

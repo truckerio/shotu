@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { api } from "../../lib/api.js";
-import { Dropdown } from "../forms/Dropdown.jsx";
+import { Dropdown, DropdownTrigger } from "../forms/Dropdown.jsx";
 import {
   createLaborProductPayload,
   laborProductLabel,
@@ -71,12 +71,12 @@ function CreateLaborProductDialog({ locationId, onClose, onCreated }) {
   </ModalOverlay>;
 }
 
-export function LaborProductSelector({ locationId = "", value = null, onChange, locale = "en", disabled = false }) {
+export function LaborProductSelector({ locationId = "", value = null, onChange, locale = "en", disabled = false, canViewPrices = false }) {
   const rootRef = useRef(null);
   const inputRef = useRef(null);
+  const triggerRef = useRef(null);
   const optionRefs = useRef([]);
   const requestRef = useRef(0);
-  const suppressNextInputOpenRef = useRef(false);
   const listboxId = useId();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState([]);
@@ -87,7 +87,6 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
   const [createOpen, setCreateOpen] = useState(false);
   const [pinError, setPinError] = useState("");
   const selectedLabel = laborProductLabel(value);
-  const displayValue = open ? query : (value ? selectedLabel : "");
   const orderedItems = orderedLaborProducts(items);
 
   useEffect(() => {
@@ -106,6 +105,7 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
     const sequence = ++requestRef.current;
     const controller = new AbortController();
     if (!open || disabled || !locationId) {
+      if (disabled || !locationId) setOpen(false);
       setItems([]);
       setState("idle");
       return () => controller.abort();
@@ -137,12 +137,11 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
     if (activeIndex >= 0) optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
 
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+
   function closeList() { setOpen(false); setActiveIndex(-1); setQuery(""); }
-  function focusInputWithoutOpening() {
-    suppressNextInputOpenRef.current = true;
-    inputRef.current?.focus();
-  }
-  function select(item) { onChange?.(localLaborProductValue(item)); closeList(); focusInputWithoutOpening(); }
+  function focusTrigger() { triggerRef.current?.focus(); }
+  function select(item) { if (disabled) return; onChange?.(localLaborProductValue(item)); closeList(); focusTrigger(); }
 
   async function togglePin(event, item) {
     event.stopPropagation();
@@ -160,7 +159,7 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
   }
 
   function handleKeyDown(event) {
-    if (event.key === "Escape") { event.stopPropagation(); closeList(); return; }
+    if (event.key === "Escape") { event.stopPropagation(); closeList(); focusTrigger(); return; }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       if (!open) { setOpen(true); return; }
@@ -185,32 +184,27 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
 
   function closeCreateDialog() {
     setCreateOpen(false);
-    window.requestAnimationFrame(focusInputWithoutOpening);
+    window.requestAnimationFrame(focusTrigger);
   }
 
   return <div className="labor-product-selector" ref={rootRef} data-locale={locale} onBlur={(event) => {
     if (!event.currentTarget.contains(event.relatedTarget)) closeList();
   }} onKeyDown={(event) => {
-    if (event.key === "Escape") { event.stopPropagation(); closeList(); }
+    if (event.key === "Escape") { event.stopPropagation(); closeList(); focusTrigger(); }
   }}>
-    <label className="labor-product-visually-hidden" htmlFor={`${listboxId}-input`}>Labor product</label>
-    <div className="labor-product-control">
-      <input ref={inputRef} id={`${listboxId}-input`} type="search" aria-expanded={open} aria-controls={open ? listboxId : undefined} aria-label="Labor product" autoComplete="off" placeholder={locationId ? "Search labor products" : "Choose a location first"} value={displayValue} disabled={disabled || !locationId} onFocus={() => {
-        if (suppressNextInputOpenRef.current) { suppressNextInputOpenRef.current = false; return; }
-        setOpen(true); setQuery("");
-      }} onClick={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); setActiveIndex(-1); }} onKeyDown={handleKeyDown} />
-      <button type="button" className="labor-product-toggle" aria-label="Choose labor product" aria-expanded={open} aria-controls={listboxId} disabled={disabled || !locationId} onClick={() => {
-        if (open) closeList();
-        else { setOpen(true); setQuery(""); inputRef.current?.focus(); }
-      }}><span aria-hidden="true">⌄</span></button>
-      {value?.productId ? <button type="button" className="labor-product-clear" aria-label="Clear labor product" disabled={disabled} onClick={() => onChange?.(null)}>Clear</button> : null}
-    </div>
+    <DropdownTrigger ref={triggerRef} type="button" className="labor-product-control labor-product-trigger" aria-label={value ? `Choose labor product: ${selectedLabel}` : "Choose labor product"} aria-expanded={open} aria-controls={open ? listboxId : undefined} disabled={disabled || !locationId} onKeyDown={handleKeyDown} onClick={() => {
+      if (open) closeList();
+      else { setOpen(true); setQuery(""); }
+    }}>
+      <span className="labor-product-value">{value ? selectedLabel : locationId ? "Select labor product" : "Choose a location first"}</span>
+    </DropdownTrigger>
     {open ? <div className="labor-product-popup" id={listboxId} aria-label="Local labor products">
+      <input ref={inputRef} className="labor-product-search" type="search" aria-label="Search labor products" autoComplete="off" placeholder="Search labor products" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(-1); }} onKeyDown={handleKeyDown} />
       {state === "loading" ? <p role="status">Searching local labor products…</p> : null}
       {state === "error" ? <p role="alert">Labor products could not be loaded. Try again.</p> : null}
       {state === "empty" ? <p role="status">No local labor products match.</p> : null}
       {pinError ? <p role="alert">{pinError}</p> : null}
-      {state === "results" ? <ul>{orderedItems.map((item, index) => { const providerPrice = laborProviderPriceLabel(item); return <li key={item.id} id={`${listboxId}-option-${index}`} ref={(element) => { optionRefs.current[index] = element; }} className={activeIndex === index ? "is-active" : ""} onMouseEnter={() => setActiveIndex(index)}><button type="button" className="labor-product-select-option" aria-pressed={productMatchesValue(item, value)} onClick={() => select(item)}><span><strong>{laborProductLabel(item)}</strong>{providerPrice ? <small>{providerPrice}</small> : null}{item.pinned ? <small>Pinned</small> : null}</span></button>{permissions.canPin ? <button type="button" aria-label={`${item.pinned ? "Unpin" : "Pin"} ${laborProductLabel(item)}`} onClick={(event) => togglePin(event, item)}>{item.pinned ? "Unpin" : "Pin"}</button> : null}</li>; })}</ul> : null}
+      {state === "results" ? <ul>{orderedItems.map((item, index) => { const providerPrice = canViewPrices ? laborProviderPriceLabel(item) : ""; return <li key={item.id} id={`${listboxId}-option-${index}`} ref={(element) => { optionRefs.current[index] = element; }} className={activeIndex === index ? "is-active" : ""} onMouseEnter={() => setActiveIndex(index)}><button type="button" className="labor-product-select-option" aria-pressed={productMatchesValue(item, value)} onClick={() => select(item)}><span><strong>{laborProductLabel(item)}</strong>{providerPrice ? <small>{providerPrice}</small> : null}{item.pinned ? <small>Pinned</small> : null}</span></button>{permissions.canPin ? <button type="button" aria-label={`${item.pinned ? "Unpin" : "Pin"} ${laborProductLabel(item)}`} onClick={(event) => togglePin(event, item)}>{item.pinned ? "Unpin" : "Pin"}</button> : null}</li>; })}</ul> : null}
       {permissions.canCreate ? <button type="button" className="labor-product-create-action" onClick={() => { closeList(); setCreateOpen(true); }}>Create labor product</button> : null}
     </div> : null}
     {createOpen ? <CreateLaborProductDialog locationId={locationId} onClose={closeCreateDialog} onCreated={handleCreated} /> : null}

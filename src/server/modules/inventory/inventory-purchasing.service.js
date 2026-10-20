@@ -11,7 +11,7 @@ import { InventoryError } from './inventory.errors.js';
 import { assertInventoryQrConfigured } from './inventory-qr.js';
 import { withInventoryLabels } from './inventory-receiving.service.js';
 const purchasingScope=(context,locationId,dependencies={})=>resolveInventoryLocationScope(context,locationId,{loadLocation:dependencies.loadLocation,code:'PURCHASING_FORBIDDEN',message:'Purchasing requires Office or Admin access.'});
-export async function getPurchasing(searchParams,context,dependencies={}){const input=purchaseScopeSchema.parse(Object.fromEntries(searchParams));return readPurchasing({...await purchasingScope(context,input.locationId,dependencies),...input});}
+export async function getPurchasing(searchParams,context,dependencies={}){const input=purchaseScopeSchema.parse(Object.fromEntries(searchParams));return (dependencies.readPurchasing||readPurchasing)({...await purchasingScope(context,input.locationId,dependencies),...input,page:input.orderId?1:input.page});}
 export async function savePurchase(input,context,dependencies={}){const command=purchaseCommandSchema.parse(input);return purchaseCommand({...await purchasingScope(context,command.locationId,dependencies),locationId:command.locationId,command});}
 
 const receiptFailure=(code,message)=>new InventoryError(message,{code,statusCode:409});

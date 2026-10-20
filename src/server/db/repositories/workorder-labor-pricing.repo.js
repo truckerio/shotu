@@ -5,6 +5,13 @@ import { resolveLegacyLocalLaborProduct } from "./labor-product.repo.js";
 
 const terminalStatuses = new Set(["closed", "odoo_entered", "cancelled"]);
 
+function priceActivityValue(price) {
+  const source = price.selection === "internal_cost" ? "internal price" : "selling price";
+  const value = scaledPrice(price.unit_price);
+  const amount = `${value / 10000n}.${(value % 10000n).toString().padStart(4, "0")}`;
+  return `${price.currency} ${amount} ${price.manual_override ? `custom price (${source})` : source}`;
+}
+
 function rate(row) {
   return row && {
     id: row.id,
@@ -199,6 +206,22 @@ export async function saveWorkorderLaborPriceSnapshot(input, transactionClient =
         input.actorId, input.reason, input.idempotencyKey, input.requestHash,
         selectedRate.selling_policy_version_id || null, selectedRate.configured_price_version_id || null],
     );
+    if (input.recordPriceActivity !== false) {
+      const previous = (await client.query(
+        `select * from workorder_labor_price_snapshots
+          where company_id=$1 and workorder_id=$2 and id<>$3
+          order by created_at desc,id desc limit 1`,
+        [workorder.company_id, workorder.id, result.rows[0].id],
+      )).rows[0];
+      const baseline = previous || { selection: input.selection, unit_price: selectedRate.amount, currency: selectedRate.currency };
+      await client.query(
+        `insert into workorder_field_events(
+           workorder_id,field_key,field_label,old_value,new_value,changed_by_user_id,created_at
+         ) values($1,'pricing.labor','Labor price',$2,$3,$4,$5)`,
+        [workorder.id, previous || manualOverride ? priceActivityValue(baseline) : "",
+          priceActivityValue(result.rows[0]), input.actorId, result.rows[0].created_at],
+      );
+    }
     if (!transactionClient) await client.query("commit");
     return { kind: "saved", laborPrice: snapshot(result.rows[0]), replayed: false };
   } catch (error) {

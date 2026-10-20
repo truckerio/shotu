@@ -90,6 +90,7 @@ export function serializedUnitRows(part = {}, selection = part) {
     const serialNumber = text(rawSerials[index]);
     return [{
       ...part,
+      ...(selection !== part && ["batch_cost", "internal_cost", "selling_price"].includes(selection.priceSelection) ? { priceSelection: selection.priceSelection, customUnitPrice: "" } : {}),
       qty: "1",
       serializationRequired: true,
       serializedUnitIds: [id],

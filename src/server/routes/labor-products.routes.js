@@ -3,6 +3,8 @@ import {
   addLaborProduct,
   changeLaborProductPin,
   readLaborProducts,
+  readLaborProductRates,
+  reviseLaborProductRate,
 } from "../modules/labor/labor-products.service.js";
 
 async function emitLaborAudit(helpers, event) {
@@ -37,6 +39,19 @@ export async function handleLaborProductsApi(req, res, url, helpers, dependencie
         locationId: body.locationId,
       });
       helpers.sendJson(res, 201, { item });
+      return true;
+    }
+    const rates = /^\/api\/labor-products\/([^/]+)\/rates$/.exec(url.pathname);
+    if (req.method === "GET" && rates) {
+      helpers.sendJson(res, 200, await readLaborProductRates(
+        decodeURIComponent(rates[1]), Object.fromEntries(url.searchParams), helpers.requestContext, dependencies,
+      ));
+      return true;
+    }
+    if (req.method === "PUT" && rates) {
+      helpers.sendJson(res, 200, await reviseLaborProductRate(
+        decodeURIComponent(rates[1]), await helpers.readBody(req), helpers.requestContext, dependencies,
+      ));
       return true;
     }
     const match = /^\/api\/labor-products\/([^/]+)$/.exec(url.pathname);

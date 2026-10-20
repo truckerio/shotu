@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart03, Briefcase02, CheckSquare, ClipboardCheck, Container, DotsVertical, LayersThree01, MarkerPin01, Package, PackagePlus, Settings01, ShoppingCart01, Tool02, Truck01 } from "@untitledui/icons";
+import { BarChart03, Briefcase02, CheckSquare, ClipboardCheck, Container, DotsVertical, LayersThree01, MarkerPin01, Package, Settings01, ShoppingCart01, Tool02, Truck01 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { ProfileMenu } from "../../../components/account/ProfileMenu.jsx";
 import { RoleNavigationRail } from "../../../components/layout/RoleNavigationRail.jsx";
@@ -50,7 +50,7 @@ export function AdminWorkspaceShell({
       : view;
   const groups = [
     { id: "operations", label: "Operations", items: [{ id: "operations-workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "operations-inspections", label: "Inspections", icon: ClipboardCheck, visible: inspectionAccess.canRead }] },
-    { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-inbound", label: "Inbound", icon: PackagePlus }, { id: "inventory-purchases", label: "Purchasing", icon: ShoppingCart01 }, { id: "inventory-tasks", label: "Tasks", icon: CheckSquare }, { id: "inventory-reports", label: "Reports", icon: BarChart03 }] },
+    { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: ShoppingCart01 }, { id: "inventory-tasks", label: "Tasks", icon: CheckSquare }, { id: "inventory-reports", label: "Reports", icon: BarChart03 }] },
     { id: "administration", label: "Administration", items: [{ id: "locations", label: "Locations", icon: MarkerPin01 }, { id: "modules", label: "Modules", icon: LayersThree01 }, { id: "settings", label: "Settings", icon: Settings01 }] },
     { id: "units", label: "Units", items: [{ id: "units-trucks", label: "Trucks", icon: Truck01 }, { id: "units-trailers", label: "Trailers", icon: Container }, { id: "units-other", label: "Other equipment", icon: Tool02 }] },
   ];

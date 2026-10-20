@@ -73,6 +73,17 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.serialized-unit-price-source {
+  color: #344054;
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.serialized-unit-price-source .dropdown-select-trigger { min-height: 44px; }
+.serialized-unit-price-popover { max-width: calc(100vw - 32px); min-width: min(22rem, calc(100vw - 32px)); width: min(22rem, calc(100vw - 32px)); }
+
 .serialized-unit-nested-search label {
   color: #344054;
   font-size: 12px;

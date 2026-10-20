@@ -21,8 +21,8 @@ test("390px and 430px phone chat use a rectangular full-width workspace with ins
   assert.match(mobileCss, /\.control-panel:has\(\.workorder-progressive-stack\s*>\s*\.chat-section\)\s*>\s*\.workorder-progressive-stack\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*padding-bottom:\s*16px;/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border:\s*0;/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border-radius:\s*0;/s);
-  assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*height:\s*100%;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
-  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-thread\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*max-width:\s*100%;[^}]*padding:\s*8px 2px 12px;/s);
+  assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread-surface\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*height:\s*100%;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
+  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-thread-surface\s*>\s*\.chat-thread\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*max-width:\s*100%;[^}]*padding:\s*8px 2px 12px;/s);
   assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*--chat-composer-inset:\s*clamp\(8px,\s*2\.5vw,\s*12px\);[^}]*max-width:\s*100%;[^}]*padding:\s*8px var\(--chat-composer-inset\) var\(--chat-composer-inset\);[^}]*position:\s*static;[^}]*width:\s*100%;/s);
 
   for (const viewportWidth of [390, 430]) {

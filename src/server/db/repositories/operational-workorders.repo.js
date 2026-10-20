@@ -11,9 +11,12 @@ import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
+import { validLaborQuantity } from "../../../../shared/labor-product.js";
 import { publicOdooRecordUrl } from "../../integrations/odoo/odoo.navigation.js";
+import { workorderPricingSummary } from "../../modules/workorders/workorder-labor-pricing.service.js";
 import {
   consumePendingSerializedInstallationsForApproval,
+  installEligibleSerializedUnitUsages,
   reserveSerializedUnitsForCreatedWorkorder,
 } from "./inventory-unit-workorder-usage.repo.js";
 import {
@@ -82,6 +85,8 @@ function workorderSelect() {
       wo.created_by_user_id,
       team.primary_mechanic_id,
       wo.status,
+      wo.activity_status,
+      wo.activity_version,
       wo.concern,
       wo.diagnosis,
       wo.work_performed,
@@ -193,6 +198,8 @@ export function publicWorkorderRow(row) {
     createdByUserId: row.created_by_user_id,
     currentMechanicId: row.primary_mechanic_id,
     status: row.status,
+    activityStatus: row.activity_status || "ready",
+    activityVersion: Number(row.activity_version || 1),
     concern: row.concern,
     diagnosis: row.diagnosis,
     workPerformed: row.work_performed,
@@ -235,6 +242,191 @@ function lifecycleConflict(code, message) {
   return new WorkorderLifecycleConflictError(code, message);
 }
 
+function approvalPrice(row, expectedQuantity, expectedSourceId = null) {
+  if (!row?.price_snapshot_id
+    || (expectedSourceId && row.price_source_id !== expectedSourceId)
+    || Number(row.price_quantity) !== Number(expectedQuantity)) return null;
+  return {
+    id: row.price_snapshot_id,
+    selection: row.price_selection,
+    quantity: String(row.price_quantity),
+    totalPrice: String(row.price_total),
+    currency: row.price_currency,
+  };
+}
+
+function currentApprovalLaborPrice(labor, formData) {
+  if (!labor) return null;
+  const product = formData?.laborProduct || {};
+  const uomCode = product.uomCode || "hr";
+  if (labor.labor_product_id !== product.productId
+    || (labor.uom_code || "hr") !== uomCode
+    || Number(labor.hours) !== Number(formData?.laborHours)) return null;
+  return {
+    id: labor.id,
+    productId: labor.labor_product_id,
+    selection: labor.selection,
+    hours: String(labor.hours),
+    uomCode: labor.uom_code || "hr",
+    totalPrice: String(labor.total_price),
+    currency: labor.currency,
+  };
+}
+
+async function readLockedApprovalPricing(client, workorder) {
+  const serializedResult = await client.query(
+      `select usage.id,usage.catalog_part_id,usage.uom_code,usage.status,
+              price.id price_snapshot_id,price.serialized_usage_id price_source_id,
+              price.selection price_selection,
+              price.quantity price_quantity,price.total_price price_total,price.currency price_currency
+         from workorder_serialized_part_usages usage
+         left join lateral (
+           select snapshot.* from workorder_part_price_snapshots snapshot
+            where snapshot.company_id=usage.company_id and snapshot.workorder_id=usage.workorder_id
+              and snapshot.serialized_usage_id=usage.id
+            order by snapshot.created_at desc,snapshot.id desc limit 1
+         ) price on true
+        where usage.company_id=$1 and usage.workorder_id=$2
+          and usage.status in ('installed_pending_approval','installed')
+        order by usage.id for share of usage`,
+    [workorder.company_id, workorder.id],
+  );
+  const aggregateResult = await client.query(
+      `select usage.id,usage.catalog_part_id,usage.uom_code,usage.status,
+              usage.quantity+usage.adjustment_total effective_quantity,
+              price.id price_snapshot_id,price.aggregate_usage_id price_source_id,
+              price.selection price_selection,
+              price.quantity price_quantity,price.total_price price_total,price.currency price_currency
+         from workorder_aggregate_part_usages usage
+         left join lateral (
+           select snapshot.* from workorder_part_price_snapshots snapshot
+            where snapshot.company_id=usage.company_id and snapshot.workorder_id=usage.workorder_id
+              and snapshot.aggregate_usage_id=usage.id
+            order by snapshot.created_at desc,snapshot.id desc limit 1
+         ) price on true
+        where usage.company_id=$1 and usage.workorder_id=$2
+          and usage.status in ('installed_pending_approval','consumed')
+          and usage.quantity+usage.adjustment_total>0
+        order by usage.id for share of usage`,
+    [workorder.company_id, workorder.id],
+  );
+  const noStockResult = await client.query(
+      `select distinct on(snapshot.no_stock_line_id)
+              snapshot.id price_snapshot_id,snapshot.no_stock_line_id,
+              snapshot.catalog_part_id,snapshot.uom_code,
+              snapshot.selection price_selection,snapshot.quantity price_quantity,
+              snapshot.total_price price_total,snapshot.currency price_currency
+         from workorder_part_price_snapshots snapshot
+        where snapshot.company_id=$1 and snapshot.workorder_id=$2
+          and snapshot.no_stock_line_id is not null
+        order by snapshot.no_stock_line_id,snapshot.created_at desc,snapshot.id desc`,
+    [workorder.company_id, workorder.id],
+  );
+  const laborResult = await client.query(
+      `select snapshot.*
+         from workorder_labor_price_snapshots snapshot
+        where snapshot.company_id=$1 and snapshot.workorder_id=$2
+        order by snapshot.created_at desc,snapshot.id desc limit 1
+        for share of snapshot`,
+    [workorder.company_id, workorder.id],
+  );
+  const manualEvidence = await listLockedWorkorderManualPartEvidence(client, {
+    workorderId: workorder.id,
+    companyId: workorder.company_id,
+    locationId: workorder.location_id,
+    limit: 2000,
+  });
+  const rawFormData = workorder.form_data || {};
+  const formData = {
+    ...rawFormData,
+    parts: applyManualPartEvidence(rawFormData.parts, manualEvidence),
+  };
+  const installedSerializedParts = serializedResult.rows.map((row) => ({
+    catalogPartId: row.catalog_part_id,
+    uomCode: row.uom_code,
+    status: row.status,
+    price: approvalPrice(row, 1, row.id),
+  }));
+  const aggregatePartUsages = aggregateResult.rows.map((row) => ({
+    catalogPartId: row.catalog_part_id,
+    uomCode: row.uom_code,
+    status: row.status,
+    effectiveQuantity: String(row.effective_quantity),
+    price: approvalPrice(row, row.effective_quantity, row.id),
+  }));
+  const noStockByLine = new Map(noStockResult.rows.map((row) => [row.no_stock_line_id, row]));
+  const noStockPartPrices = (Array.isArray(formData.parts) ? formData.parts : [])
+    .filter((part) => part?.noStockLineId && Number(part.qty) > 0)
+    .map((part) => {
+      const row = noStockByLine.get(part.noStockLineId);
+      const matchesIdentity = row
+        && row.catalog_part_id === part.catalogPartId
+        && row.uom_code === (part.uomCode || "ea");
+      return {
+        noStockLineId: part.noStockLineId,
+        catalogPartId: row?.catalog_part_id || null,
+        uomCode: row?.uom_code || null,
+        price: matchesIdentity ? approvalPrice(row, part.qty) : null,
+      };
+    });
+  const laborPrice = currentApprovalLaborPrice(laborResult.rows[0] || null, formData);
+  return {
+    workorder: { formData },
+    installedSerializedParts,
+    aggregatePartUsages,
+    noStockPartPrices,
+    laborPrice,
+  };
+}
+
+export function assertWorkorderApprovalReadiness(pricing) {
+  const formData = pricing.workorder?.formData || {};
+  const invalidActualPart = (Array.isArray(formData.parts) ? formData.parts : []).find((part) => {
+    const hasIdentity = Boolean(part?.noStockLineId || part?.evidenceId || part?.catalogPartId
+      || String(part?.partNo || "").trim());
+    const quantity = String(part?.qty ?? "").trim();
+    return hasIdentity && (quantity === "" || !Number.isFinite(Number(quantity)) || Number(quantity) <= 0);
+  });
+  if (invalidActualPart) {
+    throw lifecycleConflict(
+      "WORKORDER_APPROVAL_PART_QUANTITY_INVALID",
+      "Enter a valid positive quantity for every actual part before approving this workorder.",
+    );
+  }
+  const rawLaborQuantity = String(formData.laborHours ?? "").trim();
+  const numericLaborQuantity = Number(rawLaborQuantity);
+  const hasLabor = rawLaborQuantity !== ""
+    && Number.isFinite(numericLaborQuantity)
+    && numericLaborQuantity > 0
+    && validLaborQuantity(rawLaborQuantity, formData.laborProduct?.uomCode || "hr");
+  if (!hasLabor) {
+    throw lifecycleConflict(
+      "WORKORDER_APPROVAL_LABOR_INVALID",
+      "Enter a valid positive labor quantity before approving this workorder. Apply any customer discount separately.",
+    );
+  }
+  if (!pricing.laborPrice) {
+    throw lifecycleConflict(
+      "WORKORDER_APPROVAL_LABOR_PRICE_REQUIRED",
+      "Select a current labor price for the recorded labor quantity before approving this workorder.",
+    );
+  }
+  const summary = workorderPricingSummary(pricing);
+  if (summary.status === "mixed_currency" || summary.reason === "mixed_price_basis") {
+    throw lifecycleConflict(
+      "WORKORDER_APPROVAL_PRICING_MIXED",
+      "Use one currency and one price basis for all labor and parts before approving this workorder.",
+    );
+  }
+  if (summary.status !== "complete") {
+    throw lifecycleConflict(
+      "WORKORDER_APPROVAL_PART_PRICE_REQUIRED",
+      "Select a current price for every actual part, with the current part identity, quantity, and unit, before approving this workorder.",
+    );
+  }
+  return summary;
+}
+
 async function assertNoUnresolvedSerializedParts(
   client,
   workorderId,
@@ -256,6 +448,26 @@ async function assertNoUnresolvedSerializedParts(
       message || "Record whether every issued serialized part was installed or returned before continuing.",
     );
   }
+}
+
+async function assertNoAggregateQuantityParts(
+  client,
+  workorderId,
+  statuses,
+  code,
+  message,
+) {
+  const pending = await client.query(
+    `select id
+     from workorder_aggregate_part_usages
+     where workorder_id = $1 and tracking_mode = 'quantity'
+       and status = any($2::varchar[])
+     order by id
+     limit 1
+     for update`,
+    [workorderId, statuses],
+  );
+  if (pending.rows[0]) throw lifecycleConflict(code, message);
 }
 
 const ACTIVE_ASSET_CONSTRAINT = "operational_workorders_one_active_per_asset_uidx";
@@ -554,7 +766,7 @@ async function addFieldEvents(client, { workorderId, changes, changedByUserId })
 function priceAuditValue(amount, currency, label) {
   const value = Number(amount);
   const formatted = Number.isFinite(value) && currency
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value)
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value)
     : String(amount ?? "");
   return `${formatted} ${label}`.trim();
 }
@@ -853,6 +1065,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     await client.query(
       `update operational_workorders
           set status = $2,
+              activity_status = case when $3::boolean then 'active' else activity_status end,
               accepted_at = now(),
               started_at = case when $3::boolean then now() else null end,
               updated_at = now()
@@ -954,6 +1167,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       if (!usage) throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_ROW_INVALID", "Pricing must match a reserved inventory row.");
       const saved = await saveWorkorderPartPriceSnapshot({ ...pricingScope, ...usage, selection: selection.selection,
         customUnitPrice: selection.customUnitPrice,
+        recordPriceActivity: false,
         reason: selection.customUnitPrice === undefined ? "Selected during workorder creation" : "Manual Workorder price override during creation",
         idempotencyKey: `create-price:${result.rows[0].id}:${selection.partIndex}`,
         requestHash: createHash("sha256").update(JSON.stringify(selection)).digest("hex") }, client);
@@ -974,6 +1188,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     if (input.pricing.labor) {
       const saved = await saveWorkorderLaborPriceSnapshot({ ...pricingScope, selection: input.pricing.labor.selection,
         customUnitPrice: input.pricing.labor.customUnitPrice,
+        recordPriceActivity: false,
         reason: input.pricing.labor.customUnitPrice === undefined ? "Selected during workorder creation" : "Manual Workorder price override during creation",
         idempotencyKey: `create-labor-price:${result.rows[0].id}`,
         requestHash: createHash("sha256").update(JSON.stringify(input.pricing.labor)).digest("hex") }, client);
@@ -1227,6 +1442,7 @@ function operationsProjectionSql() {
         team.primary_mechanic_id,
         coalesce(team.mechanic_ids, '{}'::uuid[]) as mechanic_ids,
         wo.status as lifecycle,
+        wo.activity_status,
         wo.concern,
         wo.work_performed,
         wo.closed_at,
@@ -1424,6 +1640,7 @@ function publicOperationRow(row) {
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
     mechanicIds: Array.isArray(row.mechanic_ids) ? row.mechanic_ids : [],
     lifecycle: row.lifecycle,
+    activityStatus: row.activity_status || "ready",
     attentionReasons: row.attention_reasons || [],
     attentionDetails: row.attention_details || {},
     odooStatus: row.odoo_status,
@@ -1776,7 +1993,8 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status from operational_workorders where id = $1 for update",
+      `select id, company_id, status, activity_status, activity_version
+       from operational_workorders where id = $1 for update`,
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -1823,6 +2041,8 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
         `
           update operational_workorders
           set status = $2,
+              activity_status = 'active',
+              activity_version = activity_version + case when activity_status = 'active' then 0 else 1 end,
               accepted_at = coalesce(accepted_at, now()),
               started_at = coalesce(started_at, now()),
               updated_at = now()
@@ -1830,6 +2050,14 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
         `,
         [workorderId, nextStatus]
       );
+      if (workorder.activity_status !== "active") {
+        await client.query(
+          `insert into workorder_activity_status_events (
+             company_id, workorder_id, from_status, to_status, version, changed_by_user_id
+           ) values ($1, $2, $3, 'active', $4, $5)`,
+          [workorder.company_id, workorderId, workorder.activity_status, Number(workorder.activity_version) + 1, mechanicUserId],
+        );
+      }
     }
     await addAssignmentEvent(client, {
       workorderId,
@@ -2177,7 +2405,7 @@ export async function markOperationalWorkorderDone(
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, company_id, status from operational_workorders where id = $1 for update",
+      "select id, company_id, location_id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -2200,12 +2428,32 @@ export async function markOperationalWorkorderDone(
       );
       if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
     }
+    if (input.confirmPartsInstalled) {
+      await installEligibleSerializedUnitUsages(client, {
+        workorderId,
+        companyId: workorder.company_id,
+        locationId: workorder.location_id,
+        actorId: completedByUserId,
+        actorRole: requireAssignedMechanic ? "mechanic" : "office",
+      });
+      await markAggregateUsagesPending(client, {
+        workorderId,
+        companyId: workorder.company_id,
+        actorId: completedByUserId,
+        includeQuantity: true,
+      });
+    }
     await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
-    await markAggregateUsagesPending(client, {
-      workorderId,
-      companyId: workorder.company_id,
-      actorId: completedByUserId,
-    });
+    await assertNoAggregateQuantityParts(client, workorderId, ["reserved"],
+      "WORKORDER_QUANTITY_PARTS_PENDING",
+      "Mark every quantity-tracked part installed or release it before marking Work done.");
+    if (!input.confirmPartsInstalled) {
+      await markAggregateUsagesPending(client, {
+        workorderId,
+        companyId: workorder.company_id,
+        actorId: completedByUserId,
+      });
+    }
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const serializedParts = await activeSerializedRepairOrders(client, workorderId);
@@ -2262,7 +2510,9 @@ export async function markOperationalWorkorderDone(
       fromStatus: workorder.status,
       toStatus: WORKORDER_STATUS.MECHANIC_DONE,
       changedByUserId: completedByUserId,
-      note: statusNote,
+      note: input.confirmPartsInstalled
+        ? `${statusNote} Parts installed confirmation: yes.`
+        : statusNote,
     });
     const activeRevision = await client.query(
       `select 1 from workorder_attention_state
@@ -2293,7 +2543,8 @@ export async function returnOperationalWorkorder(workorderId, officeUserId, { re
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, company_id, status, mechanic_done_at from operational_workorders where id = $1 for update",
+      `select id, company_id, status, activity_status, activity_version, mechanic_done_at
+       from operational_workorders where id = $1 for update`,
       [workorderId],
     );
     const workorder = current.rows[0];
@@ -2308,10 +2559,22 @@ export async function returnOperationalWorkorder(workorderId, officeUserId, { re
     });
     await client.query(
       `update operational_workorders
-       set status = $2, mechanic_done_at = null, updated_at = now()
+       set status = $2,
+           activity_status = 'ready',
+           activity_version = activity_version + case when activity_status = 'ready' then 0 else 1 end,
+           mechanic_done_at = null,
+           updated_at = now()
        where id = $1`,
       [workorderId, WORKORDER_STATUS.IN_PROGRESS],
     );
+    if (workorder.activity_status !== "ready") {
+      await client.query(
+        `insert into workorder_activity_status_events (
+           company_id, workorder_id, from_status, to_status, version, changed_by_user_id
+         ) values ($1, $2, $3, 'ready', $4, $5)`,
+        [workorder.company_id, workorderId, workorder.activity_status, Number(workorder.activity_version) + 1, officeUserId],
+      );
+    }
     await addStatusEvent(client, {
       workorderId,
       fromStatus: workorder.status,
@@ -2357,6 +2620,13 @@ export async function cancelOperationalWorkorder(workorderId, officeUserId, reas
       client,
       workorderId,
       "Install or return every issued serialized part before cancelling this workorder.",
+    );
+    await assertNoAggregateQuantityParts(
+      client,
+      workorderId,
+      ["installed_pending_approval"],
+      "WORKORDER_INSTALLED_QUANTITY_PARTS_PENDING",
+      "Installed quantity parts require a physical removal or return before cancelling this workorder.",
     );
     await releaseAggregateUsagesForCancelledWorkorder(client, {
       workorderId,
@@ -2498,7 +2768,10 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const current = await client.query("select id, company_id, status from operational_workorders where id = $1 for update", [workorderId]);
+    const current = await client.query(
+      "select id, company_id, location_id, status, form_data from operational_workorders where id = $1 for update",
+      [workorderId],
+    );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
     await assertCurrentExternalEstimateAccepted(client, {
@@ -2524,6 +2797,8 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
       );
     }
     await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
+    const approvalPricing = await readLockedApprovalPricing(client, workorder);
+    assertWorkorderApprovalReadiness(approvalPricing);
     await consumePendingSerializedInstallationsForApproval(client, {
       workorderId,
       companyId: workorder.company_id,

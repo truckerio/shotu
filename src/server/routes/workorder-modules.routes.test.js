@@ -512,3 +512,37 @@ test("mechanic creation uses the same canonical role-neutral create route", asyn
     payload: { workorder: { id: "wo-mechanic", status: "in_progress" } },
   }]);
 });
+
+test("mechanic customer intake route parses create input and returns draft, with invalid input rejected", async () => {
+  let captured;
+  const result = await runRoute({ method: "POST", pathname: "/api/workorders/customer-intake", body: { companyId: WORKORDER_ID, locationId: WORKORDER_ID, concern: "Inspect brakes", formData: { customerCompanyName: "Fleet customer" } }, dependencies: {
+    createCustomerIntake: async (context, input) => { captured = input; return { id: "draft-1" }; },
+  } });
+  assert.equal(result.responses[0].status, 201);
+  assert.equal(result.responses[0].payload.draft.id, "draft-1");
+  assert.equal(result.responses[0].payload.workorder, undefined);
+  assert.equal(captured.formData.customerCompanyName, "Fleet customer");
+  await assert.rejects(runRoute({ method: "POST", pathname: "/api/workorders/customer-intake", body: { concern: "" }, dependencies: { createCustomerIntake: () => assert.fail("Invalid input") } }));
+});
+
+for (const kind of ["part", "labor"]) {
+  test(`canonical ${kind} price route preserves manual amount and rejects invalid prices`, async () => {
+    const moduleKey = kind === "part" ? "parts" : "diagnosisRepair";
+    const body = { operation: `${kind}PriceSelection`, selection: "internal_cost",
+      reason: "Manual Workorder price", idempotencyKey: "manual-price-route-1",
+      ...(kind === "part" ? { usageKind: "serialized", usageId: WORKORDER_ID, expectedFingerprint: "a".repeat(64) } : {}) };
+    const calls = [];
+    const dependencies = { runAction: async (...args) => { calls.push(args); return { kind: "saved" }; } };
+    for (const customUnitPrice of ["0", "12.3456", "9999999999.9999"]) {
+      const result = await runRoute({ method: "POST", pathname: `/api/workorders/${WORKORDER_ID}/modules/${moduleKey}/actions/record`,
+        body: { ...body, customUnitPrice }, dependencies });
+      assert.equal(result.responses[0].status, 200);
+      assert.equal(calls.at(-1)[4].customUnitPrice, customUnitPrice);
+    }
+    for (const customUnitPrice of ["", "-1", "1.23456", "10000000000", "NaN", "1e3", null, 15]) {
+      await assert.rejects(() => runRoute({ method: "POST", pathname: `/api/workorders/${WORKORDER_ID}/modules/${moduleKey}/actions/record`,
+        body: { ...body, customUnitPrice }, dependencies }));
+    }
+    assert.equal(calls.length, 3);
+  });
+}

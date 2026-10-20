@@ -454,7 +454,7 @@ export function RoleRouter({ actor }) {
       }}
       detailPageProps={{
         ...detailViewModel,
-        activeWorkorder, actor, browserPrintPayload, canPrint, detailSection, detailStatus,
+        activeWorkorder, actor, browserPrintPayload, canPrint, detailSection, detailStatus, request: api,
         effectiveCopies, firstSerial, form, previewForm, formRef, fullscreenPageIndex, fullscreenZoom,
         isCompact, isMechanicDetail, isOfficeDetail, isPhone, locale: interfaceLocale,
         localeError: interfacePreferences.error, localeReady: interfacePreferences.ready, lastPhysicalPageIndex, lastSerial, mapsConfig,

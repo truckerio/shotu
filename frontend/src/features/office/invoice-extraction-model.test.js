@@ -5,6 +5,7 @@ import {
   confidenceState,
   invoiceFieldNeedsReview,
   invoiceDeliveryFullyReceived,
+  invoiceAllowsPhysicalReceipt,
   invoiceLineNeedsReview,
   invoiceReviewErrorMessage,
   invoicePostingPayload,
@@ -152,4 +153,13 @@ test("every no-PO receipt requires a concise explanation", () => {
   assert.equal(invoicePostingSelectionReady({ ...selection, noPurchaseOrderReason: "Direct supplier purchase." }, suggestion, { purchaseOrderNumber: field("") }), true);
   assert.deepEqual(invoicePostingPayload(selection), selection);
   assert.deepEqual(invoicePostingPayload({ postingRoute: "purchase_order", allocationPlan: [{ invoiceLineIndex: 0 }], noPurchaseOrderReason: "ignored" }), { postingRoute: "purchase_order", allocationPlan: [{ invoiceLineIndex: 0 }], noPurchaseOrderReason: "" });
+});
+
+
+test("PO bill review purpose prevents another receipt without inferring received quantities", () => {
+  for (const status of ["processing", "extracted", "reviewed", "failed"]) {
+    assert.equal(invoiceAllowsPhysicalReceipt({ sourcePurpose: "purchase_order_bill", status }), false);
+    assert.equal(invoiceAllowsPhysicalReceipt({ status }), true);
+  }
+  assert.equal(Boolean(invoiceDeliveryFullyReceived({ suggestion: null })), false);
 });

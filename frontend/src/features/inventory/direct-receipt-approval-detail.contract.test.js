@@ -23,7 +23,8 @@ test("Inbound opens durable no-PO approvals and exact source records", async () 
   assert.match(inbound, /consumedSourceId === initialSourceId/);
   assert.match(inbound, /setConsumedSourceId\(initialSourceId\)/);
   assert.match(inbound, /\/api\/office\/inventory\/inbound\/\$\{encodeURIComponent\(initialSourceId\)\}/);
-  assert.match(inbound, /A closed or missing source falls back to the normal inbound list/);
+  assert.match(inbound, /setSourceError\(error\.message/);
+  assert.match(inbound, /The linked delivery or receipt could not be loaded/);
   assert.doesNotMatch(inbound, /data\.items\.find\(\(item\) => item\.id === initialSourceId/);
   assert.match(inbound, /url\.searchParams\.delete\("receiptId"\); url\.searchParams\.delete\("deliveryId"\)/);
   assert.match(inbound, /title="Selected delivery"/);

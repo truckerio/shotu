@@ -15,7 +15,12 @@ import {
   createLaborProductSchema,
   laborProductListSchema,
   pinLaborProductSchema,
+  laborProductRatesSchema,
+  laborProductRateRevisionSchema,
 } from "./labor-products.schemas.js";
+import { appendLaborRateVersion } from "../../db/repositories/workorder-labor-pricing.repo.js";
+import { readEffectiveLaborPriceSources } from "../../db/repositories/workorder-labor-price-sources.repo.js";
+import { createHash } from "node:crypto";
 
 function capabilities(context, role = context?.actor?.role) {
   requireActor(context);
@@ -92,6 +97,61 @@ export async function changeLaborProductPin(productId, input, context, dependenc
   });
   if (!product) throw resourceNotFound("Labor product");
   return product;
+}
+
+function publicRate(row) {
+  return {
+    id: row.id,
+    productId: row.labor_product_id,
+    locationId: row.location_id || null,
+    priceKind: row.price_kind,
+    version: Number(row.version),
+    status: row.amount === null ? "unknown" : "known",
+    amount: row.amount === null ? null : String(row.amount),
+    currency: row.currency || null,
+    sellingPolicyVersionId: row.selling_policy_version_id || null,
+    configuredPriceVersionId: row.configured_price_version_id || null,
+  };
+}
+
+export async function readLaborProductRates(productId, rawInput, context, dependencies = {}) {
+  const id = z.string().uuid().parse(productId);
+  const input = laborProductRatesSchema.parse(rawInput);
+  const { location, role } = await authorizedLocation(context, input.locationId, dependencies);
+  if (!["office", "admin"].includes(role) || context.sessionMode === "kiosk") throw permissionDenied();
+  const product = await (dependencies.findProduct || findActiveLocalLaborProduct)({
+    companyId: location.company_id, locationId: location.id, productId: id,
+  });
+  if (!product) throw resourceNotFound("Labor product");
+  const rows = await (dependencies.readRates || readEffectiveLaborPriceSources)({
+    companyId: location.company_id, locationId: location.id, productId: id,
+  });
+  return { productId: id, locationId: location.id,
+    currentRates: Object.fromEntries(rows.map((row) => [row.price_kind, publicRate(row)])) };
+}
+
+export async function reviseLaborProductRate(productId, rawInput, context, dependencies = {}) {
+  const id = z.string().uuid().parse(productId);
+  const input = laborProductRateRevisionSchema.parse(rawInput);
+  const { location, role } = await authorizedLocation(context, input.locationId, dependencies);
+  if (!["office", "admin"].includes(role) || context.sessionMode === "kiosk") throw permissionDenied();
+  if ((input.amount === null) !== (input.currency === null)) {
+    throw new AuthError(400, "LABOR_RATE_INVALID", "Amount and currency must both be known or Unknown.");
+  }
+  const command = {
+    companyId: location.company_id, productId: id, locationId: location.id,
+    priceKind: input.priceKind, expectedVersion: input.expectedVersion,
+    amount: input.amount, currency: input.currency, reason: input.reason,
+    actorId: context.actor.id, idempotencyKey: input.idempotencyKey,
+  };
+  const result = await (dependencies.appendRate || appendLaborRateVersion)({
+    ...command,
+    requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),
+  });
+  if (result.kind === "not_found") throw resourceNotFound("Labor product");
+  if (result.kind === "version_conflict") throw new AuthError(409, "LABOR_RATE_VERSION_CONFLICT", "Labor rate changed. Refresh and try again.");
+  if (result.kind === "idempotency_conflict") throw new AuthError(409, "LABOR_RATE_REPLAY_CONFLICT", "This request key was used with different rate details.");
+  return result;
 }
 
 export async function trustedLocalLaborProduct({ productId, companyId, locationId }, context, dependencies = {}) {

@@ -79,6 +79,24 @@ test("manual Workorder price overrides show the original and custom values", () 
   assert.equal(timelineEventDescription(event), "FILTER-1 price changed from $18.00 internal price to $24.00 custom price.");
 });
 
+test("price activity preserves exact four-decimal amounts, actor and timestamp", () => {
+  const event = {
+    id: "price-1", type: "field", field_key: "pricing.part.aggregate.line-1",
+    field_label: "FILTER-1 price", old_value: "USD 18.1234 selling price",
+    new_value: "USD 24.5678 custom price (selling price)",
+    actor_user_id: "office-1", changed_by_name: "Office User", actor_role: "office",
+    created_at: "2026-10-20T12:34:56.000Z",
+  };
+  assert.equal(timelineEventDescription(event), "FILTER-1 price changed from USD 18.1234 selling price to USD 24.5678 custom price (selling price).");
+  const [group] = groupTimelineEvents([event]);
+  assert.equal(group.actorName, "Office User");
+  assert.equal(group.actorRole, "office");
+  assert.equal(group.children[0].created_at, event.created_at);
+  const initial = { ...event, old_value: "" };
+  assert.equal(timelineEventTitle(initial), "Workorder price recorded");
+  assert.equal(timelineEventDescription(initial), "FILTER-1 price recorded as USD 24.5678 custom price (selling price).");
+});
+
 test("multi-event timeline keeps distinct operational activity readable", () => {
   const events = [
     { id: 1, type: "status", from_status: "created", to_status: "assigned", note: "Assigned by office." },

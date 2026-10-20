@@ -35,7 +35,7 @@ test("Create replaces its legacy Preview surfaces with one Documents supporting 
   assert.match(createPage, /import \{ DocumentsPanel \}/);
   assert.match(createPage, /previewOpen=\{customerPreviewOpen\}/);
   assert.match(createPage, /supportingPane=\{<DocumentsPanel[\s\S]*open=\{customerPreviewOpen\}/);
-  assert.doesNotMatch(createPage, /PreviewPane|CompactWorkorderPreview|PreviewFullscreen|WorkorderPreview|BrowserPrintDocument|PrintModal/);
+  assert.doesNotMatch(createPage, /<PreviewPane|CompactWorkorderPreview|PreviewFullscreen|WorkorderPreview|BrowserPrintDocument|PrintModal/);
   assert.doesNotMatch(createShell, /PreviewToggle|onTogglePreview|previewActive|previewVisible/);
 });
 
@@ -70,7 +70,7 @@ test("phone Create uses shared keyboard foundation and one docked primary action
   assert.match(createPage, /useVisualViewport/);
   assert.match(createPage, /useFocusedFieldVisibility/);
   assert.match(createShell, /<KeyboardAwareDock/);
-  assert.match(createShell, /t\("create\.creating"\) : t\("create\.title"\)/);
+  assert.match(createShell, /t\("create\.creating"\) : createLabel \|\| t\("create\.title"\)/);
   assert.match(createShell, /\{!isPhone \? \([\s\S]*className="detail-create-button"/);
   assert.match(createCss, /@media \(max-width:\s*1180px\)[\s\S]*\.prototype\.create-workorder-page\.is-keyboard-open\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100%;/s);
   assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s+\.create-workorder-form\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s);
@@ -91,12 +91,13 @@ test("Create fields provide keyboard intent without changing textarea behavior",
   assert.doesNotMatch(createUnit, /<textarea[^>]*enterKeyHint=/);
 });
 
-test("phone Create keeps one form page and opens Documents from its contextual estimate action", () => {
+test("phone Create keeps one form page and opens Documents from its header toggle", () => {
   assert.match(createHost, /sections\.map/);
   assert.match(createUnit, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"[\s\S]*keepMounted/);
   assert.doesNotMatch(createForm, /<FormCard/);
-  assert.match(createShell, /\{customerDocumentAction \? <div className="create-workorder-mobile-action">/);
-  assert.match(createPage, /const estimateActionLabel = customerRevisionId \? "View estimate" : "Review estimate"/);
+  assert.match(createShell, /\{customerDocumentAction\}/);
+  assert.doesNotMatch(createShell, /create-workorder-mobile-action">\{customerDocumentAction\}/);
+  assert.match(createPage, /<PreviewToggle[\s\S]*controls="workorder-documents-panel"/);
   assert.match(createPage, /async function previewCustomerEstimate\(\{ open = true \} = \{\}\) \{\s*if \(open\) setCustomerPreviewOpen\(true\)/);
   assert.doesNotMatch(createPage, /activeSection === "preview"/);
   assert.doesNotMatch(createSections, /WORKORDER_MODULE_IDS\.PREVIEW,[\s\S]*\];/);

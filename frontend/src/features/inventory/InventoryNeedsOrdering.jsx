@@ -24,32 +24,34 @@ const columns=[
 const quantity=value=>Number(value||0).toLocaleString(undefined,{maximumFractionDigits:3});
 const sourceLabel=value=>({workorder:'Workorder',minimum_stock:'Minimum stock',both:'Both',legacy:'Legacy request',mixed:'Mixed'}[value]||value);
 
-export function InventoryNeedsOrdering({locations,onCreateOrder,onInvoice}) {
+export function InventoryNeedsOrdering({locations,onCreateOrder,onInvoice,embedded=false,controlledLocationId='',controlledData,controlledError=''}) {
   const [locationId,setLocationId]=useState(()=>{const requested=new URLSearchParams(window.location.search).get('locationId');return locations.some(item=>item.id===requested)?requested:locations[0]?.id||'';});
   const [data,setData]=useState(null),[error,setError]=useState(''),[refresh,setRefresh]=useState(0),[selectedIds,setSelectedIds]=useState(new Set()),[detail,setDetail]=useState(null);
+  const activeLocationId=embedded?controlledLocationId:locationId;
+  const activeData=embedded?controlledData:data;
   useEffect(()=>{if(!locationId&&locations.length)setLocationId(locations[0].id);},[locations,locationId]);
-  useEffect(()=>{setData(null);setSelectedIds(new Set());setDetail(null);},[locationId]);
+  useEffect(()=>{if(!embedded)setData(null);setSelectedIds(new Set());setDetail(null);},[activeLocationId,embedded]);
   useEffect(()=>{
-    if(!locationId)return;
+    if(embedded||!locationId)return;
     let active=true;
     api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId,page:'1',view:'purchases',status:'all',supplierId:'',query:''})}`)
       .then(result=>{if(active){setData(result);setError('');}})
       .catch(failure=>{if(active)setError(failure.message);});
     return()=>{active=false;};
-  },[locationId,refresh]);
-  const selected=useMemo(()=>data?.demand.filter(row=>selectedIds.has(row.catalog_part_id))||[],[data,selectedIds]);
-  function create(rows){onCreateOrder(rows.map(demandPurchaseLine),locationId);}
+  },[embedded,locationId,refresh]);
+  const selected=useMemo(()=>activeData?.demand.filter(row=>selectedIds.has(row.catalog_part_id))||[],[activeData,selectedIds]);
+  function create(rows){onCreateOrder(rows.map(demandPurchaseLine),activeLocationId);}
   function toggle(id){setSelectedIds(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});}
   return <section className="inventory-workflows inventory-needs-ordering">
-    <div className="inventory-workflow-toolbar">
+    {!embedded?<div className="inventory-workflow-toolbar">
       <label>Location<Dropdown value={locationId} onChange={event=>setLocationId(event.target.value)}>{locations.map(location=><option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>
       <IconButton icon={RefreshCw01} label="Refresh ordering needs" onClick={()=>setRefresh(value=>value+1)}/>
       <Button variant="primary" disabled={!selected.length} onClick={()=>create(selected)}>Create order</Button>
       <Button disabled={!locationId} onClick={()=>onInvoice?.(locationId)}>Add supplier invoice</Button>
-    </div>
+    </div>:selected.length?<div className="inventory-request-actions"><Button variant="primary" onClick={()=>create(selected)}>Create order from {selected.length} selected</Button></div>:null}
     {error?<p role="alert" className="ops-error">{error}</p>:null}
-    {!data?<p role="status">Loading ordering needs…</p>:!data.demand.length?<p>No parts need ordering at this location.</p>:<OperationalDataTable ariaLabel="Needs ordering" columns={columns} className="inventory-data-table inventory-needs-ordering-table">
-      {data.demand.map(row=><OperationalDataRow id={row.catalog_part_id} key={`${row.catalog_part_id}:${row.uom_code}`}>
+    {!activeData?controlledError?<p>Ordering needs are unavailable until purchasing refreshes successfully.</p>:<p role="status">Loading ordering needs…</p>:!activeData.demand.length?<p>No parts need ordering at this location.</p>:<OperationalDataTable ariaLabel="Needs ordering" columns={columns} className="inventory-data-table inventory-needs-ordering-table">
+      {activeData.demand.map(row=><OperationalDataRow id={row.catalog_part_id} key={`${row.catalog_part_id}:${row.uom_code}`}>
         <OperationalDataCell label="Select"><Checkbox aria-label={`Select ${row.part_number}`} checked={selectedIds.has(row.catalog_part_id)} onChange={()=>toggle(row.catalog_part_id)}/></OperationalDataCell>
         <OperationalDataCell label="Part"><button type="button" className="purchase-order-link" onClick={()=>setDetail(row)}><strong>{row.part_number}</strong></button><small>{row.description} · {row.uom_code}</small></OperationalDataCell>
         <OperationalDataCell label="Buy"><strong>{quantity(row.buy_quantity)} {row.uom_code}</strong></OperationalDataCell>

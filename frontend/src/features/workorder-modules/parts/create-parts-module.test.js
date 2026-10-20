@@ -124,8 +124,30 @@ test("quantity and bulk parts choose a position while batch allocation stays aut
   assert.doesNotMatch(stockDropdown, /name=\{`source-batch-/);
   assert.match(stockDropdown, /batchCoverageMissing/);
   assert.match(stockDropdown, /Review this position in Inventory/);
-  assert.match(stockDropdown, /disabled=\{requiresSourcePosition && \(!selectedPosition \|\| batchCoverageMissing\)\}/);
+  assert.match(stockDropdown, /disabled=\{\(requiresSourcePosition && \(!selectedPosition \|\| \(canViewPrices && batchCoverageMissing\)\)\) \|\| pricingLoading \|\| \(canViewPrices && !selectedPrice\)\}/);
   assert.match(css, /\.create-stock-batch-allocation\s*\{[^}]*min-height:\s*44px/s);
+});
+
+test("Create stock and serialized pickers require an exact server price preview before Done", () => {
+  assert.match(source, /<CreateStockDropdown canViewPrices=\{canViewPrices\} loadPricingPreview=\{loadPricingPreview\}/);
+  assert.match(source, /<CreateSerializedUnitPicker[\s\S]*canViewPrices=\{canViewPrices\}[\s\S]*loadPricingPreview=\{loadPricingPreview\}/);
+  assert.match(stockDropdown, /loadPricingPreviewRef\.current\(\{[\s\S]*sourcePositionId: part\.sourcePositionId,[\s\S]*quantity: Number\(part\.qty\)/);
+  assert.match(stockDropdown, /showSelectionIndicator=\{false\}/);
+  assert.match(stockDropdown, /canViewPrices && !selectedPrice/);
+  assert.match(serializedPicker, /loadPricingPreviewRef\.current\(serializedSelectionPatch\(unitList, selected\)\)/);
+  assert.match(serializedPicker, /priceSelection, customUnitPrice: ""/);
+  assert.doesNotMatch(serializedPicker, /expectedFingerprint/);
+});
+
+test("mechanic Create stock selection does not request or render financial data", () => {
+  assert.match(stockDropdown, /if \(canViewPrices\) requests\.push\(api\(`\/api\/office\/inventory\/parts\/\$\{encodeURIComponent\(part\.catalogPartId\)\}\/selling-policy/);
+  assert.match(stockDropdown, /\{canViewPrices && selectedPosition && automaticAllocations\.length \?/);
+  assert.match(stockDropdown, /\{canViewPrices && batchCoverageMissing \?/);
+  assert.match(stockDropdown, /loadPricingPreviewRef\.current = loadPricingPreview/);
+  assert.doesNotMatch(stockDropdown, /\[canViewPrices, loadPricingPreview,/);
+  assert.match(stockDropdown, /\.stock-intake-overlay, \.dropdown-select-popover/);
+  assert.match(stockDropdown, /popoverClassName="create-stock-price-popover"/);
+  assert.match(css, /\.create-stock-price-popover\s*\{[^}]*min-width:\s*min\(22rem, calc\(100vw - 32px\)\)[^}]*width:\s*min\(22rem, calc\(100vw - 32px\)\)/s);
 });
 
 test("catalog and scanned selections carry descriptions into each Repair order", () => {
@@ -174,12 +196,12 @@ test("office and admin Create Parts expose controlled server-preview pricing in 
   assert.match(source, /purchaseRequested:true,[^}]*priceSelection:""/);
   assert.match(source, /onChange=\{\(selection\) => onChange\(index, \{ priceSelection: selection, customUnitPrice: "" \}\)\}/);
   assert.match(source, /onCustomUnitPriceChange=\{\(customUnitPrice\) => onChange\(index, \{ customUnitPrice \}\)\}/);
-  assert.match(priceCell, /priceOptionLabel\(internalPrice, "internal price"\)/);
-  assert.match(priceCell, /priceOptionLabel\(sellingPrice, "selling price"\)/);
+  assert.match(priceCell, /<PriceSourceDropdown/);
+  assert.match(priceCell, /<PartRatesDialog/);
+  assert.match(priceCell, /<LaborRatesDialog/);
   assert.match(priceCell, /aria-label="Workorder unit price"/);
   assert.match(priceCell, /className="create-price-source-menu"/);
-  assert.match(priceCell, /placement="bottom end"/);
-  assert.match(priceCell, /popoverClassName="create-price-source-popover"/);
+  assert.match(priceCell, /popoverClassName="create-price-source-popover workorder-price-source-popover"/);
   assert.doesNotMatch(priceCell, /Change price/);
   assert.match(source, /<WorkorderPricingFooter[\s\S]*pricing=\{pricing\?\.preview\?\.summary\}[\s\S]*projection=\{customerEstimateProjection\}[\s\S]*discountControl=\{discountControl\}/);
   assert.match(pricingFooter, /label="Parts & labor"[\s\S]*\{discountControl \|\| <PricingRow label="Discount"[\s\S]*label="Tax"[\s\S]*label="Total"/);

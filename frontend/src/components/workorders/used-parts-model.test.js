@@ -7,6 +7,7 @@ import {
   canEditUsedParts,
   defaultUsedPartQuantity,
   initialUsedPartRows,
+  groupSerializedUsageRows,
   installedSerializedUsedParts,
   serializedUsageTableState,
   reusableReturnedUsageIds,
@@ -402,4 +403,57 @@ test("only the latest returned usage for an exact unit offers reuse", () => {
     [],
   );
   assert.deepEqual([...reusableReturnedUsageIds(null)], []);
+});
+
+
+test("serialized quantity groups selected exact units and preserves independent lifecycle data", () => {
+  const rows = [
+    { usageId: "a", catalogPartId: "pump", partNo: "PUMP", qty: "1", uomCode: "ea", serialNumber: "SN-A", status: "reserved", repairOrder: "", price: { unitPrice: "25" } },
+    { usageId: "b", catalogPartId: "pump", partNo: "PUMP", qty: "1", uomCode: "ea", serialNumber: "SN-B", status: "installed_pending_approval", repairOrder: "Replace pump", price: { unitPrice: "30" } },
+    { usageId: "c", catalogPartId: "filter", partNo: "FILTER", qty: "1", uomCode: "ea", serialNumber: "SN-C" },
+  ];
+  const grouped = groupSerializedUsageRows(rows);
+  assert.equal(grouped.length, 2);
+  assert.equal(grouped[0].qty, "2");
+  assert.deepEqual(grouped[0].memberParts, rows.slice(0, 2));
+  assert.equal(grouped[0].memberParts[1].price.unitPrice, "30");
+  assert.deepEqual(groupSerializedUsageRows(JSON.parse(JSON.stringify(rows))), grouped, "reload reconstructs the same quantity from saved usages");
+  assert.equal(rows[0].qty, "1", "grouping must not change exact-unit evidence");
+});
+
+test("serialized quantity does not merge unidentified rows, distinct UOMs or repeat a usage", () => {
+  const first = { usageId: "a", catalogPartId: "pump", qty: "1", uomCode: "ea" };
+  const rows = [first, { ...first }, { ...first, usageId: "b", uomCode: "pc" }, { usageId: "legacy-a", partNo: "PUMP", qty: "1" }, { usageId: "legacy-b", partNo: "PUMP", qty: "1" }];
+  const grouped = groupSerializedUsageRows(rows);
+  assert.equal(grouped.length, 4);
+  assert.ok(grouped.every((row) => row.qty === "1"));
+  assert.deepEqual(groupSerializedUsageRows(null), []);
+});
+
+test("partial serialized additions and returns project only persisted active exact units", () => {
+  const actionsFor = (usage) => ({ install: usage.status === "reserved" });
+  const saved = [
+    { id: "a", catalogPartId: "pump", partNumber: "PUMP", uomCode: "ea", serialNumber: "A", status: "reserved" },
+    { id: "b", catalogPartId: "pump", partNumber: "PUMP", uomCode: "ea", serialNumber: "B", status: "reserved" },
+    { id: "c", catalogPartId: "pump", partNumber: "PUMP", uomCode: "ea", serialNumber: "C", status: "returned" },
+  ];
+  const state = serializedUsageTableState(saved, actionsFor);
+  const grouped = groupSerializedUsageRows(state.active);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].qty, "2");
+  assert.deepEqual(grouped[0].memberParts.map((member) => member.serialNumber), ["A", "B"]);
+  assert.equal(state.completed[0].id, "c");
+  assert.equal(groupSerializedUsageRows(serializedUsageTableState(saved.slice(0, 1), actionsFor).active)[0].qty, "1");
+});
+
+
+test("authoritative active usage projection preserves each saved price through grouping", () => {
+  const usages = [
+    { id: "a", catalogPartId: "pump", partNumber: "PUMP", uomCode: "ea", status: "reserved", price: { selection: "selling_price", unitPrice: "25", currency: "USD" } },
+    { id: "b", catalogPartId: "pump", partNumber: "PUMP", uomCode: "ea", status: "installed_pending_approval", price: { selection: "batch_cost", unitPrice: "18", currency: "USD" } },
+  ];
+  const state = serializedUsageTableState(usages, () => ({ install: true }));
+  const grouped = groupSerializedUsageRows(state.active);
+  assert.deepEqual(grouped[0].memberParts.map((member) => member.price), usages.map((usage) => usage.price));
+  assert.equal(grouped[0].qty, "2");
 });

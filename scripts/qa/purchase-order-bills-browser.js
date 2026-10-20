@@ -24,8 +24,9 @@ try{for(const width of [1440,390]){
     });
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`http://localhost:5173/${name}`);
-    await page.getByRole('button',{name:'Purchase orders',exact:true}).click();
+    await page.locator('.purchase-orders-page').waitFor();
     assert.equal(await page.getByRole('tab',{name:'Bills',exact:true}).count(),0);
+    await page.getByRole('button',{name:'View invoices',exact:true}).click();
     await page.getByRole('button',{name:'Upload bill',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Upload bill',exact:true});await dialog.waitFor();
     await dialog.getByText('PO-BILL-101 · ABC Parts',{exact:true}).waitFor();
@@ -37,7 +38,7 @@ try{for(const width of [1440,390]){
     assert.equal(requests.length,1);
     assert.equal(order.status,'received');assert.equal(order.version,1);
     await page.keyboard.press('Escape');await page.reload();
-    await page.getByRole('button',{name:'Purchase orders',exact:true}).click();
+    await page.locator('.purchase-orders-page').waitFor();
     await page.getByRole('button',{name:'PO-BILL-101',exact:true}).click();
     await page.getByRole('link',{name:'invoice.pdf',exact:true}).waitFor();
     assert.deepEqual(errors,[]);console.log(`Bill upload, PO link and reload passed at ${width}px`);

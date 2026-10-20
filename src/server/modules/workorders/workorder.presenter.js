@@ -15,6 +15,17 @@ export function statusLabel(status) {
   return labels[status] || status;
 }
 
+export function activityStatusLabel(status) {
+  const labels = {
+    ready: "Ready",
+    active: "Active",
+    on_hold: "On hold",
+    waiting_parts: "Waiting for parts",
+    waiting_office: "Waiting for office",
+  };
+  return labels[status] || status;
+}
+
 export function assetLabel(asset) {
   if (!asset) return "No unit selected";
   const unit = asset.unitNo || asset.name || asset.vin || "Vehicle";
@@ -30,6 +41,8 @@ export function dashboardCard(workorder, lastMessage = null) {
     concern: workorder.concern,
     status: workorder.status,
     statusLabel: statusLabel(workorder.status),
+    activityStatus: workorder.activityStatus || "ready",
+    activityStatusLabel: activityStatusLabel(workorder.activityStatus || "ready"),
     locationName: workorder.location?.name || "",
     customerCompanyName: resolveCustomerCompanyName(
       workorder.formData,

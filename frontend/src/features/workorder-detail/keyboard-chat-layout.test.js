@@ -31,7 +31,7 @@ test("compact keyboard mode hides detail navigation and bounds the page to visua
 
 test("chat uses remaining height with internal message scrolling and keyboard-following composer", () => {
   assert.match(chatCss, /grid-template-rows:\s*minmax\(0,\s*1fr\) auto;/);
-  assert.match(chatCss, /\.chat-content\s*>\s*\.chat-thread\s*\{[^}]*touch-action:\s*pan-y pinch-zoom;/s);
+  assert.match(chatCss, /\.chat-content\s*>\s*\.chat-thread-surface\s*>\s*\.chat-thread\s*\{[^}]*touch-action:\s*pan-y pinch-zoom;/s);
   assert.match(chatCss, /\.is-keyboard-open\s+\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*bottom:\s*0;[^}]*position:\s*sticky;/s);
 });
 

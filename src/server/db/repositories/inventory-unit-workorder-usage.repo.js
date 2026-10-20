@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import {
   assertExactUnitHasReservablePosition,
@@ -571,13 +572,15 @@ async function lockWorkorder(client, input) {
   return result.rows[0] || null;
 }
 
-export async function issueSerializedUnitToWorkorder(input) {
-  const client = await getPool().connect();
+export async function issueSerializedUnitToWorkorder(input, transactionClient = null) {
+  const client = transactionClient || await getPool().connect();
+  const managesTransaction = !transactionClient;
+  const finish = async (command) => { if (managesTransaction) await client.query(command); };
   try {
-    await client.query("begin");
+    await finish("begin");
     const workorder = await lockWorkorder(client, input);
     if (!workorder) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "missing" };
     }
     const replay = await client.query(
@@ -590,7 +593,7 @@ export async function issueSerializedUnitToWorkorder(input) {
     if (replay.rows[0]) {
       const kind = replay.rows[0].issue_request_hash === input.requestHash ? "replay" : "idempotency_conflict";
       const usage = kind === "replay" ? await loadUsage(client, workorder.company_id, replay.rows[0].id) : null;
-      await client.query("commit");
+      await finish("commit");
       return { kind, usage };
     }
     await assertCurrentExternalEstimateAccepted(client, {
@@ -598,11 +601,11 @@ export async function issueSerializedUnitToWorkorder(input) {
       workorderId: workorder.id,
     });
     if (!ISSUE_STATUSES.has(workorder.status)) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "workorder_state" };
     }
     if (!workorder.asset_id) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "asset_required" };
     }
     const unitResult = await client.query(
@@ -619,15 +622,15 @@ export async function issueSerializedUnitToWorkorder(input) {
     );
     const unit = unitResult.rows[0];
     if (!unit) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "missing" };
     }
     if (!isApplicationOwnedInventoryProvider(unit.provider)) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "provider_not_local" };
     }
     if (unit.status !== "in_stock") {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "unit_state" };
     }
     if (!await assertExactUnitHasReservablePosition(client, {
@@ -635,7 +638,7 @@ export async function issueSerializedUnitToWorkorder(input) {
       locationId: workorder.location_id,
       unitId: unit.id,
     })) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "unit_state" };
     }
     const itemResult = await client.query(
@@ -649,7 +652,7 @@ export async function issueSerializedUnitToWorkorder(input) {
     );
     const item = itemResult.rows[0];
     if (!item || Number(item.quantity_on_hand) - Number(item.quantity_reserved) < 1) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "stock_mismatch" };
     }
     const inserted = await client.query(
@@ -682,10 +685,10 @@ export async function issueSerializedUnitToWorkorder(input) {
         workorder.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
     );
     const usage = await loadUsage(client, workorder.company_id, usageId);
-    await client.query("commit");
+    await finish("commit");
     return { kind: "reserved", usage };
   } catch (error) {
-    await client.query("rollback").catch(() => {});
+    if (managesTransaction) await client.query("rollback").catch(() => {});
     if (error?.code === "23505") {
       return {
         kind: error.constraint === "workorder_serialized_usage_issue_idempotency_key"
@@ -695,18 +698,18 @@ export async function issueSerializedUnitToWorkorder(input) {
       };
     }
     throw error;
-  } finally {
-    client.release();
-  }
+  } finally { if (managesTransaction) client.release(); }
 }
 
-export async function finalizeSerializedUnitUsage(input) {
-  const client = await getPool().connect();
+export async function finalizeSerializedUnitUsage(input, transactionClient = null) {
+  const client = transactionClient || await getPool().connect();
+  const managesTransaction = !transactionClient;
+  const finish = async (command) => { if (managesTransaction) await client.query(command); };
   try {
-    await client.query("begin");
+    await finish("begin");
     const workorder = await lockWorkorder(client, input);
     if (!workorder) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "missing" };
     }
     const usageResult = await client.query(
@@ -721,13 +724,13 @@ export async function finalizeSerializedUnitUsage(input) {
     );
     const usage = usageResult.rows[0];
     if (!usage) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "missing" };
     }
     if (usage.finalize_idempotency_key === input.idempotencyKey) {
       const kind = usage.finalize_request_hash === input.requestHash ? "replay" : "idempotency_conflict";
       const replayed = kind === "replay" ? await loadUsage(client, workorder.company_id, usage.id) : null;
-      await client.query("commit");
+      await finish("commit");
       return { kind, usage: replayed };
     }
     const command = await client.query(
@@ -738,15 +741,19 @@ export async function finalizeSerializedUnitUsage(input) {
     if (command.rows[0]) {
       const kind = command.rows[0].request_hash === input.requestHash ? "replay" : "idempotency_conflict";
       const replayed = kind === "replay" ? await loadUsage(client, workorder.company_id, usage.id) : null;
-      await client.query("commit");
+      await finish("commit");
       return { kind, usage: replayed };
     }
     const removing = input.disposition === "removed";
     const permittedStatuses = removing
       ? REMOVAL_STATUSES
-      : input.disposition === "returned" ? RETURN_STATUSES : FINALIZE_STATUSES;
+      : input.disposition === "returned"
+        ? RETURN_STATUSES
+        : transactionClient && input.actorRole === "office"
+          ? new Set([...FINALIZE_STATUSES, "open"])
+          : FINALIZE_STATUSES;
     if (!permittedStatuses.has(workorder.status)) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "workorder_state" };
     }
     const legacy = usage.status === "issued" && usage.unit_status === "issued";
@@ -756,7 +763,7 @@ export async function finalizeSerializedUnitUsage(input) {
     // Physically fitted parts never go straight back to Available. The custody
     // command records removal-workorder context, handoff, and independent review.
     if (removing || input.disposition === "returned" && pendingInstall) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "custody_required" };
     }
     if (!(
@@ -764,7 +771,7 @@ export async function finalizeSerializedUnitUsage(input) {
       || input.disposition === "returned" && (legacy || reserving || pendingInstall)
       || removing && approvedInstall
     )) {
-      await client.query("rollback");
+      await finish("rollback");
       return { kind: "unit_state" };
     }
     if (input.disposition === "installed") {
@@ -782,7 +789,7 @@ export async function finalizeSerializedUnitUsage(input) {
         [workorder.company_id, usage.location_id, usage.catalog_part_id, usage.uom_code],
       );
       if (!item.rows[0]) {
-        await client.query("rollback");
+        await finish("rollback");
         return { kind: "stock_mismatch" };
       }
       if (legacy) {
@@ -806,7 +813,7 @@ export async function finalizeSerializedUnitUsage(input) {
           [item.rows[0].id],
         );
         if (!released.rows[0]) {
-          await client.query("rollback");
+          await finish("rollback");
           return { kind: "stock_mismatch" };
         }
       }
@@ -863,15 +870,58 @@ export async function finalizeSerializedUnitUsage(input) {
         workorder.id, usage.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole, positionOperationId })],
     );
     const finalized = await loadUsage(client, workorder.company_id, usage.id);
-    await client.query("commit");
+    await finish("commit");
     return { kind: "finalized", usage: finalized };
   } catch (error) {
-    await client.query("rollback").catch(() => {});
-    if (error?.code === "23505") return { kind: "idempotency_conflict", usage: null };
+    if (managesTransaction) await client.query("rollback").catch(() => {});
+    if (managesTransaction && error?.code === "23505") return { kind: "idempotency_conflict", usage: null };
     throw error;
   } finally {
-    client.release();
+    if (managesTransaction) client.release();
   }
+}
+
+export async function installEligibleSerializedUnitUsages(client, {
+  workorderId,
+  companyId,
+  locationId,
+  actorId,
+  actorRole,
+}) {
+  const eligible = await client.query(
+    `select usage.id
+     from workorder_serialized_part_usages usage
+     join inventory_serialized_units unit
+       on unit.company_id = usage.company_id and unit.id = usage.unit_id
+     where usage.company_id = $1 and usage.workorder_id = $2
+       and usage.location_id = $3
+       and (
+         (usage.status = 'issued' and unit.status = 'issued')
+         or (usage.status = 'reserved' and unit.status = 'reserved')
+       )
+     order by usage.id
+     for update of usage, unit`,
+    [companyId, workorderId, locationId],
+  );
+  for (const usage of eligible.rows) {
+    const idempotencyKey = `workdone-install:${workorderId}:${usage.id}`;
+    const requestHash = createHash("sha256").update(idempotencyKey).digest("hex");
+    const result = await finalizeSerializedUnitUsage({
+      workorderId,
+      companyId,
+      locationId,
+      actorId,
+      actorRole,
+      usageId: usage.id,
+      disposition: "installed",
+      idempotencyKey,
+      requestHash,
+    }, client);
+    if (!['finalized', 'replay'].includes(result.kind)) {
+      throw new Error(`Serialized Workorder installation failed: ${result.kind}.`);
+    }
+  }
+  return eligible.rowCount;
 }
 
 export async function consumePendingSerializedInstallationsForApproval(client, { workorderId, companyId, officeUserId }) {

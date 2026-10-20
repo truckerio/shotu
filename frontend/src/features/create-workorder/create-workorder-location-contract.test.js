@@ -19,7 +19,7 @@ test("required create location remains visible while location data loads or fail
 test("granted cross-role Create uses the neutral authenticated context and submit APIs", () => {
   assert.match(locationController, /createTemplateEndpoint\(\)/);
   assert.doesNotMatch(locationController, /templateApiRole|\/api\/office\/locations/);
-  assert.match(commands, /api\("\/api\/workorders"/);
+  assert.match(commands, /api\(customerIntake \? "\/api\/workorders\/customer-intake" : "\/api\/workorders"/);
   assert.match(commands, /!\["admin", "office"\]\.includes\(actor\.role\)/);
 });
 

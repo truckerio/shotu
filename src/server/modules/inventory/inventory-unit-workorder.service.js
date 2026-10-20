@@ -28,6 +28,8 @@ import {
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import { authorizeWorkorderCreate } from "../workorders/workorder-module-access.service.js";
 import { createSerializedUnitsForPart } from "./inventory-part-serialization.service.js";
+import { issueSerializedUnitWithPrice } from "../../db/repositories/workorder-part-selection.repo.js";
+import { readCreatePricing } from "../../db/repositories/workorder-create-pricing.repo.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
 
@@ -129,17 +131,24 @@ export async function issueSerializedUnitForWorkorder(workorderId, rawInput, con
   const input = issueWorkorderInventoryUnitSchema.parse(rawInput);
   const { scope } = await authorizeScanning(workorderId, context, dependencies, "write", "issue");
   const unitId = input.unitId || unitIdFromCode(input.code, dependencies);
+  if (input.pricing && !["office", "admin"].includes(scope.actorRole)) {
+    throw failure("WORKORDER_PART_PRICE_FORBIDDEN", "Only Office or Admin may select part prices.", 403);
+  }
   const requestHash = hash({ action: "issue", workorderId, unitId });
-  const result = await (dependencies.issueUnit || issueSerializedUnitToWorkorder)({
+  const usageCommand = {
     workorderId,
     unitId,
     actorId: context.actor.id,
     idempotencyKey: input.idempotencyKey,
     requestHash,
     ...scope,
-  });
+  };
+  const result = input.pricing
+    ? await (dependencies.issueUnitWithPrice || issueSerializedUnitWithPrice)({ usage: usageCommand, pricing: input.pricing })
+    : await (dependencies.issueUnit || issueSerializedUnitToWorkorder)(usageCommand);
   mapMutationFailure(result.kind);
-  return { usage: result.usage, replayed: result.kind === "replay" };
+  if (result.kind === "pricing_changed") throw failure("WORKORDER_PRICING_CHANGED", "Part pricing changed. Refresh the preview and try again.");
+  return { usage: result.usage, price: result.price || null, replayed: result.kind === "replay" };
 }
 
 export async function readAvailableSerializedUnitsForWorkorder(workorderId, rawInput, context, dependencies = {}) {
@@ -187,6 +196,20 @@ export async function readAvailableSerializedUnitsForCreate(rawInput, context, d
     limit: input.limit,
   });
   if (result.kind === "missing" || result.serialRequired !== true) throw inventoryNotFound();
+  const role = effectiveCompanyRole(context, location.company_id);
+  if (["office", "admin"].includes(role) && context.sessionMode !== "kiosk" && result.part?.uomCode) {
+    result.units = await Promise.all(result.units.map(async (unit) => {
+      const pricing = await (dependencies.readCreatePricing || readCreatePricing)({
+        companyId: location.company_id,
+        locationId: location.id,
+        formData: { parts: [{ catalogPartId: input.catalogPartId, qty: 1, uomCode: result.part.uomCode }], laborHours: 0, laborProduct: null },
+        inventoryUnitSelections: [{ partIndex: 0, unitIds: [unit.id] }],
+        inventoryPositionSelections: [],
+        pricing: { parts: [] },
+      });
+      return { ...unit, pricing: { fingerprint: pricing.fingerprint, options: pricing.parts[0]?.options || {} } };
+    }));
+  }
   return result;
 }
 

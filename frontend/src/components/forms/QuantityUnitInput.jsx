@@ -17,6 +17,8 @@ export function QuantityUnitInput({
   unitLabel = "Unit",
   disabled = false,
   quantityReadOnly = false,
+  onQuantityActivate,
+  quantityHint,
   unitReadOnly = false,
   compact = false,
   max,
@@ -62,6 +64,15 @@ export function QuantityUnitInput({
             else onQuantityChange(value);
           }}
           onBlur={commitQuantity}
+          onClick={onQuantityActivate}
+          onKeyDown={onQuantityActivate ? (event) => {
+            if (["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)) {
+              event.preventDefault();
+              onQuantityActivate();
+            }
+          } : undefined}
+          aria-haspopup={onQuantityActivate ? "dialog" : undefined}
+          title={quantityHint}
           placeholder={t("uom.quantityShort")}
           aria-label={quantityLabel}
           disabled={disabled}

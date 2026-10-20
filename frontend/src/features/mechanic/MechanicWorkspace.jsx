@@ -10,7 +10,6 @@ import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.j
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
-import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
 import { inspectionFromApi } from "../inspections/inspection-api-model.js";
@@ -46,9 +45,6 @@ function jobLocation(workorder, fallback) {
 export function MechanicWorkspace({
   actor,
   locale = "en",
-  localeError = "",
-  localeReady = true,
-  onLocaleChange,
   onCreateWorkorder,
   onOpenWorkorder,
   inspectionAccess = { canRead: false, canWrite: false },
@@ -261,9 +257,6 @@ export function MechanicWorkspace({
               <SearchMd aria-hidden="true" />
               <input aria-label={t("mechanic.searchWorkorders")} {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("mechanic.searchPlaceholder")} />
             </label>
-            <div className="mechanic-secondary-actions mechanic-wide-account-actions">
-              <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} />
-            </div>
           </section>
 
           {error ? <p className="ops-error" role="alert">{error}</p> : null}
@@ -344,11 +337,6 @@ export function MechanicWorkspace({
               <div className="mechanic-secondary-queues">
                 <WorkorderQueueTabs tabs={phoneSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
               </div>
-              <section className="mechanic-secondary-tools" aria-label={t("mechanic.accountControls")}>
-                <div className="mechanic-secondary-actions">
-                  <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} />
-                </div>
-              </section>
             </div>
           </details>
         </section>

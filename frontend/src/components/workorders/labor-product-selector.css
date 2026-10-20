@@ -1,12 +1,13 @@
 .labor-product-selector { min-width: 0; position: relative; }
 .labor-product-visually-hidden { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
-.labor-product-control { align-items: center; border-bottom: 1px solid #98a2b3; display: flex; gap: 6px; min-height: 38px; }
-.labor-product-control:focus-within { border-bottom-color: #1570ef; box-shadow: 0 1px 0 #1570ef; }
-.labor-product-control input { background: transparent; border: 0; color: #182230; font: inherit; min-width: 0; outline: 0; padding: 7px 0; width: 100%; }
-.labor-product-control input:disabled { color: #98a2b3; cursor: not-allowed; }
-.labor-product-clear, .labor-product-toggle, .labor-product-popup button { background: transparent; border: 0; color: #175cd3; cursor: pointer; font: inherit; font-size: 12px; min-height: 44px; padding: 5px; }
-.labor-product-toggle { color: #344054; font-size: 20px; min-width: 44px; }
-.labor-product-toggle:disabled { color: #98a2b3; cursor: not-allowed; }
+.labor-product-selector > .labor-product-trigger { align-items: center; background: transparent; border: 0; border-bottom: 1px solid #d0d5dd; border-radius: 0; box-shadow: none; color: #182230; cursor: pointer; display: flex; font: inherit; gap: 8px; min-height: 44px; padding: 8px 0; text-align: left; width: 100%; }
+.labor-product-selector > .labor-product-trigger:focus-visible { border-color: #1570ef; outline: 2px solid #1570ef; outline-offset: 2px; }
+.labor-product-selector > .labor-product-trigger:disabled { background: transparent; color: #667085; cursor: not-allowed; }
+.labor-product-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.labor-product-trigger .dropdown-select-chevron { color: #667085; }
+.labor-product-trigger[aria-expanded="true"] .dropdown-select-chevron { transform: rotate(180deg); }
+.labor-product-selector .labor-product-popup > .labor-product-search { background: #fff; border: 0; border-bottom: 1px solid #eaecf0; border-radius: 0; box-shadow: none; color: #182230; font: inherit; min-height: 44px; padding: 10px 12px; width: 100%; }
+.labor-product-popup button { background: transparent; border: 0; color: #175cd3; cursor: pointer; font: inherit; font-size: 12px; min-height: 44px; padding: 5px; }
 .labor-product-popup { background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; box-shadow: 0 10px 24px rgb(16 24 40 / 14%); left: 0; max-height: min(320px, 50vh); overflow: auto; position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; }
 .labor-product-popup p { color: #475467; font-size: 13px; margin: 0; padding: 12px; }
 .labor-product-popup ul { list-style: none; margin: 0; padding: 4px; }

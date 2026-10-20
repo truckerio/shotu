@@ -75,6 +75,7 @@ const PATCH_SCHEMAS = Object.freeze({
 });
 
 const id = z.string().uuid();
+const customUnitPrice = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,4})?$/).optional();
 const partDecision = decidePartRequestSchema.extend({ requestId: id });
 
 const ACTIONS = Object.freeze({
@@ -99,6 +100,7 @@ const ACTIONS = Object.freeze({
       }).strict(),
       z.object({
         operation: z.literal("laborPriceSelection"),
+        customUnitPrice,
         selection: z.enum(["internal_cost", "selling_price"]),
         expectedRateVersionId: id.optional(),
         reason: z.string().trim().min(2).max(500),
@@ -127,23 +129,47 @@ const ACTIONS = Object.freeze({
         uomCode: z.string().trim().min(1).max(32),
         repairOrder: z.string().trim().max(2000).default(""),
         idempotencyKey: z.string().trim().min(8).max(160),
+        pricing: z.object({
+          selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
+          expectedFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+          reason: z.string().trim().min(2).max(500),
+        }).strict().optional(),
       }),
       z.object({
         operation: z.literal("aggregateUsageLifecycle"),
         usageId: id,
-        action: z.enum(["release", "reverse", "adjust"]),
+        action: z.enum(["install", "release", "reverse", "adjust"]),
         targetQuantity: z.coerce.number().positive().max(999999.999).multipleOf(0.001).optional(),
         reason: z.string().trim().min(2).max(500),
         idempotencyKey: z.string().trim().min(8).max(160),
       }),
       z.object({
+        operation: z.literal("partPricingPreview"),
+        usageKind: z.enum(["serialized", "aggregate", "no_stock"]),
+        catalogPartId: id.optional(),
+        usageId: id.optional(),
+        noStockLineId: id.optional(),
+        serializedUnitIds: z.array(id).min(1).max(100).optional(),
+        sourcePositionId: id.optional(),
+        quantity: z.coerce.number().positive().max(999999.999).multipleOf(0.001).optional(),
+        uomCode: z.string().trim().min(1).max(32).optional(),
+      }).strict().superRefine((value, ctx) => {
+        const saved = value.usageId || value.noStockLineId;
+        const serialized = value.usageKind === "serialized" && value.catalogPartId && value.serializedUnitIds?.length;
+        const aggregate = value.usageKind === "aggregate" && value.catalogPartId && value.sourcePositionId
+          && value.quantity !== undefined && value.uomCode;
+        if (!saved && !serialized && !aggregate) ctx.addIssue({ code: "custom", message: "Choose a saved row or exact physical stock for pricing." });
+      }),
+      z.object({
         operation: z.literal("partPriceSelection"),
+        customUnitPrice,
         usageKind: z.enum(["serialized", "aggregate", "no_stock"]),
         usageId: id.optional(),
         noStockLineId: id.optional(),
         selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
         reason: z.string().trim().min(2).max(500),
         idempotencyKey: z.string().trim().min(8).max(160),
+        expectedFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
       }),
     ]),
     approve: partDecision,

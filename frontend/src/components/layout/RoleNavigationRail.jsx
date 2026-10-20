@@ -147,15 +147,19 @@ export function RoleNavigationRail({ actor, locale = "en", ariaLabel = "Workspac
     onNavigate(nextId);
   }} />;
   return <aside ref={railRef} className="role-navigation-rail" data-compact={compact} data-overlay={overlay} data-tablet={tablet}>
-    <WorkspaceHeader actor={actor} locale={locale} className="role-navigation-account" />
-    <button ref={toggleRef} className="role-navigation-toggle" type="button" aria-label={compact ? "Expand navigation" : "Collapse navigation"} aria-expanded={!compact} aria-controls={navigationId} onClick={() => {
-      resetListScroll();
-      if (tablet) setTabletExpanded((current) => !current);
-      else setDesktopCollapsed((current) => !current);
-    }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m4-11 3 3-3 3" /></svg>
-      <span>Collapse navigation</span>
-    </button>
+    <div className="role-navigation-header">
+      <WorkspaceHeader actor={actor} locale={locale} className="role-navigation-account" />
+      <TooltipTrigger delay={250} closeDelay={0}>
+        <Button ref={toggleRef} className="role-navigation-toggle" type="button" aria-label={compact ? "Expand navigation" : "Collapse navigation"} aria-expanded={!compact} aria-controls={navigationId} onPress={() => {
+          resetListScroll();
+          if (tablet) setTabletExpanded((current) => !current);
+          else setDesktopCollapsed((current) => !current);
+        }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m4-11 3 3-3 3" /></svg>
+        </Button>
+        <Tooltip className="role-navigation-tooltip" placement="bottom">{compact ? "Expand navigation" : "Collapse navigation"}</Tooltip>
+      </TooltipTrigger>
+    </div>
     <div className="role-navigation-divider" />
     <nav ref={listRef} id={navigationId} className="role-navigation-list" aria-label={ariaLabel}>
       {groups.map((group) => {

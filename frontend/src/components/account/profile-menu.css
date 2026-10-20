@@ -640,3 +640,25 @@
     width: 32px;
   }
 }
+
+.profile-menu-language {
+  padding: 6px 10px 10px;
+}
+
+.profile-menu-language .locale-selector,
+.profile-menu-language label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-menu-language label > span {
+  color: #475467;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.profile-menu-language small {
+  color: #b42318;
+  overflow-wrap: anywhere;
+}

@@ -1,10 +1,11 @@
 import { DraftSaveStatus } from "../../../components/drafts/DraftSaveStatus.jsx";
 
-export function MechanicProgressStatus({ status, error, localeText = (key) => key }) {
+export function MechanicProgressStatus({ status, error, localeText = (key) => key, iconOnly = false }) {
   return (
     <DraftSaveStatus
       status={status}
       error={error}
+      iconOnly={iconOnly}
       showPristine={false}
       labels={{
         pristine: localeText("progress.noChanges"),

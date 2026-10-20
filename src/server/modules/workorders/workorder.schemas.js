@@ -280,6 +280,7 @@ export const markDoneSchema = z.object({
   diagnosis: z.string().trim().max(5000).default(""),
   workPerformed: z.string().trim().max(5000).default(""),
   confirmationName: z.string().trim().max(200).optional(),
+  confirmPartsInstalled: z.boolean().optional().default(false),
 });
 
 const chatAttachmentSchema = z.object({

@@ -33,7 +33,7 @@ test("RoleNavigationRail keeps a flush workspace rail and phone-safe targets", (
 
 test("Admin profile divider aligns with the page card without dividing the full rail", () => {
   assert.match(adminStyles, /\.admin-shell \.role-navigation-rail\s*\{[^}]*position:\s*sticky;/s);
-  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*112px;/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*68px;/s);
   assert.doesNotMatch(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*inset:/s);
   assert.match(adminStyles, /\.admin-shell \.role-navigation-divider\s*\{[^}]*background:\s*transparent;/s);
 });
@@ -52,7 +52,7 @@ test("compact navigation preserves permitted destinations and tablet layout spac
   assert.match(source, /aria-controls=\{navigationId\}/);
   assert.match(source, /data-compact=\{compact\} data-overlay=\{overlay\} data-tablet=\{tablet\}/);
   assert.match(styles, /:has\(> \.role-navigation-rail\[data-tablet="true"\]\)/);
-  assert.match(styles, /grid-template-columns:68px minmax\(0, 1fr\)/);
+  assert.match(styles, /grid-template-columns:104px minmax\(0, 1fr\)/);
   assert.match(styles, /\[data-overlay="true"\][^}]*width:var\(--role-navigation-expanded-width/s);
 });
 

@@ -15,6 +15,10 @@ import {
 } from "../../db/repositories/operational-workorders.repo.js";
 import { closePool, getPool, query } from "../../db/pool.js";
 import { placeSerializedInventoryReceipt } from "../../db/repositories/inventory-positions.repo.js";
+import {
+  appendLaborRateVersion,
+  saveWorkorderLaborPriceSnapshot,
+} from "../../db/repositories/workorder-labor-pricing.repo.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -174,6 +178,7 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
   const receiptId = randomUUID();
   const lineId = randomUUID();
   const catalogPartId = randomUUID();
+  const laborProductId = randomUUID();
   const unitA = randomUUID();
   const unitB = randomUUID();
   const scope = { actorId, actorRole: "office", companyId, locationId, workorderId };
@@ -192,6 +197,18 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
       [workorderId, companyId, `WO-SERIAL-${suffix}`, assetId, locationId, actorId],
     );
     await query(
+      `insert into local_labor_products(
+         id,company_id,name,normalized_name,code,normalized_code,created_by_user_id,uom_code
+       ) values($1,$2,'Serialized integration labor','serialized integration labor',$3,$4,$5,'hr')`,
+      [laborProductId, companyId, `LAB-${suffix}`, `lab-${suffix}`, actorId],
+    );
+    await query(
+      `update operational_workorders
+          set form_data=$2::jsonb
+        where id=$1`,
+      [workorderId, JSON.stringify({ laborHours: "1", laborProduct: { productId: laborProductId, uomCode: "hr" } })],
+    );
+    await query(
       `insert into parts_catalog (
          id, company_id, normalized_part_number, part_number, description, uom_code
        ) values ($1,$2,$3,$4,'Serialized integration filter','ea')`,
@@ -208,6 +225,13 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
       [runId, companyId, locationId, actorId, digest(suffix), `extract-${suffix}`, draft],
     );
     await query(
+      `insert into inventory_receipts (
+         id, company_id, location_id, invoice_run_id, created_by, idempotency_key,
+         provider, provider_marker, provider_picking_name, status, confirmed_at
+      ) values ($1,$2,$3,$4,$5,$6,'local',$7,'Local receipt','confirmed',now())`,
+      [receiptId, companyId, locationId, runId, actorId, `receipt-${suffix}`, `LOCAL-${suffix}`],
+    );
+    await query(
       `insert into local_inventory_receipts (
          id, company_id, location_id, invoice_run_id, created_by, idempotency_key,
          request_hash, status, line_count, total_quantity, reviewed_run_version,
@@ -216,11 +240,11 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
       [receiptId, companyId, locationId, runId, actorId, `receipt-${suffix}`, digest(`receipt-${suffix}`)],
     );
     await query(
-      `insert into inventory_receipts (
-         id, company_id, location_id, invoice_run_id, created_by, idempotency_key,
-         provider, provider_marker, provider_picking_name, status, confirmed_at
-       ) values ($1,$2,$3,$4,$5,$6,'local',$7,'Local receipt','confirmed',now())`,
-      [receiptId, companyId, locationId, runId, actorId, `receipt-${suffix}`, `LOCAL-${suffix}`],
+      `insert into inventory_receipt_lines (
+         id, company_id, receipt_id, line_index, catalog_part_id, product_external_id,
+         part_number, description, quantity, uom_code, tracking_mode
+      ) values ($1,$2,$3,0,$4,$5,$6,'Serialized integration filter',2,'ea','serial')`,
+      [lineId, companyId, receiptId, catalogPartId, `local:${catalogPartId}`, `SERIAL-${suffix}`],
     );
     await query(
       `insert into local_inventory_receipt_lines (
@@ -228,13 +252,6 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
          normalized_part_number, part_number, description, quantity, uom_code
        ) values ($1,$2,$3,0,$4,$5,$6,'Serialized integration filter',2,'ea')`,
       [lineId, companyId, receiptId, catalogPartId, `SERIAL${suffix}`, `SERIAL-${suffix}`],
-    );
-    await query(
-      `insert into inventory_receipt_lines (
-         id, company_id, receipt_id, line_index, catalog_part_id, product_external_id,
-         part_number, description, quantity, uom_code, tracking_mode
-       ) values ($1,$2,$3,0,$4,$5,$6,'Serialized integration filter',2,'ea','serial')`,
-      [lineId, companyId, receiptId, catalogPartId, `local:${catalogPartId}`, `SERIAL-${suffix}`],
     );
     await query(
       `insert into inventory_serialized_units (
@@ -320,6 +337,49 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
       "select quantity_on_hand, quantity_reserved from inventory_items where company_id = $1 and location_id = $2 and catalog_part_id = $3",
       [companyId, locationId, catalogPartId],
     )).rows[0], { quantity_on_hand: "2.000", quantity_reserved: "1.000" });
+    const configuredPriceId = randomUUID();
+    await query(
+      `insert into inventory_part_price_versions(
+         id,company_id,location_id,catalog_part_id,price_kind,version,amount,currency,tax_treatment,
+         reason,created_by,idempotency_key,request_hash
+       ) values($1,$2,$3,$4,'internal',1,0,'USD','out_of_scope','Serialized integration zero price',$5,$6,$7)`,
+      [configuredPriceId, companyId, locationId, catalogPartId, actorId,
+        `serialized-price-source-${suffix}`, digest(`serialized-price-source-${suffix}`)],
+    );
+    await query(
+      `insert into workorder_part_price_snapshots(
+         company_id,workorder_id,serialized_usage_id,selection,unit_price,quantity,total_price,currency,
+         configured_price_version_id,created_by,reason,idempotency_key,request_hash
+       ) values($1,$2,$3,'internal_cost',0,1,0,'USD',$4,$5,'Serialized integration zero price',$6,$7)`,
+      [companyId, workorderId, usageB.id, configuredPriceId, actorId,
+        `serialized-price-${suffix}`, digest(`serialized-price-${suffix}`)],
+    );
+    const laborRate = await appendLaborRateVersion({
+      companyId,
+      locationId,
+      productId: laborProductId,
+      priceKind: "internal_cost",
+      expectedVersion: 0,
+      amount: "25.0000",
+      currency: "USD",
+      reason: "Serialized integration labor",
+      actorId,
+      idempotencyKey: `serialized-labor-rate-${suffix}`,
+      requestHash: digest(`serialized-labor-rate-${suffix}`),
+    });
+    assert.equal(laborRate.kind, "saved");
+    assert.equal((await saveWorkorderLaborPriceSnapshot({
+      workorderId,
+      actorId,
+      companyIds: [companyId],
+      locationIds: [locationId],
+      isAdmin: false,
+      selection: "internal_cost",
+      expectedRateVersionId: laborRate.rate.id,
+      reason: "Serialized integration labor",
+      idempotencyKey: `serialized-labor-price-${suffix}`,
+      requestHash: digest(`serialized-labor-price-${suffix}`),
+    })).kind, "saved");
     await query("update operational_workorders set status = 'mechanic_done' where id = $1", [workorderId]);
     assert.equal((await finalizeSerializedUnitUsage(installCommand)).kind, "replay");
     await closeOperationalWorkorder(workorderId, actorId, "Approved serialized installation.");
@@ -416,6 +476,10 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
     const grantedMechanicView = await listWorkorderSerializedUnitUsages({ ...scope, actorRole: "mechanic", limit: 100 });
     assert.equal(grantedMechanicView.length, 3);
   } finally {
+    await query("delete from workorder_labor_price_snapshots where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from labor_rate_versions where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from workorder_part_price_snapshots where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from inventory_part_price_versions where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_unit_events where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_stock_movements where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_position_movements where company_id = $1", [companyId]).catch(() => {});
@@ -429,6 +493,7 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
     await query("delete from local_inventory_receipts where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_items where company_id = $1", [companyId]).catch(() => {});
     await query("delete from parts_catalog where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from local_labor_products where company_id = $1", [companyId]).catch(() => {});
     await query("delete from workorder_mechanic_assignments where workorder_id = $1", [workorderId]).catch(() => {});
     await query("delete from operational_workorders where id = $1", [workorderId]).catch(() => {});
     await query("delete from operational_workorders where id = $1", [secondWorkorderId]).catch(() => {});

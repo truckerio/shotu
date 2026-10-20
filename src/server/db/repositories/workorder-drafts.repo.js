@@ -539,7 +539,7 @@ export async function submitWorkorderDraft(input) {
 }
 
 export async function takeoverWorkorderDraft({ id, companyIds, adminCompanyIds, locationIds, userId, role, version }) {
-  if (adminCompanyIds !== undefined ? !adminCompanyIds.length : role !== "admin") throw new WorkorderDraftPermissionError();
+  if (adminCompanyIds !== undefined ? !companyIds?.length : !["office", "admin"].includes(role)) throw new WorkorderDraftPermissionError();
   const scope = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const client = await getPool().connect();
   try {
@@ -556,6 +556,9 @@ export async function takeoverWorkorderDraft({ id, companyIds, adminCompanyIds, 
       await client.query("rollback");
       return null;
     }
+    const companyAdmin = adminCompanyIds !== undefined ? adminCompanyIds.includes(current.company_id) : role === "admin";
+    if (!companyAdmin && !(current.payload?.intakeSource === "mechanic_customer"
+      && current.owner_user_id === current.created_by_user_id)) throw new WorkorderDraftPermissionError();
     if (current.status !== "active") {
       throw new WorkorderDraftConflictError("DRAFT_NOT_ACTIVE", "This draft is no longer active.");
     }

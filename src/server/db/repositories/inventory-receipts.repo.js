@@ -1,9 +1,11 @@
+import { purchaseBillSourcePurposeSql } from "./invoice-extractions.repo.js";
 import { getPool, query } from "../pool.js";
 
 export async function loadReviewedInvoiceForReceipt({ runId, companyIds }) {
   const result = await query(
     `select r.id, r.company_id, r.location_id, r.status, r.version, r.reviewed_draft,
-            r.reviewed_at, location.name as location_name
+            r.reviewed_at, location.name as location_name,
+            ${purchaseBillSourcePurposeSql("r")} as is_purchase_order_bill
      from invoice_extraction_runs r
      join locations location on location.company_id = r.company_id and location.id = r.location_id
      where r.id = $1 and r.company_id = any($2::uuid[])

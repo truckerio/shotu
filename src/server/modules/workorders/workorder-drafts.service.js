@@ -274,17 +274,16 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
 }
 
 export async function takeoverUserWorkorderDraft(context, id, input, dependencies = {}) {
-  const { actor, adminCompanyIds } = draftScope(context);
-  if (!adminCompanyIds.length) throw permissionDenied();
+  const { actor, companyIds, adminCompanyIds, locationIds } = draftScope(context);
   const takeover = dependencies.takeover || takeoverWorkorderDraft;
   try {
     const draft = await takeover({
       id,
-      companyIds: adminCompanyIds,
+      companyIds,
       adminCompanyIds,
-      locationIds: [],
+      locationIds,
       userId: actor.id,
-      role: "admin",
+      role: actor.role,
       version: input.version,
     });
     if (!draft) throw resourceNotFound("Draft");

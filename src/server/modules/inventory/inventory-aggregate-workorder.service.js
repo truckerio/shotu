@@ -11,6 +11,13 @@ import { getPartPositions } from "../../db/repositories/inventory-positions.repo
 import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 import { effectiveCompanyRole } from "../../auth/company-role.js";
 import { permissionDenied } from "../../auth/errors.js";
+import { reserveAggregateUsageWithPrice } from "../../db/repositories/workorder-part-selection.repo.js";
+
+const pricingSelection = z.object({
+  selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
+  expectedFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  reason: z.string().trim().min(2).max(500),
+}).strict();
 
 const reserveSchema = z.object({
   catalogPartId: z.string().uuid(),
@@ -19,11 +26,12 @@ const reserveSchema = z.object({
   uomCode: z.string().trim().min(1).max(32),
   repairOrder: z.string().trim().max(2000).default(""),
   idempotencyKey: z.string().trim().min(8).max(160),
+  pricing: pricingSelection.optional(),
 }).strict().superRefine((value, context) => validateQuantityUnit(value, context));
 
 const lifecycleSchema = z.object({
   usageId: z.string().uuid(),
-  action: z.enum(["release", "reverse", "adjust"]),
+  action: z.enum(["install", "release", "reverse", "adjust"]),
   targetQuantity: z.coerce.number().positive().max(999999.999)
     .refine((value) => hasQuantityPrecision(value, 3), "Quantity supports at most three decimals.").optional(),
   reason: z.string().trim().min(2).max(500),
@@ -82,6 +90,9 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
   const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(context, "workorder", workorderId, {
     allowedRoles: ["mechanic", "office", "admin"],
   });
+  if (input.pricing && !["office", "admin"].includes(scope.effectiveRole)) {
+    fail("WORKORDER_PART_PRICE_FORBIDDEN", "Only Office or Admin may select part prices.", 403);
+  }
   const command = {
     workorderId,
     catalogPartId: input.catalogPartId,
@@ -95,10 +106,10 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
     isAdmin: scope.isAdmin,
     actorId: context.actor.id,
   };
-  const result = await (dependencies.reserveAggregateUsage || reserveAggregateWorkorderUsage)({
-    ...command,
-    requestHash: hash(command),
-  });
+  const usageCommand = { ...command, requestHash: hash(command) };
+  const result = input.pricing
+    ? await (dependencies.reserveAggregateUsageWithPrice || reserveAggregateUsageWithPrice)({ usage: usageCommand, pricing: input.pricing })
+    : await (dependencies.reserveAggregateUsage || reserveAggregateWorkorderUsage)(usageCommand);
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "inactive_workorder") fail("AGGREGATE_USAGE_WORKORDER_INACTIVE", "Measured inventory can be reserved only for active accepted work.");
   if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "The quantity and unit must match this part's saved tracking method and canonical unit.");
@@ -106,7 +117,8 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
   if (result.kind === "source_position_unavailable") fail("AGGREGATE_USAGE_POSITION_UNAVAILABLE", "The selected pickup location no longer has enough available stock.");
   if (result.kind === "batch_reconciliation_required") fail("INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED", "This pickup location has incomplete batch placement. Reconcile it before using the part.");
   if (result.kind === "idempotency_conflict") fail("AGGREGATE_USAGE_REPLAY_CONFLICT", "That measured-usage request key was already used with different details.");
-  return { usage: result.usage, replayed: result.kind === "replay" };
+  if (result.kind === "pricing_changed") fail("WORKORDER_PRICING_CHANGED", "Part pricing changed. Refresh the preview and try again.");
+  return { usage: result.usage, price: result.price || null, replayed: result.kind === "replay" };
 }
 
 export async function releaseOrReverseMeasuredUsageForWorkorder(workorderId, input, context, dependencies = {}) {
@@ -139,6 +151,9 @@ export async function releaseOrReverseMeasuredUsageForWorkorder(workorderId, inp
   });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "idempotency_conflict") fail("AGGREGATE_USAGE_REPLAY_CONFLICT", "That measured-usage request key was already used with different details.");
+  if (result.kind === "inactive_workorder") fail("AGGREGATE_USAGE_WORKORDER_INACTIVE", "Quantity parts can be marked installed only on active accepted work.");
+  if (result.kind === "unsupported_tracking") fail("AGGREGATE_USAGE_INSTALL_UNSUPPORTED", "Only quantity-tracked parts can be marked installed.");
+  if (result.kind === "physical_return_required") fail("AGGREGATE_USAGE_PHYSICAL_RETURN_REQUIRED", "Installed quantity parts require a physical removal or return before stock can be released.");
   if (result.kind === "insufficient_stock") fail("AGGREGATE_USAGE_INSUFFICIENT_STOCK", "The adjustment would make measured inventory negative.");
   if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "Quantity-tracked inventory must be adjusted in whole units.");
   if (result.kind === "terminal") fail("AGGREGATE_USAGE_TERMINAL", "This measured-usage evidence is already released or reversed.");

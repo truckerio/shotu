@@ -26,6 +26,6 @@ test("login preserves only a bounded inventory scan return target", async () => 
   const source = await readFile(new URL("../auth/LoginPage.jsx", import.meta.url), "utf8");
   assert.match(source, /function loginReturnTarget/);
   assert.match(source, /token\.length < 8 \|\| token\.length > 2000/);
-  assert.match(source, /window\.location\.replace\(loginReturnTarget\(\)\)/);
+  assert.match(source, /window\.history\.replaceState\(window\.history\.state, "", loginReturnTarget\(\)\)/);
   assert.doesNotMatch(source, /window\.location\.replace\("\/"\)/);
 });

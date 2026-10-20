@@ -1,0 +1,48 @@
+.purchase-line-edit-overlay { position:fixed; inset:0; z-index:151; background:rgb(16 24 40 / 40%); display:flex; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; }
+.purchase-line-edit-modal { width:min(1160px,100%); max-height:calc(100dvh - 48px); overflow:auto; background:#fff; border-radius:12px; box-shadow:0 24px 48px rgb(16 24 40 / 20%); }
+.purchase-line-edit-dialog { outline:none; container-type:inline-size; min-width:0; }
+.purchase-line-edit-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:24px; border-bottom:1px solid #eaecf0; }
+.purchase-line-edit-header h2 { margin:0; font-size:22px; }
+.purchase-line-edit-header p { margin:6px 0 0; color:#667085; font-size:13px; overflow-wrap:anywhere; }
+.purchase-line-edit-body { min-width:0; padding:24px; display:grid; gap:16px; }
+.purchase-line-parts-grid { container-type:inline-size; min-width:0; }
+.purchase-line-parts-grid > .operational-part-row { display:grid; grid-template-columns:var(--workorder-parts-grid-template); align-items:start; gap:12px; padding:16px 8px; border-top:1px solid #eaecf0; min-width:0; }
+.purchase-line-parts-grid > .operational-part-row > * { min-width:0; }
+.purchase-line-parts-grid .purchase-line-product { display:grid; gap:8px; }
+.purchase-line-parts-grid .purchase-line-product > span { overflow-wrap:anywhere; }
+.purchase-line-parts-grid .purchase-line-ordinal { padding-top:12px; color:#667085; text-align:center; font-size:12px; }
+.purchase-line-parts-grid input { min-width:0; width:100%; box-sizing:border-box; min-height:40px; border:1px solid #d0d5dd; border-radius:6px; padding:8px 10px; font:inherit; font-size:13px; }
+.purchase-line-parts-grid input:focus-visible { outline:2px solid #2e6ee6; outline-offset:1px; }
+.purchase-line-parts-grid input:disabled { color:#667085; background:#f2f4f7; }
+.purchase-line-parts-grid :is(.purchase-line-quantity,.purchase-line-cost) { display:grid; gap:6px; }
+.purchase-line-parts-grid :is(.purchase-line-quantity,.purchase-line-cost,.purchase-line-amount) > span { display:none; }
+.purchase-line-parts-grid small { color:#667085; font-size:12px; }
+.purchase-line-parts-grid .purchase-line-amount { padding-top:11px; text-align:right; overflow-wrap:anywhere; font-size:13px; }
+.purchase-line-parts-grid .part-catalog-field > label { display:none; }
+.purchase-line-setup summary { color:#475467; font-size:12px; cursor:pointer; }
+.purchase-line-setup > div { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding-top:8px; }
+.purchase-line-edit-body > .button { justify-self:start; }
+.purchase-line-edit-body [role="alert"] { color:#b42318; font-size:13px; }
+.purchase-line-edit-body [role="status"] { color:#475467; font-size:13px; }
+.purchase-line-edit-footer { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; border-top:1px solid #eaecf0; background:#fff; position:sticky; bottom:0; z-index:1; }
+.purchase-line-edit-footer > div { display:flex; align-items:center; gap:12px; }
+.purchase-line-edit-footer > div:first-child { display:grid; gap:5px; }
+.purchase-line-edit-footer > div:first-child > span { font-size:12px; color:#667085; }
+.purchase-line-edit-footer strong { font-size:20px; }
+@container (max-width:700px) {
+ .purchase-line-parts-grid > .workorder-parts-column-head { display:none; }
+ .purchase-line-parts-grid > .operational-part-row { grid-template-columns:24px minmax(0,1fr) minmax(0,1fr) 32px; gap:12px 8px; }
+ .purchase-line-parts-grid .purchase-line-product { grid-column:2 / 4; }
+ .purchase-line-parts-grid .purchase-line-quantity { grid-column:2; }
+ .purchase-line-parts-grid .purchase-line-cost { grid-column:3; }
+ .purchase-line-parts-grid .purchase-line-amount { grid-column:2 / 4; padding-top:0; display:flex; justify-content:space-between; gap:8px; }
+ .purchase-line-parts-grid .operational-part-row > .shared-icon-button { grid-column:4; grid-row:1; }
+ .purchase-line-parts-grid :is(.purchase-line-quantity,.purchase-line-cost,.purchase-line-amount) > span { display:block; color:#667085; font-size:12px; }
+}
+@media (max-width:600px) {
+ .purchase-line-edit-overlay { padding:10px; }
+ .purchase-line-edit-modal { max-height:calc(100dvh - 20px); }
+ .purchase-line-edit-header,.purchase-line-edit-body { padding:16px; }
+ .purchase-line-edit-footer { align-items:stretch; flex-direction:column; padding:16px; gap:14px; }
+ .purchase-line-edit-footer > div:last-child { justify-content:flex-end; }
+}

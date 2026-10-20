@@ -15,6 +15,13 @@ import {
   readCreatePricing,
 } from "../../db/repositories/workorder-create-pricing.repo.js";
 import { appendLaborRateVersion } from "../../db/repositories/workorder-labor-pricing.repo.js";
+import {
+  issueSerializedUnitWithPrice,
+  reserveAggregateUsageWithPrice,
+} from "../../db/repositories/workorder-part-selection.repo.js";
+import { buildCandidatePricingPreview, previewWorkorderPartPricing, selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
+import { appendInventoryPartPrice } from "../../db/repositories/inventory-part-prices.repo.js";
+import { saveWorkorderPartPriceSnapshot } from "../../db/repositories/workorder-part-pricing.repo.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -91,6 +98,18 @@ async function createFixture({ aggregateSelection = "batch_cost" } = {}) {
            ($5,$2,$6,$7,'Aggregate priced part','ea','quantity')`,
     [serializedPartId, companyId, `SERIAL${suffix}`, `SERIAL-${suffix}`,
       aggregatePartId, `AGGREGATE${suffix}`, `AGGREGATE-${suffix}`],
+  );
+  const serializedInternalPriceId = randomUUID();
+  const aggregateInternalPriceId = randomUUID();
+  await query(
+    `insert into inventory_part_price_versions(
+       id,company_id,catalog_part_id,price_kind,version,amount,currency,tax_treatment,
+       reason,created_by,idempotency_key,request_hash
+     ) values($1,$2,$3,'internal',1,44,'USD','not_configured','Configured physical internal cost',$6,$7,$8),
+             ($4,$2,$5,'internal',1,15,'USD','not_configured','Configured physical internal cost',$6,$9,$10)`,
+    [serializedInternalPriceId, companyId, serializedPartId, aggregateInternalPriceId, aggregatePartId,
+      actorId, `serial-internal-${suffix}`, digest(`serial-internal-${suffix}`),
+      `aggregate-internal-${suffix}`, digest(`aggregate-internal-${suffix}`)],
   );
 
   await query(
@@ -342,6 +361,8 @@ async function createFixture({ aggregateSelection = "batch_cost" } = {}) {
     aggregatePartId,
     serializedReceiptLineId,
     serializedUnitId,
+    serializedInternalPriceId,
+    aggregateInternalPriceId,
     aggregatePositionId,
     aggregateLayers,
     oldBatch,
@@ -422,6 +443,21 @@ async function assertNoCreateSideEffects(fixture) {
        from inventory_position_balances where company_id=$1 and catalog_part_id=$2`,
     [companyId, aggregatePartId],
   )).rows[0].quantity_reserved), 0);
+}
+
+async function createBareAcceptedWorkorder(fixture) {
+  const input = {
+    ...fixture.input,
+    formData: { ...fixture.input.formData, parts: [] },
+    inventoryUnitSelections: [], inventoryPositionSelections: [],
+    pricing: { parts: [], labor: { selection: "internal_cost" } },
+  };
+  const preview = await readCreatePricing(input);
+  const workorder = await createOperationalWorkorder({
+    ...input, pricing: { ...input.pricing, expectedFingerprint: preview.fingerprint },
+  });
+  await query("update operational_workorders set status='accepted' where company_id=$1 and id=$2", [fixture.companyId, workorder.id]);
+  return workorder;
 }
 
 function persistedPartPrice(row, allocations = []) {
@@ -549,6 +585,150 @@ test("Create Workorder commits exact serialized, FCFS aggregate, and labor snaps
       part_prices: 2,
       labor_prices: 1,
     });
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
+test("Create Workorder snapshots configured internal cost for physical stock without replacing batch lineage", { skip: !enabled }, async () => {
+  let fixture;
+  try {
+    fixture = await createFixture();
+    const input = {
+      ...fixture.input,
+      pricing: {
+        ...fixture.input.pricing,
+        parts: [
+          { partIndex: 0, selection: "internal_cost" },
+          { partIndex: 1, selection: "internal_cost" },
+        ],
+      },
+    };
+    const preview = await readCreatePricing(input);
+    assert.equal(preview.parts[0].price.unitPrice, "44.0000");
+    assert.equal(preview.parts[0].price.configuredPriceVersionId, fixture.serializedInternalPriceId);
+    assert.equal(preview.parts[1].price.unitPrice, "15.0000");
+    assert.equal(preview.parts[1].price.totalPrice, "60.0000");
+    assert.equal(preview.parts[1].price.configuredPriceVersionId, fixture.aggregateInternalPriceId);
+    const created = await createOperationalWorkorder({
+      ...input,
+      pricing: { ...input.pricing, expectedFingerprint: preview.fingerprint },
+    });
+    const rows = (await query(
+      `select selection,serialized_usage_id,aggregate_usage_id,receipt_line_id,
+              configured_price_version_id,unit_price,total_price
+         from workorder_part_price_snapshots
+        where company_id=$1 and workorder_id=$2 order by serialized_usage_id nulls last`,
+      [fixture.companyId, created.id],
+    )).rows;
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map((row) => row.selection), ["internal_cost", "internal_cost"]);
+    assert.equal(rows[0].configured_price_version_id, fixture.serializedInternalPriceId);
+    assert.equal(rows[1].configured_price_version_id, fixture.aggregateInternalPriceId);
+    assert.equal(rows[0].receipt_line_id, null);
+    assert.equal(rows[1].receipt_line_id, null);
+    const allocationCount = (await query(
+      `select count(*)::int count from workorder_part_price_snapshot_allocations allocation
+        join workorder_part_price_snapshots snapshot on snapshot.company_id=allocation.company_id and snapshot.id=allocation.snapshot_id
+       where snapshot.company_id=$1 and snapshot.workorder_id=$2`, [fixture.companyId, created.id],
+    )).rows[0].count;
+    assert.equal(allocationCount, 0, "configured cost does not fabricate receipt or cost-layer price allocations");
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
+test("existing Workorder physical selection commits usage and configured price in one transaction", { skip: !enabled }, async () => {
+  let fixture;
+  try {
+    fixture = await createFixture();
+    const workorder = await createBareAcceptedWorkorder(fixture);
+    const common = {
+      workorderId: workorder.id, actorId: fixture.actorId, actorRole: "admin",
+      companyId: fixture.companyId, locationId: fixture.locationId,
+      companyIds: [fixture.companyId], locationIds: [fixture.locationId], isAdmin: true,
+    };
+    const serialKey = `existing-serial-${fixture.suffix}`;
+    const serialOptions = (await readCreatePricing({
+      companyId: fixture.companyId, locationId: fixture.locationId,
+      formData: { parts: [{ catalogPartId: fixture.serializedPartId, qty: 1, uomCode: "ea" }], laborHours: 0, laborProduct: null },
+      inventoryUnitSelections: [{ partIndex: 0, unitIds: [fixture.serializedUnitId] }], inventoryPositionSelections: [], pricing: { parts: [] },
+    })).parts[0].options;
+    const serialFingerprint = buildCandidatePricingPreview(workorder.id, {
+      usageKind: "serialized", unitId: fixture.serializedUnitId, catalogPartId: fixture.serializedPartId, quantity: 1, uomCode: "ea",
+    }, serialOptions).fingerprint;
+    const serialCommand = {
+      usage: { ...common, unitId: fixture.serializedUnitId, idempotencyKey: serialKey,
+        requestHash: digest({ ...common, unitId: fixture.serializedUnitId, idempotencyKey: serialKey }) },
+      pricing: { selection: "internal_cost", expectedFingerprint: serialFingerprint, reason: "Approved configured cost" },
+    };
+    const serial = await issueSerializedUnitWithPrice(serialCommand);
+    assert.equal(serial.kind, "reserved");
+    assert.equal(serial.price.configuredPriceVersionId, fixture.serializedInternalPriceId);
+    const serialReplay = await issueSerializedUnitWithPrice(serialCommand);
+    assert.equal(serialReplay.kind, "replay");
+    assert.equal(serialReplay.price.id, serial.price.id);
+    const aggregateKey = `existing-aggregate-${fixture.suffix}`;
+    const aggregateOptions = (await readCreatePricing({
+      companyId: fixture.companyId, locationId: fixture.locationId,
+      formData: { parts: [{ catalogPartId: fixture.aggregatePartId, qty: 2, uomCode: "ea" }], laborHours: 0, laborProduct: null },
+      inventoryUnitSelections: [], inventoryPositionSelections: [{ partIndex: 0, positionId: fixture.aggregatePositionId }], pricing: { parts: [] },
+    })).parts[0].options;
+    const aggregateFingerprint = buildCandidatePricingPreview(workorder.id, {
+      usageKind: "aggregate", sourcePositionId: fixture.aggregatePositionId, catalogPartId: fixture.aggregatePartId, quantity: 2, uomCode: "ea",
+    }, aggregateOptions).fingerprint;
+    const aggregateCommand = {
+      usage: { ...common, catalogPartId: fixture.aggregatePartId, sourcePositionId: fixture.aggregatePositionId,
+        quantity: 2, uomCode: "ea", repairOrder: "Install two", idempotencyKey: aggregateKey,
+        requestHash: digest({ ...common, catalogPartId: fixture.aggregatePartId, quantity: 2, idempotencyKey: aggregateKey }) },
+      pricing: { selection: "internal_cost", expectedFingerprint: aggregateFingerprint, reason: "Approved configured cost" },
+    };
+    const aggregate = await reserveAggregateUsageWithPrice(aggregateCommand);
+    assert.equal(aggregate.kind, "reserved");
+    assert.equal(aggregate.price.configuredPriceVersionId, fixture.aggregateInternalPriceId);
+    const aggregateReplay = await reserveAggregateUsageWithPrice(aggregateCommand);
+    assert.equal(aggregateReplay.kind, "replay");
+    assert.equal(aggregateReplay.price.id, aggregate.price.id);
+    const persisted = (await query(
+      `select count(*)::int snapshots,
+              count(*) filter(where configured_price_version_id is not null)::int configured
+         from workorder_part_price_snapshots where company_id=$1 and workorder_id=$2`,
+      [fixture.companyId, workorder.id],
+    )).rows[0];
+    assert.deepEqual(persisted, { snapshots: 2, configured: 2 });
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
+test("existing Workorder pricing failure rolls back the physical reservation", { skip: !enabled }, async () => {
+  let fixture;
+  try {
+    fixture = await createFixture();
+    const workorder = await createBareAcceptedWorkorder(fixture);
+    const key = `rollback-serial-${fixture.suffix}`;
+    const options = (await readCreatePricing({
+      companyId: fixture.companyId, locationId: fixture.locationId,
+      formData: { parts: [{ catalogPartId: fixture.serializedPartId, qty: 1, uomCode: "ea" }], laborHours: 0, laborProduct: null },
+      inventoryUnitSelections: [{ partIndex: 0, unitIds: [fixture.serializedUnitId] }], inventoryPositionSelections: [], pricing: { parts: [] },
+    })).parts[0].options;
+    const fingerprint = buildCandidatePricingPreview(workorder.id, {
+      usageKind: "serialized", unitId: fixture.serializedUnitId, catalogPartId: fixture.serializedPartId, quantity: 1, uomCode: "ea",
+    }, options).fingerprint;
+    const result = await issueSerializedUnitWithPrice({
+      usage: { workorderId: workorder.id, unitId: fixture.serializedUnitId, actorId: fixture.actorId,
+        actorRole: "admin", companyId: fixture.companyId, locationId: fixture.locationId,
+        idempotencyKey: key, requestHash: digest(key) },
+      pricing: { selection: "selling_price", expectedFingerprint: fingerprint, reason: "Unavailable policy" },
+    });
+    assert.equal(result.kind, "pricing_changed");
+    const state = (await query(
+      `select unit.status,
+              (select count(*)::int from workorder_serialized_part_usages usage where usage.company_id=$1 and usage.workorder_id=$2) usages
+         from inventory_serialized_units unit where unit.company_id=$1 and unit.id=$3`,
+      [fixture.companyId, workorder.id, fixture.serializedUnitId],
+    )).rows[0];
+    assert.deepEqual(state, { status: "in_stock", usages: 0 });
   } finally {
     await cleanupFixture(fixture);
   }
@@ -766,4 +946,141 @@ test("stale Create Workorder pricing evidence returns a lifecycle conflict and r
       }
     });
   }
+});
+
+
+test("saved-line price selection rejects a rate changed after service validation inside the snapshot transaction", { skip: !enabled }, async () => {
+  let fixture;
+  try {
+    fixture = await createFixture();
+    const input = { ...fixture.input };
+    const createPreview = await readCreatePricing(input);
+    input.pricing = { ...input.pricing, expectedFingerprint: createPreview.fingerprint };
+    const created = await createOperationalWorkorder(input);
+    const workorder = { id: created.id, companyId: fixture.companyId, locationId: fixture.locationId, status: "accepted" };
+    const usage = (await query("select id from workorder_serialized_part_usages where workorder_id=$1", [created.id])).rows[0];
+    const context = { actor: { id: fixture.actorId, role: "admin" }, companyIds: new Set([fixture.companyId]),
+      companyRoles: new Map([[fixture.companyId, "admin"]]), locationIds: new Set([fixture.locationId]) };
+    const identity = { usageKind: "serialized", usageId: usage.id };
+    const dependencies = { authorizedWorkorder: workorder };
+    const preview = await previewWorkorderPartPricing(created.id, identity, context, dependencies);
+    const count = async () => Number((await query("select count(*)::int count from workorder_part_price_snapshots where workorder_id=$1", [created.id])).rows[0].count);
+    const before = await count();
+    const revise = async (version, amount) => appendInventoryPartPrice({
+      catalogPartId: fixture.serializedPartId, companyIds: [fixture.companyId], locationIds: [fixture.locationId],
+      isAdmin: true, actorId: fixture.actorId, kind: "internal", expectedVersion: version,
+      amount, currency: "USD", taxTreatment: "not_configured", taxProfileVersionId: null,
+      reason: "Concurrent configured price revision", idempotencyKey: randomUUID(), requestHash: digest({ version, amount }),
+    });
+    const command = { ...identity, selection: "internal_cost", expectedFingerprint: preview.fingerprint,
+      reason: "Select previewed internal price", idempotencyKey: randomUUID() };
+    await assert.rejects(selectWorkorderPartPrice(created.id, command, context, {
+      ...dependencies,
+      savePartPrice: async (saveCommand) => {
+        assert.equal((await revise(1, "999")).kind, "saved");
+        return saveWorkorderPartPriceSnapshot(saveCommand);
+      },
+    }), { code: "WORKORDER_PRICING_CHANGED", statusCode: 409 });
+    assert.equal(await count(), before, "stale confirmation must not append a different price");
+    const fresh = await previewWorkorderPartPricing(created.id, identity, context, dependencies);
+    const freshCommand = { ...command, expectedFingerprint: fresh.fingerprint, idempotencyKey: randomUUID() };
+    const selected = await selectWorkorderPartPrice(created.id, freshCommand, context, dependencies);
+    assert.equal(Number(selected.snapshot.unitPrice), 999);
+    assert.equal((await revise(2, "1000")).kind, "saved");
+    const replay = await selectWorkorderPartPrice(created.id, freshCommand, context, dependencies);
+    assert.equal(replay.snapshot.id, selected.snapshot.id);
+    assert.equal(Number(replay.snapshot.unitPrice), 999);
+    assert.equal(await count(), before + 1);
+  } finally { await cleanupFixture(fixture); }
+});
+
+test("saved Workorder manual part/labor edits persist exact prices and atomic actor/time activity", { skip: !enabled }, async () => {
+  let fixture;
+  try {
+    fixture = await createFixture({ aggregateSelection: "selling_price" });
+    const preview = await readCreatePricing(fixture.input);
+    const created = await createOperationalWorkorder({ ...fixture.input,
+      pricing: { ...fixture.input.pricing, expectedFingerprint: preview.fingerprint } });
+    const { selectWorkorderLaborPrice } = await import("./workorder-labor-pricing.service.js");
+    const { moduleActionSchema } = await import("./workorder-module-runtime.registry.js");
+    const contextFor = (role) => ({ actor: { id: fixture.actorId, role },
+      companyIds: new Set([fixture.companyId]), companyRoles: new Map([[fixture.companyId, role]]),
+      locationIds: new Set([fixture.locationId]) });
+    const authorizedWorkorder = { id: created.id, companyId: fixture.companyId, locationId: fixture.locationId };
+    const dependencies = { authorizedWorkorder };
+    const usageRows = (await query(`select serialized_usage_id,aggregate_usage_id
+      from workorder_part_price_snapshots where workorder_id=$1`, [created.id])).rows;
+    const serialId = usageRows.find((row) => row.serialized_usage_id).serialized_usage_id;
+    const aggregateId = usageRows.find((row) => row.aggregate_usage_id).aggregate_usage_id;
+    const noStockPartId = randomUUID(), noStockLineId = randomUUID();
+    await query(`insert into parts_catalog(id,company_id,normalized_part_number,part_number,description,uom_code,tracking_mode)
+      values($1,$2,$3,$3,'Manual test service','ea','no_stock')`, [noStockPartId, fixture.companyId, `NS${fixture.suffix}`]);
+    await appendInventorySellingPolicy({ catalogPartId: noStockPartId, locationId: fixture.locationId,
+      expectedVersion: 0, method: "fixed", value: "25", currency: "USD", reason: "Manual test baseline",
+      companyIds: [fixture.companyId], locationIds: [fixture.locationId], isAdmin: true, actorId: fixture.actorId,
+      idempotencyKey: randomUUID(), requestHash: digest(randomUUID()) });
+    await query(`update operational_workorders set form_data=jsonb_set(form_data,'{parts}',
+      (form_data->'parts') || $2::jsonb) where id=$1`, [created.id, JSON.stringify([{
+      catalogPartId: noStockPartId, noStockLineId, trackingMode: "no_stock", partNo: `NS${fixture.suffix}`, qty: "2", uomCode: "ea" }])]);
+    let eventCount = 0;
+    for (const [index, target] of [
+      { usageKind: "serialized", usageId: serialId, selection: "batch_cost", customUnitPrice: "12.3456" },
+      { usageKind: "aggregate", usageId: aggregateId, selection: "internal_cost", customUnitPrice: "0" },
+      { usageKind: "no_stock", noStockLineId, selection: "selling_price", customUnitPrice: "45.6789" },
+    ].entries()) {
+      const context = contextFor(index % 2 ? "admin" : "office");
+      const current = await previewWorkorderPartPricing(created.id, target, context, dependencies);
+      const input = moduleActionSchema("parts", "record").parse({ ...target, operation: "partPriceSelection",
+        expectedFingerprint: current.fingerprint, reason: "Manually entered test price", idempotencyKey: randomUUID() });
+      const result = await selectWorkorderPartPrice(created.id, input, context, dependencies);
+      assert.equal(result.kind, "saved");
+      assert.equal(Number(result.snapshot.unitPrice), Number(target.customUnitPrice));
+      assert.equal(result.snapshot.manualOverride, true);
+      assert.equal(Number(result.snapshot.totalPrice), Number((Number(target.customUnitPrice) * Number(result.snapshot.quantity)).toFixed(4)));
+      const replay = await selectWorkorderPartPrice(created.id, input, context, dependencies);
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.snapshot.id, result.snapshot.id);
+      await assert.rejects(() => selectWorkorderPartPrice(created.id, { ...input, customUnitPrice: "9" }, context, dependencies),
+        { code: "WORKORDER_PART_PRICE_REPLAY_CONFLICT" });
+      const persisted = (await query("select unit_price,created_by from workorder_part_price_snapshots where id=$1", [result.snapshot.id])).rows[0];
+      assert.equal(Number(persisted.unit_price), Number(target.customUnitPrice));
+      assert.equal(persisted.created_by, fixture.actorId);
+      eventCount++;
+    }
+    for (const [index, customUnitPrice] of ["44.1234", "0"].entries()) {
+      const context = contextFor(index ? "office" : "admin");
+      const input = moduleActionSchema("diagnosisRepair", "record").parse({ operation: "laborPriceSelection",
+        selection: "internal_cost", customUnitPrice, reason: "Manually entered labor price", idempotencyKey: randomUUID() });
+      const result = await selectWorkorderLaborPrice(created.id, input, context, dependencies);
+      assert.equal(result.kind, "saved");
+      assert.equal(Number(result.laborPrice.unitPrice), Number(customUnitPrice));
+      const replay = await selectWorkorderLaborPrice(created.id, input, context, dependencies);
+      assert.equal(replay.replayed, true);
+      await assert.rejects(() => selectWorkorderLaborPrice(created.id, { ...input, customUnitPrice: "9" }, context, dependencies),
+        { code: "WORKORDER_LABOR_PRICE_REPLAY_CONFLICT" });
+      eventCount++;
+    }
+    const events = (await query(`select * from workorder_field_events
+      where workorder_id=$1 and field_key like 'pricing.%' order by created_at,id`, [created.id])).rows;
+    assert.equal(events.length, eventCount, "one event per new edit, none for replay or conflict");
+    assert.ok(events.every((event) => event.changed_by_user_id === fixture.actorId && event.created_at && event.old_value && event.new_value));
+    assert.ok(events.some((event) => event.new_value.includes("12.3456")));
+    assert.ok(events.some((event) => event.new_value.includes("45.6789")));
+    assert.ok(events.some((event) => event.new_value.includes("44.1234")));
+    assert.equal((await query("select unit_cost from inventory_receipt_lines where id=$1", [fixture.serializedReceiptLineId])).rows[0].unit_cost, "37.5000");
+    const context = contextFor("office");
+    const target = { usageKind: "serialized", usageId: serialId };
+    const current = await previewWorkorderPartPricing(created.id, target, context, dependencies);
+    const partCommand = { ...target, selection: "batch_cost", customUnitPrice: "11", expectedFingerprint: current.fingerprint,
+      reason: "Rejected test", idempotencyKey: randomUUID() };
+    await assert.rejects(() => selectWorkorderPartPrice(created.id, { ...partCommand, expectedFingerprint: "f".repeat(64) }, context, dependencies), { code: "WORKORDER_PRICING_CHANGED" });
+    await assert.rejects(() => selectWorkorderPartPrice(created.id, partCommand, contextFor("mechanic"), dependencies), { code: "WORKORDER_PART_PRICE_FORBIDDEN" });
+    for (const scope of [{ companyIds: new Set([randomUUID()]) }, { locationIds: new Set([randomUUID()]) }]) {
+      await assert.rejects(() => previewWorkorderPartPricing(created.id, target, { ...context, ...scope }, dependencies), (error) => error.statusCode === 404);
+    }
+    await query("update operational_workorders set status='closed' where id=$1", [created.id]);
+    await assert.rejects(() => selectWorkorderPartPrice(created.id, partCommand, context, dependencies), { code: "WORKORDER_PART_PRICE_LOCKED" });
+    await assert.rejects(() => selectWorkorderLaborPrice(created.id, { selection: "internal_cost", customUnitPrice: "1", reason: "Rejected closed edit", idempotencyKey: randomUUID() }, context, dependencies), { code: "WORKORDER_LABOR_PRICE_LOCKED" });
+    assert.equal((await query("select count(*)::int count from workorder_field_events where workorder_id=$1 and field_key like 'pricing.%'", [created.id])).rows[0].count, eventCount);
+  } finally { await cleanupFixture(fixture); }
 });

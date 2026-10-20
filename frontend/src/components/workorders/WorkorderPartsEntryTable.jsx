@@ -13,6 +13,7 @@ export function workorderPartsEntryColumns(showPrice = false) {
 }
 
 export function WorkorderPartsEntryTable({
+  afterLaborContent = null,
   children,
   className = "",
   laborAction = <span aria-hidden="true"></span>,
@@ -37,6 +38,7 @@ export function WorkorderPartsEntryTable({
         {showPrice ? laborPrice : null}
         {laborAction}
       </WorkorderPartsRow>
+      {afterLaborContent}
       {children}
     </WorkorderPartsTable>
   );

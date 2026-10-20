@@ -189,3 +189,21 @@ test("migration keeps local rates and immutable snapshots separate from Odoo", a
   assert.match(sql, /rate_version_id uuid not null/i);
   assert.doesNotMatch(sql, /update\s+odoo_service_products/i);
 });
+
+for (const role of ["office", "admin"]) {
+  test(`${role}: manual labor amount reaches persistence and idempotency hash`, async () => {
+    const context = { ...office, actor: { id: actorId, role }, companyRoles: new Map([[companyId, role]]) };
+    const saved = [];
+    const dependencies = { ...workorderAccess, saveLaborPrice: async (command) => {
+      saved.push(command); return { kind: "saved" };
+    } };
+    const base = { selection: "internal_cost", reason: "Manual price", idempotencyKey: "manual-labor-price" };
+    await selectWorkorderLaborPrice(workorderId, { ...base, customUnitPrice: "0" }, context, dependencies);
+    await selectWorkorderLaborPrice(workorderId, { ...base, customUnitPrice: "1.2345" }, context, dependencies);
+    assert.equal(saved[0].customUnitPrice, "0");
+    assert.equal(saved[1].customUnitPrice, "1.2345");
+    assert.notEqual(saved[0].requestHash, saved[1].requestHash);
+    await assert.rejects(() => selectWorkorderLaborPrice(workorderId, base,
+      { ...context, sessionMode: "kiosk" }, dependencies), { code: "WORKORDER_LABOR_PRICE_FORBIDDEN" });
+  });
+}

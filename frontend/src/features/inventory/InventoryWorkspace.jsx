@@ -3,8 +3,7 @@ import { PartPositionsPanel } from "./PartPositionsPanel.jsx";
 import { PartCommercialDetails } from "./PartCommercialDetails.jsx";
 import './inventory-tables.css';
 import { InventoryPurchases } from './InventoryPurchases.jsx';
-import { createPurchaseReceiptHandoff, consumePurchaseReceiptHandoff } from './purchase-receipt-handoff.js';
-import { InventoryInboundWorkspace } from './InventoryInboundWorkspace.jsx';
+import { consumePurchaseReceiptHandoff } from './purchase-receipt-handoff.js';
 import { InventoryStockTasks } from './InventoryStockTasks.jsx';
 import { InventoryReports } from './InventoryReports.jsx';
 import { InventoryTaskQueue } from './InventoryTaskQueue.jsx';
@@ -56,7 +55,8 @@ function loadInventoryCountPanel() {
   return inventoryCountPanelPromise;
 }
 const InventoryCountImportPanel = lazy(loadInventoryCountPanel);
-const INVENTORY_SECTIONS = [{ id: "stock", label: "Stock" }, { id: "inbound", label: "Inbound" }, { id: "purchases", label: "Purchasing" }, { id: "tasks", label: "Tasks" }, { id: "reports", label: "Reports" }];
+const INVENTORY_SECTIONS = [{ id: "stock", label: "Stock" }, { id: "purchases", label: "Purchasing" }, { id: "tasks", label: "Tasks" }, { id: "reports", label: "Reports" }];
+const normalizeInventorySection = (section) => section === "inbound" ? "purchases" : section;
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(Number(value || 0));
@@ -103,6 +103,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [workflowDetail, setWorkflowDetail] = useState(null);
   const [query, setQuery] = useState("");
   const [locationId, setLocationId] = useState("all");
+  const [purchaseLocationId, setPurchaseLocationId] = useState(() => initialParams.get("taskLocation") || "");
   const [stockFilter, setStockFilter] = useState("all");
   const [stockSort, setStockSort] = useState(DEFAULT_STOCK_SORT);
   const [stockMode, setStockMode] = useState(() => initialParams.get("stockMode") === "location" ? "location" : "part");
@@ -122,16 +123,17 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [partHeaderPrice, setPartHeaderPrice] = useState({ scopeKey: "", label: "" });
   const [createPartOpen, setCreatePartOpen] = useState(false);
   const [receivingPart, setReceivingPart] = useState(null);
-  const [inventorySection, setInventorySection] = useState(() => INVENTORY_SECTIONS.some((section) => section.id === activeSection)
-    ? activeSection
-    : ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
+  const [inventorySection, setInventorySection] = useState(() => {
+    const requested = normalizeInventorySection(activeSection || initialParams.get("inventorySection"));
+    return INVENTORY_SECTIONS.some((section) => section.id === requested) ? requested : "stock";
+  });
   const [inboundReceiptHandoff, setInboundReceiptHandoff] = useState(null);
   const consumeInboundReceiptHandoff = useCallback((key) => {
     setInboundReceiptHandoff((current) => consumePurchaseReceiptHandoff(current, key));
   }, []);
-  const [reportPurchaseOrderId] = useState(() => initialParams.get("purchaseOrderId") || "");
-  const [reportPurchaseOrderNumber] = useState(() => initialParams.get("purchaseOrderNumber") || "");
-  const [reportPurchaseOrderLocationId] = useState(() => initialParams.get("taskLocation") || "");
+  const [reportPurchaseOrderId, setReportPurchaseOrderId] = useState(() => initialParams.get("purchaseOrderId") || "");
+  const [reportPurchaseOrderNumber, setReportPurchaseOrderNumber] = useState(() => initialParams.get("purchaseOrderNumber") || "");
+  const [reportPurchaseOrderLocationId, setReportPurchaseOrderLocationId] = useState(() => initialParams.get("taskLocation") || "");
   const [inboundSource, setInboundSource] = useState(() => ({ receiptId: initialParams.get("receiptId") || "", deliveryId: initialParams.get("deliveryId") || "" }));
   const [stockLocationInitialShop, setStockLocationInitialShop] = useState(() => initialParams.get("taskLocation") || "");
   const [stockLocationInitialPosition, setStockLocationInitialPosition] = useState(() => initialParams.get("positionId") || "");
@@ -147,15 +149,17 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   });
 
   useEffect(() => {
-    if (!INVENTORY_SECTIONS.some((section) => section.id === activeSection) || activeSection === inventorySection) return;
-    setInventorySection(activeSection);
+    const nextSection = normalizeInventorySection(activeSection);
+    if (!INVENTORY_SECTIONS.some((section) => section.id === nextSection) || nextSection === inventorySection) return;
+    setInventorySection(nextSection);
     setTaskWorkflow(null);
     setInboundSource({ receiptId: "", deliveryId: "" });
   }, [activeSection, inventorySection]);
 
   function selectInventorySection(nextSection) {
-    setInventorySection(nextSection);
-    onSectionChange?.(nextSection);
+    const normalizedSection = normalizeInventorySection(nextSection);
+    setInventorySection(normalizedSection);
+    onSectionChange?.(normalizedSection);
   }
 
   useEffect(() => {
@@ -339,10 +343,20 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   }
 
   function openInvoiceWorkflow(invoiceRun = "", requestedLocationId = "") {
-    if (requestedLocationId && locations.some((location) => location.id === requestedLocationId)) {
+    const resolvedLocationId = requestedLocationId && locations.some((location) => location.id === requestedLocationId) ? requestedLocationId : "";
+    if (resolvedLocationId) {
       setLocationId(requestedLocationId);
+      setPurchaseLocationId(requestedLocationId);
     }
-    window.history.replaceState({}, "", inventoryUrl({ invoiceRun, upload: !invoiceRun }));
+    const url = inventoryUrl({ invoiceRun, upload: !invoiceRun });
+    url.searchParams.set("inventorySection", "purchases");
+    if (resolvedLocationId) url.searchParams.set("taskLocation", resolvedLocationId);
+    for (const key of ["receiptId", "deliveryId", "approvalId", "purchaseOrderId", "purchaseOrderNumber"]) url.searchParams.delete(key);
+    window.history.replaceState({}, "", url);
+    setInboundSource({ receiptId: "", deliveryId: "" });
+    setReportPurchaseOrderId("");
+    setReportPurchaseOrderNumber("");
+    setReportPurchaseOrderLocationId("");
     setInvoiceRunId(invoiceRun);
     setInvoiceWorkflowOpen(true);
     setInvoiceUploadOpen(!invoiceRun);
@@ -433,12 +447,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     <IconButton className="inventory-refresh-button" icon={RefreshCw01} label="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
     <Button type="button" icon={Plus} onClick={() => setCreatePartOpen(true)} disabled={!locations.length}>New part</Button>
   </>;
-  const inboundActions = <>
-    <Button type="button" variant="primary" onClick={() => setReceivingPart({})} disabled={!locations.length}>Record arrival</Button>
-    <Button type="button" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Upload invoice</Button>
-  </>;
   const taskActions = !taskWorkflow ? <Button type="button" onClick={openPhysicalCountTasks}>Physical counts</Button> : null;
-  const sectionActions = inventorySection === "stock" ? stockActions : inventorySection === "inbound" ? inboundActions : inventorySection === "tasks" ? taskActions : null;
+  const sectionActions = inventorySection === "stock" ? stockActions : inventorySection === "tasks" ? taskActions : null;
   const inventoryActions = countWorkflowOpen ? (
     <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Import count sheet</Button>
   ) : invoiceWorkflowOpen ? (
@@ -462,19 +472,44 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   }, [countWorkflowOpen, inventorySection, invoiceWorkflowOpen, onSectionTitleChange]);
 
   function changeInventorySection(nextSection) {
+    nextSection = normalizeInventorySection(nextSection);
     selectInventorySection(nextSection);
     setTaskWorkflow(null);
     setInboundSource({ receiptId: "", deliveryId: "" });
+    setReportPurchaseOrderId("");
+    setReportPurchaseOrderNumber("");
+    setReportPurchaseOrderLocationId("");
     const url = new URL(window.location.href);
     url.searchParams.set("inventorySection", nextSection);
-    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
+    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "approvalId", "purchaseOrderId", "purchaseOrderNumber", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
     window.history.replaceState({}, "", url);
   }
 
   function openExactTaskUrl(values) {
     const url = new URL(window.location.href);
-    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
+    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "approvalId", "purchaseOrderId", "purchaseOrderNumber", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
     for (const [key, value] of Object.entries(values)) if (value) url.searchParams.set(key, value);
+    window.history.replaceState({}, "", url);
+  }
+
+  function changePurchaseLocation(nextLocationId, { preserveSource = false, preservePurchaseOrder = false } = {}) {
+    if (!locations.some((location) => location.id === nextLocationId)) return;
+    setPurchaseLocationId(nextLocationId);
+    const url = new URL(window.location.href);
+    url.searchParams.set("inventorySection", "purchases");
+    url.searchParams.set("taskLocation", nextLocationId);
+    if (!preservePurchaseOrder) {
+      url.searchParams.delete("purchaseOrderId");
+      url.searchParams.delete("purchaseOrderNumber");
+      setReportPurchaseOrderId("");
+      setReportPurchaseOrderNumber("");
+      setReportPurchaseOrderLocationId("");
+    }
+    if (!preserveSource) {
+      for (const key of ["receiptId", "deliveryId", "approvalId"]) url.searchParams.delete(key);
+      setInboundSource({ receiptId: "", deliveryId: "" });
+      setInboundReceiptHandoff(null);
+    }
     window.history.replaceState({}, "", url);
   }
 
@@ -490,8 +525,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     if (task.sourceType === "removed_part_custody") { setTaskLocationId(location); setTaskWorkflow({ kind: "custody", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "custody", reuseCaseId: task.sourceId, taskLocation: location }); return; }
     if (["position_recount", "position_count_review"].includes(task.sourceType)) { const positionId = task.actionTarget?.positionId || new URL(task.deepLink, window.location.href).searchParams.get("positionId") || ""; setStockLocationInitialShop(location); setStockLocationInitialPosition(positionId); setStockMode("location"); selectInventorySection("stock"); openExactTaskUrl({ inventorySection: "stock", stockMode: "location", positionId, taskLocation: location }); return; }
     if (task.sourceType === "invoice_po_decision") { openInvoiceWorkflow(task.sourceId, location); return; }
-    if (task.sourceType === "missing_invoice") { setInboundSource({ receiptId: task.sourceId, deliveryId: "" }); selectInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", receiptId: task.sourceId, taskLocation: location }); return; }
-    if (task.sourceType === "receipt_exception") { setInboundSource({ receiptId: "", deliveryId: task.sourceId }); selectInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", deliveryId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "missing_invoice") { setPurchaseLocationId(location); setInboundSource({ receiptId: task.sourceId, deliveryId: "" }); selectInventorySection("purchases"); openExactTaskUrl({ inventorySection: "purchases", receiptId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "receipt_exception") { setPurchaseLocationId(location); setInboundSource({ receiptId: "", deliveryId: task.sourceId }); selectInventorySection("purchases"); openExactTaskUrl({ inventorySection: "purchases", deliveryId: task.sourceId, taskLocation: location }); return; }
     window.location.assign(task.deepLink);
   }
 
@@ -515,6 +550,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     openExactTaskUrl({ inventorySection: "tasks", taskOwner: "count" });
   }
 
+  const invoiceLocationId = inventorySection === "purchases" ? purchaseLocationId || locationId : locationId;
+
   return (
     <OperationalCollectionPage
       className={`${presentation === "page" ? "admin-content " : ""}inventory-workspace${invoiceWorkflowOpen || countWorkflowOpen ? " is-invoice-workflow" : " is-section-root"}`}
@@ -532,14 +569,13 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         onCreated={(part) => { setQuery(part.partNumber); setRefreshKey((value) => value + 1); }}
       /> : null}
 
-      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === locationId) ? locationId : ""} initialRunId={invoiceRunId} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
+      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === invoiceLocationId) ? invoiceLocationId : ""} initialRunId={invoiceRunId} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
       {showSectionNavigation ? <OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={INVENTORY_SECTIONS} actions={sectionActions} headingLevel={presentation === "embedded" ? 2 : 1} showHeading={presentation !== "embedded"} /> : <>
         {showSectionNavigationOnPhone ? <div className="inventory-phone-section-navigation"><OperationalCollectionSectionHeader ariaLabel="Inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={INVENTORY_SECTIONS} headingLevel={presentation === "embedded" ? 2 : 1} showHeading={false} /></div> : null}
       </>}
       <section className="operational-collection-surface inventory-section-surface" aria-label={`${INVENTORY_SECTIONS.find((section) => section.id === inventorySection)?.label || "Stock"} workspace`}>
-      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId, requestedLocationId, poNumber) => { setInboundReceiptHandoff(createPurchaseReceiptHandoff(poId, requestedLocationId, poNumber, crypto.randomUUID())); selectInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
-      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptHandoff={inboundReceiptHandoff} onReceiptHandoffConsumed={consumeInboundReceiptHandoff} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} initialPurchaseLocationId={reportPurchaseOrderLocationId} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>selectInventorySection('stock')}/>:null}
+      {inventorySection==='purchases'?<InventoryPurchases locations={locations} actorId={actorId} view={inventorySection} initialReceiptHandoff={inboundReceiptHandoff} onReceiptHandoffConsumed={consumeInboundReceiptHandoff} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} initialPurchaseLocationId={reportPurchaseOrderLocationId} initialLocationId={purchaseLocationId} onLocationChange={changePurchaseLocation} initialInboundSource={inboundSource} initialInboundOpen={initialParams.get("inventorySection")==="inbound"||activeSection==="inbound"} initialInboundLocationId={initialParams.get("taskLocation")||""} onInvoice={(requestedLocationId,invoiceRunId="")=>openInvoiceWorkflow(invoiceRunId,requestedLocationId)} onStock={(requestedLocationId)=>setReceivingPart({receiptLocationId:requestedLocationId})}/>:null}
       {inventorySection==='reports'?<InventoryReports locations={locations}/>:null}
       {inventorySection==='tasks'?taskWorkflow?<section className="inventory-task-owner"><IconButton icon={ArrowLeft} label="Back to My work" onClick={closeTaskOwner} />{taskWorkflow.kind==='custody'?<InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" initialLocationId={taskLocationId} initialCaseId={taskWorkflow.task.sourceId} hidePrimaryTabs/>:<InventoryStockTasks
           key={taskSection}

@@ -11,7 +11,7 @@ import { createCheckpointScrollWork, firstVisibleCheckpointRow, checkpointPrefet
 import { createCheckpointExtent } from "../operations/checkpoint-extent.js";
 
 // Keep DOM rows bounded while preserving an actual row, not estimated row heights.
-export function CheckpointCollection({ queue, columns, renderItem, renderItems, header, ariaLabel, className = "", storageKey, children, label = "records", pageSize = 20, getItemKey = defaultItemKey, getPreview }) {
+export function CheckpointCollection({ queue, columns, renderItem, renderItems, header, ariaLabel, className = "", storageKey, children, label = "records", pageSize = 20, getItemKey = defaultItemKey, getPreview, statusPlacement = "overlay" }) {
   const tableRef = useRef(null);
   const anchor = useRef(null);
   const restoring = useRef(true);
@@ -231,8 +231,10 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
   const semanticFrameClass = renderedRows?.type === OperationalDataTable
     ? "is-data-table-frame"
     : renderedRows?.type === OperationalCollectionTable ? "is-collection-table-frame" : "";
+  const footerStatus = statusPlacement === "footer";
+  const reachedCount = Math.min(queue.total || 0, (queue.pages.at(-1)?.page || 0) * pageSize);
   return (
-    <div className={`checkpoint-queue-table checkpoint-collection${queue.pageCount > 1 ? "" : " is-single-batch"}`} style={viewportHeight ? { "--checkpoint-viewport-height": `${viewportHeight}px` } : undefined} onClickCapture={() => work.flush()} onWheelCapture={(event) => {
+    <div className={`checkpoint-queue-table checkpoint-collection${footerStatus ? " is-footer-status" : ""}${queue.pageCount > 1 ? "" : " is-single-batch"}`} style={viewportHeight ? { "--checkpoint-viewport-height": `${viewportHeight}px` } : undefined} onClickCapture={() => work.flush()} onWheelCapture={(event) => {
       if (event.deltaY < 0) work.schedule(-1);
     }} onKeyDownCapture={(event) => {
       if (["ArrowUp", "PageUp"].includes(event.key)) work.schedule(-1);
@@ -253,9 +255,14 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
         <div className="checkpoint-queue-spacer" aria-hidden="true" style={{ height: spacing.after }} />
         {!hasItems && !queue.loading && !queue.error ? children : null}
       </OperationalCollectionTable>}
+      {footerStatus ? <footer className="checkpoint-collection-footer" aria-label={`${ariaLabel || label} count`}>
+        <span role="status">{queue.loading && !queue.pages.length ? `Loading ${label}…` : `${reachedCount.toLocaleString()} of ${Number(queue.total || 0).toLocaleString()}`}{queue.loadingMore ? " · Loading…" : ""}</span>
+        {queue.error ? <span className="error" role="alert">{queue.error.message || String(queue.error)} <button type="button" onClick={() => queue.retry()}>Retry</button></span> : null}
+      </footer> : <>
       {queue.loading || queue.loadingMore ? <div className="checkpoint-queue-edge checkpoint-queue-notice" role="status">Loading {label}…</div> : null}
       {queue.error ? <div className="checkpoint-queue-edge checkpoint-queue-notice error" role="alert"><span>{queue.error.message || String(queue.error)}</span><button type="button" onClick={() => queue.retry()}>Retry</button></div> : null}
       {!queue.loading && !queue.loadingMore && !queue.error && queue.total > 0 && queue.pages.length && queue.pages.at(-1).page === queue.pageCount ? <div className="checkpoint-queue-edge checkpoint-queue-notice" role="status">All {queue.total} {label} reached</div> : null}
+      </>}
     </div>
   );
 }

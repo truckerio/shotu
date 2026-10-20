@@ -21,13 +21,9 @@ export function validateCreateWorkorder(form = {}, { actorRole = "" } = {}) {
   return {
     ...(!String(form.locationId || "").trim() ? { locationId: "Select the repair location." } : {}),
     ...(!String(form.unitNo || "").trim() ? { unitNo: "Enter or select the unit." } : {}),
-    ...(actorRole === "mechanic"
-      ? (String(form.customerCompanyName || "").trim()
-        ? { customerCompanyName: "Clear Customer for internal fleet work, or ask Office to create this customer workorder from an accepted Estimate." }
-        : {})
-      : (!String(form.customerCompanyName || "").trim()
-        ? { customerCompanyName: "Enter the company that owns or operates this unit." }
-        : {})),
+    ...(actorRole !== "mechanic" && !String(form.customerCompanyName || "").trim()
+      ? { customerCompanyName: "Enter the company that owns or operates this unit." }
+      : {}),
     ...(!String(form.mechanicConcern || "").trim()
       ? { mechanicConcern: "Describe what needs to be inspected or repaired." }
       : {}),

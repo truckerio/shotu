@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import {writeFile,unlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {chromium} from 'playwright';
@@ -19,7 +19,7 @@ try{for(const width of [1440,768,390]){
  await context.route('**/api/office/inventory/purchasing',async r=>{const body=r.request().postDataJSON();if(body.action==='create'){posted=true;assert.equal(body.lines[0].catalogPartId,undefined);assert.equal(body.lines[0].partNumber,'ITS GODD');assert.equal(body.lines[0].unitPrice,'39');assert.equal(body.lines.length,1);assert.equal(body.placeOrder,true);assert.equal(body.expectedDeliveryDate,null);order.status='ordered';await r.fulfill({json:{order}});return;}assert.equal(body.expectedVersion,order.version);if(body.action==='approve')order.status='ordered';else{assert.equal(body.action,'place');assert.equal(body.reason,'Supplier reference 123');order.status='ordered';order.communication_reference=body.reason;}order.version++;await r.fulfill({json:{order}});});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://localhost:5173/${name}`);
- await page.getByRole('button',{name:'Purchase orders',exact:true}).click();
+ await page.locator('.purchase-orders-page').waitFor();
 
  assert.equal(await page.locator('#purchase-order-filters').count(),0);
  await page.getByRole('button',{name:'Filters',exact:true}).click();

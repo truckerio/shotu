@@ -59,7 +59,7 @@ try {
     for (const section of ['Purchases', 'Tasks', 'Reports', 'Storage locations', 'Stock']) {
       await nav.getByRole('button', { name: section, exact: true }).click();
       if (section === 'Purchases') {
-        await page.getByRole('button', { name: 'Purchase orders', exact: true }).click();
+        await page.locator('.purchase-orders-page').waitFor();
         await page.getByRole('button', { name: 'New purchase order', exact: true }).waitFor();
         await page.getByText(order.number, { exact: true }).first().waitFor();
         await page.getByRole('button', { name: 'New purchase order', exact: true }).click();

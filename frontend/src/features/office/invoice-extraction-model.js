@@ -105,6 +105,10 @@ export function orderInvoiceReviewSections(sections = []) {
     .map(({ section }) => section);
 }
 
+export function invoiceAllowsPhysicalReceipt(run) {
+  return run?.sourcePurpose !== "purchase_order_bill";
+}
+
 export function invoiceDeliveryFullyReceived({ suggestion } = {}) {
   return suggestion?.reason === "invoice_fully_received"
     || (suggestion?.receiptLines?.length > 0

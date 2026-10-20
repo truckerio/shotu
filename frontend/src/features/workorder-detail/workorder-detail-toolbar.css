@@ -73,6 +73,25 @@
   overflow: visible !important;
 }
 
+@media (max-width: 720px) {
+  .workorder-activity-status .dropdown-select-trigger { max-width: 150px; }
+}
+
+.detail-context-actions > .mechanic-progress-status.is-icon-only {
+  flex: 0 0 40px;
+  height: 40px;
+  justify-content: center;
+  margin: 0;
+  position: relative;
+  width: 40px;
+}
+
+.detail-context-actions > .mechanic-progress-status.is-icon-only:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #1570ef;
+  outline-offset: 2px;
+}
+
 .detail-save-button,
 .detail-create-button {
   align-items: center;
@@ -336,6 +355,12 @@
 }
 
 @media screen and (max-width: 700px) {
+  .detail-context-actions > .mechanic-progress-status.is-icon-only {
+    flex-basis: 44px;
+    height: 44px;
+    width: 44px;
+  }
+
   .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
@@ -423,4 +448,17 @@
 
 .mechanic-action-message.is-validation-warning strong {
   font-weight: var(--weight-bold);
+}
+
+/* Announce transient save/approval feedback without widening the toolbar. */
+.workorder-detail-page .detail-action-feedback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

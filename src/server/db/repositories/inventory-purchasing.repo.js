@@ -11,7 +11,18 @@ async function location(client, input) {
   return result.rows[0];
 }
 async function orderDetail(client, companyId, orderId) {
-  const result = await client.query(`select o.*,(select sum(l.quantity*l.unit_price) from inventory_purchase_lines l where l.company_id=o.company_id and l.order_id=o.id having count(*)=count(l.unit_price)) as total,to_char(o.expected_delivery_date,'YYYY-MM-DD') as expected_delivery_date,s.name as supplier_name from inventory_purchase_orders o join inventory_suppliers s on s.company_id=o.company_id and s.id=o.supplier_id where o.company_id=$1 and o.id=$2`, [companyId,orderId]);
+  const result = await client.query(`select o.*,(select sum(l.quantity*l.unit_price) from inventory_purchase_lines l where l.company_id=o.company_id and l.order_id=o.id having count(*)=count(l.unit_price)) as total,to_char(o.expected_delivery_date,'YYYY-MM-DD') as expected_delivery_date,s.name as supplier_name,
+    (o.status in ('draft','awaiting_approval','ordered') and not exists(
+      select 1 from inventory_purchase_lines protected_line where protected_line.company_id=o.company_id and protected_line.order_id=o.id
+        and (protected_line.received_quantity>0 or protected_line.cancelled_quantity>0)
+    ) and not exists(
+      select 1 from inventory_purchase_deliveries delivery where delivery.company_id=o.company_id and delivery.order_id=o.id and delivery.status='posted'
+    )) as can_edit_lines,
+    case when o.status not in ('draft','awaiting_approval','ordered') then 'Line editing is unavailable in this purchase order state.'
+      when exists(select 1 from inventory_purchase_lines protected_line where protected_line.company_id=o.company_id and protected_line.order_id=o.id and (protected_line.received_quantity>0 or protected_line.cancelled_quantity>0))
+        or exists(select 1 from inventory_purchase_deliveries delivery where delivery.company_id=o.company_id and delivery.order_id=o.id and delivery.status='posted')
+        then 'Line editing is locked after delivery activity has been recorded.' else '' end as line_edit_reason
+    from inventory_purchase_orders o join inventory_suppliers s on s.company_id=o.company_id and s.id=o.supplier_id where o.company_id=$1 and o.id=$2`, [companyId,orderId]);
   const lines = await client.query(`select l.*,coalesce(p.tracking_mode,l.tracking_mode) as tracking_mode,p.version as part_version,coalesce(p.uom_code,l.uom_code) as current_uom_code,
     coalesce((select jsonb_agg(jsonb_build_object('sourceType',source.source_type,'sourceId',source.source_id,
       'plannedQuantity',source.planned_quantity,'receivedQuantity',source.received_quantity,'cancelledQuantity',source.cancelled_quantity)
@@ -112,6 +123,80 @@ async function purchasingDemand(client, companyId, locationId, catalogPartId = n
     order by part_number,catalog_part_id`,[companyId,locationId,catalogPartId,uomCode]);
   return result.rows.filter(row=>Number(row.buy_quantity)>0);
 }
+
+const lineAuditState = line => ({
+  id:line.id,catalogPartId:line.catalog_part_id,partNumber:line.part_number,description:line.description,
+  uomCode:line.uom_code,trackingMode:line.tracking_mode,quantity:String(line.quantity),unitPrice:line.unit_price===null?null:String(line.unit_price),
+});
+function validatePhysicalLine(part, quantity) {
+  const unit=getUnitDefinition(part.uom_code);
+  if(!part.tracking_mode||part.tracking_mode==='no_stock'||!unit||unit.category==='time')fail('Review physical part tracking and stocking unit before ordering.');
+  if(part.tracking_mode==='serialized'&&!Number.isInteger(quantity))fail('Serialized order quantities must be whole units.');
+  if(Math.round(quantity*10**unit.decimalScale)/10**unit.decimalScale!==quantity)fail('Quantity does not match the stocking unit precision.');
+}
+async function approvalStatus(client, companyId, orderId) {
+  const policy=await readApprovalPolicy(client,companyId,true);
+  if(!policy)fail('Configure Purchase Order Approval in Settings before placing an order.','PURCHASE_APPROVAL_NOT_CONFIGURED');
+  const result=await client.query(`select o.currency,
+    coalesce(bool_or(l.unit_price is null),false) or coalesce(sum(l.quantity*l.unit_price)>$3::numeric,false) as needs_approval
+    from inventory_purchase_orders o join inventory_purchase_lines l on l.company_id=o.company_id and l.order_id=o.id
+    where o.company_id=$1 and o.id=$2 group by o.id`,[companyId,orderId,policy.approval_limit]);
+  const order=result.rows[0];
+  if(!order)fail('Add at least one part before placing the order.');
+  if(order.currency!==policy.currency)fail(`The approval limit is in ${policy.currency}. Use that currency or update Purchase Order Approval in Settings.`,'PURCHASE_APPROVAL_CURRENCY');
+  return order.needs_approval?'awaiting_approval':'ordered';
+}
+async function amendPurchaseLines(client, shop, input, command, order) {
+  if(!['draft','awaiting_approval','ordered'].includes(order.status))fail('Line editing is unavailable in this purchase order state.','INVENTORY_PURCHASE_LINES_PROTECTED');
+  const currentResult=await client.query('select * from inventory_purchase_lines where company_id=$1 and order_id=$2 order by id for update',[shop.company_id,order.id]);
+  const currentLines=currentResult.rows;
+  const currentIds=currentLines.map(line=>line.id).sort(),requestedIds=command.lines.flatMap(line=>line.id?[line.id]:[]).sort();
+  if(currentIds.length!==requestedIds.length||currentIds.some((id,index)=>id!==requestedIds[index]))fail('Submit every current purchase line exactly once. Refresh the order before editing.');
+  const activity=await client.query(`select
+    exists(select 1 from inventory_purchase_lines line where line.company_id=$1 and line.order_id=$2 and (line.received_quantity>0 or line.cancelled_quantity>0))
+    or exists(select 1 from inventory_purchase_deliveries delivery where delivery.company_id=$1 and delivery.order_id=$2 and delivery.status='posted') as protected`,[shop.company_id,order.id]);
+  if(activity.rows[0].protected)fail('Line editing is locked after delivery activity has been recorded.','INVENTORY_PURCHASE_LINES_PROTECTED');
+  const sourceResult=await client.query('select * from inventory_purchase_line_sources where company_id=$1 and purchase_line_id=any($2::uuid[]) for update',[shop.company_id,currentIds]);
+  const sourcedIds=new Set(sourceResult.rows.map(source=>source.purchase_line_id));
+  const currentById=new Map(currentLines.map(line=>[line.id,line]));
+  const before=currentLines.map(lineAuditState),after=[],catalogKeys=new Set(),partKeys=new Set();
+  for(const change of command.lines) {
+    const current=change.id?currentById.get(change.id):null;
+    let next;
+    if(current&&sourcedIds.has(current.id)) {
+      const identityChanged=(change.catalogPartId||null)!==(current.catalog_part_id||null)
+        || change.partNumber!==current.part_number||change.description!==current.description||change.uomCode!==current.uom_code
+        || change.trackingMode!==current.tracking_mode||Math.abs(Number(change.quantity)-Number(current.quantity))>0.0005;
+      if(identityChanged)fail('Demand-linked purchase lines keep their part identity and quantity. Only cost can be edited.','INVENTORY_PURCHASE_DEMAND_LINKED');
+      next={...current,unit_price:change.unitPrice};
+    } else if(change.catalogPartId) {
+      const selected=await client.query('select * from parts_catalog where company_id=$1 and id=$2 for share',[shop.company_id,change.catalogPartId]);
+      const part=selected.rows[0]; if(!part)throw inventoryNotFound();
+      validatePhysicalLine(part,change.quantity);
+      next={...current,id:current?.id||randomUUID(),catalog_part_id:part.id,part_number:part.part_number,description:change.description,uom_code:part.uom_code,tracking_mode:part.tracking_mode,quantity:change.quantity,unit_price:change.unitPrice};
+    } else {
+      if(current?.catalog_part_id)fail('Choose a catalog part when replacing a catalog purchase line.');
+      next={...current,id:current?.id||randomUUID(),catalog_part_id:null,part_number:change.partNumber,description:change.description,uom_code:change.uomCode,tracking_mode:change.trackingMode,quantity:change.quantity,unit_price:change.unitPrice};
+      validatePhysicalLine(next,change.quantity);
+    }
+    const partKey=String(next.part_number).toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(!partKey)fail('Enter the part number or description.');
+    if(partKeys.has(partKey)||(next.catalog_part_id&&catalogKeys.has(next.catalog_part_id)))fail('Combine repeated parts into one order line.');
+    partKeys.add(partKey);if(next.catalog_part_id)catalogKeys.add(next.catalog_part_id);
+    if(current)await client.query(`update inventory_purchase_lines set catalog_part_id=$4,part_number=$5,description=$6,uom_code=$7,
+      tracking_mode=$8,quantity=$9,unit_price=$10 where company_id=$1 and order_id=$2 and id=$3`,
+      [shop.company_id,order.id,current.id,next.catalog_part_id,next.part_number,next.description,next.uom_code,next.tracking_mode,next.quantity,next.unit_price]);
+    else await client.query(`insert into inventory_purchase_lines(id,company_id,order_id,catalog_part_id,part_number,description,uom_code,quantity,unit_price,tracking_mode)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[next.id,shop.company_id,order.id,next.catalog_part_id,next.part_number,next.description,next.uom_code,next.quantity,next.unit_price,next.tracking_mode]);
+    after.push(lineAuditState(next));
+  }
+  const status=order.status==='draft'?'draft':await approvalStatus(client,shop.company_id,order.id);
+  await client.query(`update inventory_purchase_orders set status=$3,version=version+1,updated_at=now(),
+    placed_at=case when $3='ordered' then coalesce(placed_at,now()) else placed_at end,
+    placed_by=case when $3='ordered' then coalesce(placed_by,$4::uuid) else placed_by end
+    where company_id=$1 and id=$2`,[shop.company_id,order.id,status,input.actorId]);
+  return {before:{status:order.status,version:order.version,lines:before},after:{status,version:order.version+1,lines:after}};
+}
 export async function readPurchaseOrderForReceipt(input) {
   const client = await getPool().connect();
   try {
@@ -126,9 +211,9 @@ export async function readPurchasing(input) {
   try {
     const shop = await location(client,input);
     const suppliers = await client.query("select id,name,contact from inventory_suppliers where company_id=$1 and active=true order by lower(name) limit 500", [shop.company_id]);
-    const orderParams=[shop.company_id,shop.id,(input.page-1)*25,input.view==='receiving',input.status||'all',input.supplierId||'',input.query||''];
+    const orderParams=[shop.company_id,shop.id,(input.page-1)*25,input.view==='receiving',input.status||'all',input.supplierId||'',input.query||'',input.orderId||''];
     const orders = await client.query(`with filtered as (
-      select id,created_at from inventory_purchase_orders where company_id=$1 and location_id=$2 and ($4::boolean=false or status in ('ordered','partially_received')) and ($5='all' or status=$5) and ($6='' or supplier_id=nullif($6,'')::uuid) and ($7='' or number ilike '%'||$7||'%' or supplier_id in (select id from inventory_suppliers where company_id=$1 and name ilike '%'||$7||'%'))
+      select id,created_at from inventory_purchase_orders where company_id=$1 and location_id=$2 and (($8<>'' and id=nullif($8,'')::uuid) or ($8='' and ($4::boolean=false or status in ('ordered','partially_received')) and ($5='all' or status=$5) and ($6='' or supplier_id=nullif($6,'')::uuid) and ($7='' or number ilike '%'||$7||'%' or supplier_id in (select id from inventory_suppliers where company_id=$1 and name ilike '%'||$7||'%'))))
     ), page_rows as (
       select id,created_at from filtered order by created_at desc,id desc limit 26 offset $3
     ), totals as (
@@ -168,7 +253,7 @@ export async function purchaseCommand(input) {
       if(!supplier.rows[0])fail("A supplier with this name already exists. Select that supplier.");
       result={supplier:supplier.rows[0]};
     } else {
-      let orderId=command.orderId;
+      let orderId=command.orderId,eventDetails=command;
       if(['create','revise'].includes(command.action)) {
         const supplier=await client.query("select id from inventory_suppliers where company_id=$1 and id=$2 and active=true for share",[shop.company_id,command.supplierId]);
         if(!supplier.rows[0])throw inventoryNotFound();
@@ -225,6 +310,10 @@ export async function purchaseCommand(input) {
         const selected=await client.query("select * from inventory_purchase_orders where company_id=$1 and location_id=$2 and id=$3 for update",[shop.company_id,shop.id,orderId]);
         const order=selected.rows[0]; if(!order)throw inventoryNotFound();
         if(order.version!==command.expectedVersion)fail("The order changed. Refresh it before continuing.");
+        if(command.action==='amend_lines') {
+          eventDetails=await amendPurchaseLines(client,shop,input,command,order);
+          result={order:await orderDetail(client,shop.company_id,orderId)};
+        } else {
         let status=order.status;
         if(['submit','place'].includes(command.action) && status==='draft') {
           status=await placePurchase(client,shop.company_id,orderId,input.actorId);
@@ -232,7 +321,7 @@ export async function purchaseCommand(input) {
           const policy=await readApprovalPolicy(client,shop.company_id,true);
           if(!await canApprovePurchase(client,shop.company_id,input.actorId,policy)) throw new InventoryError('You are not an authorized purchase order approver.',{code:'PURCHASE_APPROVAL_FORBIDDEN',statusCode:403});
           status='ordered';
-          await client.query('update inventory_purchase_orders set placed_at=now(),placed_by=$3 where company_id=$1 and id=$2',[shop.company_id,orderId,input.actorId]);
+          await client.query('update inventory_purchase_orders set placed_at=coalesce(placed_at,now()),placed_by=coalesce(placed_by,$3) where company_id=$1 and id=$2',[shop.company_id,orderId,input.actorId]);
         }
         else if(command.action==='receive') fail('Record the delivered quantities. Purchase order status follows accepted stock.', 'INVENTORY_PURCHASE_RECEIPT_LINES_REQUIRED');
         else if(command.action==='cancel' && !['received','cancelled'].includes(status) && command.reason){
@@ -250,9 +339,10 @@ export async function purchaseCommand(input) {
           await client.query("update inventory_purchase_orders set communication_reference=$3 where company_id=$1 and id=$2",[shop.company_id,orderId,command.reason]);
         } else fail("This action is not permitted for the order's current state and your access.");
         await client.query("update inventory_purchase_orders set status=$3,version=version+1,updated_at=now() where company_id=$1 and id=$2",[shop.company_id,orderId,status]);
+        }
       }
-      await client.query("insert into inventory_purchase_events(company_id,order_id,actor_id,action,details) values($1,$2,$3,$4,$5)",[shop.company_id,orderId,input.actorId,command.action,JSON.stringify(command)]);
-      result={order:await orderDetail(client,shop.company_id,orderId)};
+      await client.query("insert into inventory_purchase_events(company_id,order_id,actor_id,action,details) values($1,$2,$3,$4,$5)",[shop.company_id,orderId,input.actorId,command.action,JSON.stringify(eventDetails)]);
+      if(!result)result={order:await orderDetail(client,shop.company_id,orderId)};
     }
     await client.query("insert into inventory_workflow_commands(company_id,actor_id,idempotency_key,request_hash,result,location_id) values($1,$2,$3,$4,$5,$6)",[shop.company_id,input.actorId,command.idempotencyKey,requestHash,JSON.stringify(result),shop.id]);
     await client.query("commit");return result;
@@ -269,19 +359,7 @@ export async function readPurchaseCommand(input) {
 }
 
 async function placePurchase(client, companyId, orderId, actorId) {
-  const policy = await readApprovalPolicy(client,companyId,true);
-  if (!policy) fail('Configure Purchase Order Approval in Settings before placing an order.', 'PURCHASE_APPROVAL_NOT_CONFIGURED');
-  // PostgreSQL numeric arithmetic preserves the exact threshold at equality.
-  const result = await client.query(`select o.currency,count(l.id)::integer as lines,
-    count(l.unit_price)::integer as priced_lines,
-    coalesce(bool_or(l.unit_price is null),false) or coalesce(sum(l.quantity*l.unit_price)>$3::numeric,false) as needs_approval
-    from inventory_purchase_orders o join inventory_purchase_lines l on l.company_id=o.company_id and l.order_id=o.id
-    where o.company_id=$1 and o.id=$2 group by o.id`, [companyId,orderId,policy.approval_limit]);
-  const order=result.rows[0];
-  if (!order || !order.lines) fail('Add at least one part before placing the order.');
-  if (order.currency!==policy.currency) fail(`The approval limit is in ${policy.currency}. Use that currency or update Purchase Order Approval in Settings.`, 'PURCHASE_APPROVAL_CURRENCY');
-  // An incomplete commercial total cannot be bounded, so it always requires the configured approval path.
-  const status=order.needs_approval?'awaiting_approval':'ordered';
+  const status=await approvalStatus(client,companyId,orderId);
   await client.query(`update inventory_purchase_orders set status=$3,
     placed_at=case when $3='ordered' then now() else null end,
     placed_by=case when $3='ordered' then $4::uuid else null end where company_id=$1 and id=$2`, [companyId,orderId,status,actorId]);

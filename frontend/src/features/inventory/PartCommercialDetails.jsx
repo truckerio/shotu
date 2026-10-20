@@ -1,11 +1,12 @@
-import { CurrencySelector } from "../../components/forms/CurrencySelector.jsx";
-import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
+import { CurrencySelector } from "../../components/forms/CurrencySelector.jsx";
+import { PartRatesDialog } from "../../components/pricing/PartRatesDialog.jsx";
+import { rateSourceLabel } from "../../components/pricing/set-rates-model.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from "../../components/ui/OperationalDataTable.jsx";
 import { api } from "../../lib/api.js";
-import { configuredPriceView, displayMoney, locationPriceEditState, pricePayload, purchaseCoverageLabel, receiptCostBasisLabel, receiptDateBasisLabel } from "./part-commercial-model.js";
+import { configuredPriceView, displayMoney, locationPriceEditState, receiptCostBasisLabel, receiptDateBasisLabel } from "./part-commercial-model.js";
 import "./part-commercial-details.css";
 
 const newKey = (type) => `${type}-${crypto.randomUUID()}`;
@@ -45,132 +46,14 @@ function PriceHistory({ prices, locationScoped }) {
   return groups.map(([label, history]) => <div className="inventory-commercial-history-group" key={label}><h6>{label}</h6>{history.length ? <ul>{history.map((price) => <li key={price.id}><strong>{configuredPriceView(price).label}</strong><span>Version {price.version} · {new Date(price.effectiveAt).toLocaleString()}</span><small>{price.reason}{price.createdBy?.name ? ` · ${price.createdBy.name}` : ""}</small></li>)}</ul> : <p>No saved history.</p>}</div>);
 }
 
-function SellingPolicyEditor({ policy, writeVersion = 0, disabled, observations, defaultCurrency, fixedOnly = false, onSaved }) {
-  const savedMethod = policy?.method || "fixed";
-  const savedValue = fixedOnly && policy?.method && policy.method !== "fixed" ? "" : policy?.value || "";
-  const savedCurrency = policy?.currency || defaultCurrency || "";
-  const [method, setMethod] = useState(fixedOnly ? "fixed" : savedMethod);
-  const [value, setValue] = useState(savedValue);
-  const [currency, setCurrency] = useState(savedCurrency);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const retry = useRef(null);
-  useEffect(() => {
-    setMethod(fixedOnly ? "fixed" : savedMethod);
-    setValue(savedValue);
-    setCurrency(savedCurrency);
-    setError("");
-    retry.current = null;
-  }, [savedMethod, savedValue, savedCurrency, fixedOnly]);
-  const needsCurrency = method !== "markup_percent";
-  const dirty = method !== savedMethod
-    || String(value) !== String(savedValue)
-    || (needsCurrency ? currency : "") !== (savedMethod !== "markup_percent" ? savedCurrency : "");
-  const valid = /^(?:\d{1,10})(?:\.\d{1,4})?$/.test(String(value).trim()) && (!needsCurrency || currency);
-  const label = method === "fixed"
-    ? "Fixed selling price"
-    : method === "markup_percent" ? "Markup on batch cost (%)" : "Amount added to batch cost";
-  const preview = valid ? (observations || [])
-    .filter((entry) => entry.status === "known" || (entry.unitCost !== null && entry.currency))
-    .slice(0, 3)
-    .map((entry) => {
-      const cost = Number(entry.unitCost);
-      const adjustment = Number(value || 0);
-      const amount = method === "fixed"
-        ? adjustment
-        : method === "markup_percent" ? cost * (1 + adjustment / 100) : cost + adjustment;
-      return {
-        ...entry,
-        batchCurrency: entry.currency,
-        selling: amount,
-        sellingCurrency: method === "markup_percent" ? entry.currency : currency,
-      };
-    }) : [];
-
-  async function save(event) {
-    event.preventDefault();
-    if (!dirty || !valid || busy || disabled) return;
-    setBusy(true);
-    setError("");
-    try {
-      const command = {
-        expectedVersion: Number(writeVersion),
-        method,
-        value: String(value).trim(),
-        currency: needsCurrency ? currency : null,
-        reason: `Updated ${label.toLowerCase()}`,
-      };
-      const signature = JSON.stringify(command);
-      if (retry.current?.signature !== signature) retry.current = { signature, key: newKey("selling-policy") };
-      await onSaved({ ...command, idempotencyKey: retry.current.key });
-    } catch (failure) {
-      setError(failure.message || "Selling policy could not be saved.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <form className="inventory-commercial-price inventory-selling-policy" onSubmit={save}>
-    <div className="inventory-commercial-price-fields">
-      {fixedOnly ? null : <label><span>Method</span><Dropdown value={method} onChange={(event) => setMethod(event.target.value)} disabled={busy || disabled}><option value="fixed">Same price for every batch</option><option value="markup_percent">Markup % on batch cost</option><option value="markup_amount">Add amount to batch cost</option></Dropdown></label>}
-      <label><span>{fixedOnly ? "Selling price" : method === "markup_percent" ? "Markup %" : "Value"}</span><input inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} disabled={busy || disabled} /></label>
-      {needsCurrency ? <label><span>Currency</span><CurrencySelector value={currency} onChange={(event) => setCurrency(event.target.value)} disabled={busy || disabled} /></label> : <small>Uses each batch currency</small>}
-      <Button type="submit" variant="primary" disabled={!dirty || !valid || busy || disabled}>{busy ? "Saving…" : "Save"}</Button>
-    </div>
-    {fixedOnly ? null : preview.length ? <div className="inventory-selling-preview"><strong>Batch preview</strong>{preview.map((entry) => <span key={entry.costLayerId || entry.receiptLineId}>{displayMoney(entry.unitCost, entry.batchCurrency)} cost → {displayMoney(String(entry.selling), entry.sellingCurrency)}</span>)}</div> : <small className="inventory-commercial-fallback">{valid ? "Add a priced batch to preview this policy." : "Enter a value to preview this policy."}</small>}
-    {error ? <p role="alert">{error}</p> : null}
-  </form>;
-}
-
-function NoStockCostEditor({ projection, locationId, onSaved }) {
-  const state = locationId ? locationPriceEditState(projection) : {
-    draft: projection?.current || null,
-    expectedVersion: Number(projection?.current?.version || 0),
-    effective: projection?.current || null,
-    source: "company_default",
-  };
-  const saved = state.draft;
-  const [amount, setAmount] = useState(saved?.amount ?? "");
-  const [currency, setCurrency] = useState(saved?.currency || "USD");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const retry = useRef(null);
-  useEffect(() => {
-    setAmount(saved?.amount ?? "");
-    setCurrency(saved?.currency || "USD");
-    setReason("");
-    setError("");
-    retry.current = null;
-  }, [saved?.id, state.expectedVersion]);
-  const dirty = String(amount) !== String(saved?.amount ?? "") || (amount !== "" && currency !== (saved?.currency || "USD"));
-  const valid = (amount === "" || /^\d{1,10}(?:\.\d{1,4})?$/.test(String(amount).trim())) && Boolean(currency) && reason.trim().length >= 2;
-  async function save(event) {
-    event.preventDefault();
-    if (!dirty || !valid || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const command = pricePayload({ amount, currency, taxTreatment: "not_configured", reason, expectedVersion: state.expectedVersion });
-      delete command.idempotencyKey;
-      const signature = JSON.stringify(command);
-      if (retry.current?.signature !== signature) retry.current = { signature, key: newKey("configured-cost") };
-      await onSaved({ ...command, idempotencyKey: retry.current.key });
-    } catch (failure) {
-      setError(failure.message || "Configured cost could not be saved.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return <form className="inventory-no-stock-cost-editor" onSubmit={save}>
-    <div className="inventory-commercial-price-fields">
-      <label><span>Internal cost per unit</span><input aria-label="Internal cost per unit" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="Unknown" disabled={busy} /></label>
-      <label><span>Currency</span><CurrencySelector value={currency} onChange={(event) => setCurrency(event.target.value)} disabled={busy} /></label>
-      <label><span>Reason</span><input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="Why is this cost changing?" disabled={busy} /></label>
-      <Button type="submit" variant="primary" disabled={!dirty || !valid || busy}>{busy ? "Saving…" : "Save cost"}</Button>
-    </div>
-    {error ? <p role="alert">{error}</p> : null}
-  </form>;
+function ConfiguredRates({ internal, sellingPolicy, locationScoped, canEdit, uomCode, onEdit }) {
+  const internalState = locationScoped ? locationPriceEditState(internal) : { effective: internal?.current || null, source: internal?.current ? "company_default" : null };
+  const sellingSource = sellingPolicy ? (locationScoped && sellingPolicy.locationId ? "location_override" : "company_default") : null;
+  return <section className="inventory-configured-rates" aria-label="Configured rates">
+    <div><span>Internal price</span><strong>{configuredPriceView(internalState.effective).label} / {uomCode || "unit"}</strong><small>{rateSourceLabel(internalState.source, locationScoped)}</small></div>
+    <div><span>Selling price</span><strong>{sellingPolicySummary(sellingPolicy)} / {uomCode || "unit"}</strong><small>{rateSourceLabel(sellingSource, locationScoped)}</small></div>
+    {canEdit ? <Button type="button" onClick={onEdit}>Set rates</Button> : null}
+  </section>;
 }
 
 function BatchCostEditor({ batch, onCancel, onSaved }) {
@@ -231,6 +114,7 @@ function BatchRow({ batch, locationScoped, canEditBatchCost, isNextToUse, onEdit
 export function PartCommercialDetails({ part, location = null, secondary = false, readOnly = false, manageableLocationIds = null, onChanged }) {
   const [details, setDetails] = useState(null), [error, setError] = useState(""), [loading, setLoading] = useState(true);
   const [editingBatch, setEditingBatch] = useState(null);
+  const [ratesKind, setRatesKind] = useState(null);
   const sequence = useRef(0);
   const locationId = location?.locationId || location?.id || "";
   async function load({ preserveError = false } = {}) {
@@ -257,24 +141,7 @@ export function PartCommercialDetails({ part, location = null, secondary = false
     }
   }
   useEffect(() => { setDetails(null); load(); return () => { sequence.current += 1; }; }, [part?.catalogPartId, locationId]);
-  async function saveSellingPolicy(body) {
-    const params = locationId ? `?${new URLSearchParams({ locationId })}` : "";
-    await api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/selling-policy${params}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
-    await load();
-    onChanged?.();
-  }
-  async function saveConfiguredCost(body) {
-    const path = `/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}`;
-    const target = locationId
-      ? `${path}/locations/${encodeURIComponent(locationId)}/prices/internal`
-      : `${path}/prices/internal`;
-    await api(target, { method: "PUT", body: JSON.stringify(body) });
-    await load();
-    onChanged?.();
-  }
+  async function refreshAfterRatesSave() { await load(); onChanged?.(); }
   async function saveBatchCost(batch, body) {
     await api(`/api/office/inventory/batches/${encodeURIComponent(batch.costLayerId)}/cost`, {
       method: "PUT",
@@ -289,45 +156,42 @@ export function PartCommercialDetails({ part, location = null, secondary = false
   if (!details) return null;
   const costs = details.receiptCosts || details.purchaseCost || { observations: [], coverage: {} };
   const purchaseOrders = details.purchaseOrders || { observations: [] };
-  const receiptLatest = costs.latest?.status === "known" ? costs.latest : null;
   const availableBatches = details.sellingPolicy?.availableBatches || [];
-  const currentPricedBatch = availableBatches.find((batch) => Number(batch.availableQuantity) > 0 && batch.unitCost !== null && batch.currency) || null;
-  const latest = receiptLatest || currentPricedBatch || purchaseOrders.latest || costs.latest;
-  const latestLabel = receiptLatest || purchaseOrders.latest ? (receiptLatest ? "Latest purchase cost" : "Latest Odoo PO price") : "Latest purchase cost";
-  const latestMeta = currentPricedBatch && !receiptLatest
-    ? `${currentPricedBatch.receiptReference || "Legacy stock"} · ${currentPricedBatch.locationName}`
-    : receiptLatest || !purchaseOrders.latest
-      ? purchaseCoverageLabel(costs)
-      : `${purchaseOrders.latest.orderNumber}${purchaseOrders.latest.vendorName ? ` · ${purchaseOrders.latest.vendorName}` : ""}`;
   const invoiceHref = (entry) => entry.source?.type === "invoice" && (entry.invoiceRunId || entry.source.id) ? `/?${new URLSearchParams({ adminView: "inventory", view: "inventory", invoiceRun: entry.invoiceRunId || entry.source.id })}` : "";
   const canEditSellingPolicy = !readOnly && details.sellingPolicy?.capabilities?.canEdit;
   const canEditBatchCost = !readOnly && details.sellingPolicy?.capabilities?.canEditBatchCost;
+  const canEditConfiguredRates = !readOnly && (details.capabilities?.canEditPrices || canEditSellingPolicy);
+  const ratesDialog = <PartRatesDialog
+    open={Boolean(ratesKind)}
+    onClose={() => setRatesKind(null)}
+    catalogPartId={part.catalogPartId}
+    locationId={locationId || undefined}
+    partLabel={part.partNumber || part.name || part.description || "Part"}
+    uomCode={part.uomCode}
+    initialKind={ratesKind || "selling_price"}
+    onSaved={refreshAfterRatesSave}
+    readOnly={readOnly}
+  />;
   if (part.trackingMode === "no_stock") {
     const internal = details.prices?.internal;
-    const costState = locationId ? locationPriceEditState(internal) : { effective: internal?.current || null, source: "company_default" };
-    const cost = costState.effective;
-    const canEditCost = !readOnly && details.capabilities?.canEditPrices;
     return <section className="inventory-commercial-details inventory-no-stock-pricing" aria-label="No-stock pricing">
       {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
-      {!canEditCost || !canEditSellingPolicy ? <div className="inventory-no-stock-price-summary">
-        {!canEditCost ? <div><span>Internal cost</span><span>{configuredPriceView(cost).label} / {part.uomCode || "unit"}</span></div> : null}
-        {!canEditSellingPolicy ? <div><span>Selling price</span><span>{details.sellingPolicy?.policy?.method === "fixed" ? sellingPolicySummary(details.sellingPolicy.policy) : "Not configured"} / {part.uomCode || "unit"}</span></div> : null}
-      </div> : null}
-      {canEditCost ? <NoStockCostEditor key={`${part.catalogPartId}:${locationId}:${costState.effective?.id || "new"}`} projection={internal} locationId={locationId} onSaved={saveConfiguredCost} /> : null}
-      {canEditSellingPolicy ? <SellingPolicyEditor policy={details.sellingPolicy?.policy} writeVersion={details.sellingPolicy?.writeVersion} observations={[]} defaultCurrency={cost?.currency || "USD"} fixedOnly onSaved={saveSellingPolicy} /> : null}
+      <ConfiguredRates internal={internal} sellingPolicy={details.sellingPolicy?.policy} locationScoped={Boolean(locationId)} canEdit={canEditConfiguredRates} uomCode={part.uomCode} onEdit={() => setRatesKind(canEditSellingPolicy ? "selling_price" : "internal_cost")} />
       <details className="inventory-commercial-configured-history"><summary>Cost history</summary><PriceHistory prices={internal} locationScoped={Boolean(locationId)} /></details>
+      {ratesDialog}
     </section>;
   }
   const contents = <section className="inventory-commercial-details" aria-label={locationId ? `Batches at ${details.scope?.locationName || location?.locationName || "location"}` : "Batch costs and selling policy"}>
     {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
     {availableBatches.length ? <section className="inventory-batch-list" aria-label={`Batches (${availableBatches.length})`}><header><h3>Batches <span>{availableBatches.length}</span></h3></header>{availableBatches.map((batch, index) => <BatchRow key={batch.costLayerId} batch={batch} locationScoped={Boolean(locationId)} canEditBatchCost={canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(batch.locationId))} isNextToUse={index === 0} onEdit={setEditingBatch} />)}{editingBatch && canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(editingBatch.locationId)) ? <BatchCostEditor key={`${editingBatch.costLayerId}:${editingBatch.costVersion}`} batch={editingBatch} onCancel={() => setEditingBatch(null)} onSaved={saveBatchCost} /> : null}</section> : <p className="inventory-commercial-empty">No available batches for this {locationId ? "location" : "part"}.</p>}
+    <ConfiguredRates internal={details.prices?.internal} sellingPolicy={details.sellingPolicy?.policy} locationScoped={Boolean(locationId)} canEdit={canEditConfiguredRates} uomCode={part.uomCode} onEdit={() => setRatesKind(canEditSellingPolicy ? "selling_price" : "internal_cost")} />
     <details className="inventory-commercial-policy inventory-commercial-pricing-history">
-      <summary><strong>Pricing &amp; history</strong><span>{sellingPolicySummary(details.sellingPolicy?.policy)}</span></summary>
-      {canEditSellingPolicy ? <div className="inventory-commercial-editors"><h4>Selling policy</h4><SellingPolicyEditor policy={details.sellingPolicy?.policy} writeVersion={details.sellingPolicy?.writeVersion} observations={availableBatches} defaultCurrency={latest?.currency||""} onSaved={saveSellingPolicy}/></div> : null}
+      <summary><strong>Pricing history</strong></summary>
       {purchaseOrders.observations?.length ? <details className="inventory-commercial-history"><summary>Odoo purchase orders</summary><OperationalDataTable ariaLabel="Odoo purchase orders" columns={purchaseOrderColumns} className="inventory-commercial-history-table">{purchaseOrders.observations.map((entry) => <OperationalDataRow id={entry.lineId} key={entry.lineId}><OperationalDataCell label="Date"><span>{entry.approvedAt || entry.orderedAt ? new Date(entry.approvedAt || entry.orderedAt).toLocaleDateString() : "Unknown"}</span><small>{entry.status || "Purchased"}</small></OperationalDataCell><OperationalDataCell label="Purchase order"><strong>{entry.orderNumber || "Odoo PO"}</strong><small>{entry.vendorName || "Vendor not recorded"}</small></OperationalDataCell><OperationalDataCell label="Ordered / received"><span>{entry.quantity ?? "—"} {entry.uomCode}</span><small>{entry.receivedQuantity ?? "—"} received</small></OperationalDataCell><OperationalDataCell label="Unit price"><strong>{displayMoney(entry.unitCost, entry.currency)}</strong><small>{entry.currency || "Currency unavailable"}</small></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>{purchaseOrders.truncated ? <p>Showing the 50 most recent Odoo purchase lines.</p> : null}</details> : null}
       {costs.observations?.length ? <details className="inventory-commercial-history"><summary>Purchase history</summary><OperationalDataTable ariaLabel="Purchase history" columns={purchaseHistoryColumns} className="inventory-commercial-history-table">{costs.observations.map((entry) => { const href = invoiceHref(entry), sourceName = entry.invoice?.invoiceNumber || entry.source?.invoiceNumber || entry.invoice?.vendorName || entry.source?.vendorName || String(entry.source?.type || "receipt").replaceAll("_", " "); return <OperationalDataRow id={entry.receiptLineId} key={entry.receiptLineId}><OperationalDataCell label="Date"><span>{entry.occurredOn ? new Date(entry.occurredOn).toLocaleDateString() : "Unknown"}</span><small>{receiptDateBasisLabel(entry)}</small></OperationalDataCell><OperationalDataCell label="Source"><span>{href ? <a href={href}>{sourceName}</a> : sourceName}</span><small>{receiptCostBasisLabel(entry)}</small></OperationalDataCell><OperationalDataCell label="Quantity">{entry.quantity} {entry.uomCode}</OperationalDataCell><OperationalDataCell label="Unit cost"><strong>{displayMoney(entry.unitCost, entry.currency)}</strong><small>{entry.status === "known" ? "Known cost" : "Unknown cost"}</small></OperationalDataCell></OperationalDataRow>; })}</OperationalDataTable>{costs.truncated ? <p>Showing the 50 most recent receipt lines.</p> : null}</details> : <p className="inventory-commercial-empty">No purchase cost recorded for this {locationId ? "location" : "part"}.</p>}
       <details className="inventory-commercial-configured-history"><summary>Legacy price history</summary><section><h5>Selling price</h5><PriceHistory prices={details.prices.selling} locationScoped={Boolean(locationId)} /></section></details>
     </details>
+    {ratesDialog}
   </section>;
   return secondary ? <details className="inventory-commercial-secondary"><summary>Company price defaults</summary>{contents}</details> : contents;
 }

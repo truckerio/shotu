@@ -3,6 +3,10 @@ import { UsedPartsSection } from "./UsedPartsSection.jsx";
 
 export function ReadOnlyPartsSurface({
   actorId,
+  financialFooter = null,
+  locationId,
+  locale = "en",
+  presentation = "panel",
   role = "read",
   detail,
   parts,
@@ -10,6 +14,7 @@ export function ReadOnlyPartsSurface({
   laborProduct,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  laborLogContent,
   installedParts = [],
   onLaborHoursChange,
   onLaborRepairOrderChange,
@@ -26,6 +31,10 @@ export function ReadOnlyPartsSurface({
     <>
       <UsedPartsSection
         actorId={actorId}
+        financialFooter={financialFooter}
+        locationId={locationId}
+        locale={locale}
+        presentation={presentation}
         role={role}
         detail={detail}
         parts={parts}
@@ -33,6 +42,7 @@ export function ReadOnlyPartsSurface({
         laborProduct={laborProduct}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        laborLogContent={laborLogContent}
         installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}

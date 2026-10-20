@@ -295,6 +295,9 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
   if (result.kind === "stale") {
     throw publicError("INVOICE_REVIEW_STALE", "This reviewed invoice changed. Refresh it before confirming delivery.", 409, true);
   }
+  if (result.kind === "purchase_bill_receipt_recorded") {
+    throw publicError("PURCHASE_BILL_RECEIPT_ALREADY_RECORDED", "This purchase order bill is for invoice review. Its delivery was already received through the purchase order.", 409);
+  }
   if (result.kind === "conflict") {
     throw publicError("INVENTORY_RECEIPT_REPLAY_CONFLICT", "This invoice was already posted with different inventory details.", 409);
   }

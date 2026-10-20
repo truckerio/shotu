@@ -16,7 +16,7 @@ test("shared Approve action owns its success color, icon, and busy state", () =>
 });
 
 test("every interactive approval surface uses the shared Approve action", () => {
-  assert.equal((detailPage.match(/<ApproveButton/g) || []).length, 2);
+  assert.equal((detailPage.match(/<ApproveButton/g) || []).length, 1);
   assert.match(completionModule, /allowedActions\.approve \? <ApproveButton/);
   assert.match(officeRequestCard, /<ApproveButton/);
   assert.doesNotMatch(completionModule, /<Button[^>]*>\s*<CheckCircle \/>Approve/);

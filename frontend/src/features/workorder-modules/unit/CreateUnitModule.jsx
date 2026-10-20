@@ -103,7 +103,7 @@ export function CreateUnitModule({ access, activeSection, actorRole = "", custom
   if (!access) return null;
   const UnitSection = onePage ? "div" : FormSection;
   const UnitDetails = onePage ? UnitDetailsPopover : OptionalSection;
-  const customerField = customerControl || <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={actorRole === "mechanic" ? t("create.mechanicInternalFleetGuidance") : onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required={actorRole !== "mechanic"} requiredLabel={t("create.required")} />;
+  const customerField = customerControl || <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={actorRole === "mechanic" ? t("create.mechanicCustomerGuidance") : onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required={actorRole !== "mechanic"} requiredLabel={t("create.required")} />;
   return (
     <ProgressiveWorkorderSection
       id="unit"

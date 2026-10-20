@@ -100,6 +100,16 @@
   text-align: right;
 }
 
+.serialized-unit-child-price {
+  color: #344054;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.serialized-unit-child-price.is-missing { color: #b42318; }
+
 @media (max-width: 700px) {
   .serialized-unit-child-actions .button {
     min-height: 44px;

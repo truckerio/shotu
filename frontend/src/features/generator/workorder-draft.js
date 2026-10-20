@@ -35,7 +35,7 @@ function filledParts(parts) {
         serializedUnitIds: [...new Set(part.serializedUnitIds.filter(Boolean))],
         serializedSerialNumbers: [...new Set((part.serializedSerialNumbers || []).filter(Boolean))],
       } : {}),
-      ...((part?.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "selling_price"]).includes(part?.priceSelection) ? {
+      ...((part?.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "internal_cost", "selling_price"]).includes(part?.priceSelection) ? {
         priceSelection: part.priceSelection,
         ...(text(part.customUnitPrice) ? { customUnitPrice: text(part.customUnitPrice) } : {}),
       } : {}),
@@ -62,7 +62,7 @@ export function buildWorkorderDraftPayload({
   const parts = filledParts(form.parts);
   const financialRole = ["admin", "office"].includes(actor.role);
   const pricingParts = financialRole ? parts.flatMap((part, partIndex) => (
-    partHasExactInventorySource(part) && (part.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "selling_price"]).includes(part.priceSelection)
+    partHasExactInventorySource(part) && (part.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "internal_cost", "selling_price"]).includes(part.priceSelection)
       ? [{
         partIndex,
         selection: part.priceSelection,
@@ -203,7 +203,7 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
 
 export function formValuesFromWorkorderDraft(payload, currentForm) {
   const partSelections = new Map((Array.isArray(payload?.pricing?.parts) ? payload.pricing.parts : [])
-    .filter((entry) => Number.isInteger(entry?.partIndex) && ["batch_cost", "selling_price"].includes(entry?.selection))
+    .filter((entry) => Number.isInteger(entry?.partIndex) && ["batch_cost", "internal_cost", "selling_price"].includes(entry?.selection))
     .map((entry) => [entry.partIndex, entry]));
   const saved = payload?.formData || {};
   const savedParts = Array.isArray(saved.parts)

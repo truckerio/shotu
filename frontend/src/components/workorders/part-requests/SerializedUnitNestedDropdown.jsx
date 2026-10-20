@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/Button.jsx";
+import { Dropdown } from "../../forms/Dropdown.jsx";
 import { normalizeLocale } from "../../../i18n/index.js";
 import { anchoredOverlayShift } from "./anchored-overlay-position.js";
 import { serializedPickerMaxHeight, serializedPickerPlacement } from "./serialized-picker-placement.js";
@@ -34,9 +35,16 @@ export function SerializedUnitNestedDropdown({
   onClose,
   onConfirm,
   onQueryChange,
+  onPriceSelectionChange,
   onSearch,
   onSelectionChange,
   partNumber = "",
+  pricePreviewsByUnitId = {},
+  priceSelection = "",
+  priceSourceOptions = [],
+  pricingLoading = false,
+  pricingReady = true,
+  pricingRequired = false,
   query,
   selectedUnitIds = [],
   showConfirmCount = true,
@@ -187,6 +195,22 @@ export function SerializedUnitNestedDropdown({
         </form>
         {error ? <p className="serialized-unit-nested-message" role="alert">{error}</p> : null}
         {loading ? <p className="serialized-unit-nested-state" role="status">{text.loading}</p> : null}
+        {pricingRequired && visibleUnits.length ? (
+          <label className="serialized-unit-price-source">
+            <span>Price source</span>
+            <Dropdown
+              aria-label="Price source"
+              disabled={busy || pricingLoading}
+              onChange={(event) => onPriceSelectionChange?.(event.target.value)}
+              popoverClassName="serialized-unit-price-popover"
+              showSelectionIndicator={false}
+              value={priceSelection}
+            >
+              <option value="" disabled data-description={pricingLoading ? "Loading…" : "Required"}>Choose price source</option>
+              {priceSourceOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled} data-description={option.amount}>{option.label}</option>)}
+            </Dropdown>
+          </label>
+        ) : null}
         {!loading && !error && !visibleUnits.length ? (
           <div className="serialized-unit-nested-empty" role="status">
             <span>{emptyMessage || text.empty}</span>
@@ -199,7 +223,11 @@ export function SerializedUnitNestedDropdown({
             locale={locale}
             maxSelected={maxSelected}
             onSelectionChange={onSelectionChange}
+            partNumber={partNumber}
+            pricePreviewsByUnitId={pricePreviewsByUnitId}
+            priceSelection={priceSelection}
             selectedUnitIds={selected}
+            showPrices={pricingRequired}
             units={visibleUnits}
           />
         ) : null}
@@ -207,7 +235,7 @@ export function SerializedUnitNestedDropdown({
       <footer>
         <div>
           {footerAction}
-          <Button type="button" variant="primary" onClick={onConfirm || onClose} disabled={busy || (onConfirm && selectedCount === 0)}>
+          <Button type="button" variant="primary" onClick={onConfirm || onClose} disabled={busy || pricingLoading || (onConfirm && selectedCount === 0) || (pricingRequired && (!priceSelection || !pricingReady))}>
             {onConfirm && showConfirmCount ? `${confirmLabel || text.done} (${selectedCount})` : confirmLabel || text.done}
           </Button>
         </div>

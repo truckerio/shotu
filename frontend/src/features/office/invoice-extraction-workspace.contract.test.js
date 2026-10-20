@@ -221,9 +221,12 @@ test("Delivery owns pending physical receipt and resets it only after successful
   const deliverySource = source.slice(deliveryStart, footerStart);
   assert.match(source, /const \[receiptEpisode, setReceiptEpisode\] = useState\(0\)/);
   assert.match(source, /setReceipt\(result\.receipt\);[\s\S]*setReceiptEpisode\(\(current\) => current \+ 1\)/);
-  assert.match(deliverySource, /status=\{deliveryPending \? "Pending" : deliveryComplete \? "Complete" : deliveryReversed \? "Reversed" : ""\}/);
-  assert.match(deliverySource, /defaultOpen=\{deliveryPending \|\| deliveryIssues > 0\}/);
+  assert.match(deliverySource, /status=\{billReviewOnly \? "Review only" : deliveryPending \? "Pending" : deliveryComplete \? "Complete" : deliveryReversed \? "Reversed" : ""\}/);
+  assert.match(deliverySource, /defaultOpen=\{billReviewOnly \|\| deliveryPending \|\| deliveryIssues > 0\}/);
   assert.match(deliverySource, /<PhysicalReceiptConfirmation receiptEpisode=\{receiptEpisode\}/);
+  assert.match(source, /const billReviewOnly = !invoiceAllowsPhysicalReceipt\(run\);/);
+  assert.match(source, /const deliveryPending = !billReviewOnly && run.status === "reviewed"/);
+  assert.match(deliverySource, /billReviewOnly \? <p role="status">[\s\S]*: deliveryPending \? <PhysicalReceiptConfirmation/);
   assert.doesNotMatch(source.slice(footerStart), /<PhysicalReceiptConfirmation/);
   assert.match(source, /setReceiptEpisode\(0\)/);
 });

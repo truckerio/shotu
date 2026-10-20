@@ -24,7 +24,7 @@ test("create validation accepts trimmed required values", () => {
   }), {});
 });
 
-test("mechanic create permits blank customer but blocks named customer work", () => {
+test("mechanic create permits both fleet and customer intake", () => {
   const form = {
     locationId: "location-1",
     unitNo: "G2021",
@@ -32,7 +32,7 @@ test("mechanic create permits blank customer but blocks named customer work", ()
     customerCompanyName: "   ",
   };
   assert.deepEqual(validateCreateWorkorder(form, { actorRole: "mechanic" }), {});
-  assert.match(validateCreateWorkorder({ ...form, customerCompanyName: "Fleet customer" }, { actorRole: "mechanic" }).customerCompanyName, /Office.*accepted Estimate/);
+  assert.deepEqual(validateCreateWorkorder({ ...form, customerCompanyName: "Fleet customer" }, { actorRole: "mechanic" }), {});
   for (const actorRole of ["office", "admin"]) {
     assert.match(validateCreateWorkorder(form, { actorRole }).customerCompanyName, /Enter the company/);
     assert.equal(validateCreateWorkorder({ ...form, customerCompanyName: "Fleet customer" }, { actorRole }).customerCompanyName, undefined);

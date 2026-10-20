@@ -121,6 +121,11 @@
   overflow-y: auto;
 }
 
+.workorder-tools-panel-view .chat-thread-surface {
+  flex: 1;
+  min-height: 0;
+}
+
 .workorder-tools-panel-view .chat-prompt-composer { flex-shrink: 0; }
 
 @media (max-width: 1279px) {

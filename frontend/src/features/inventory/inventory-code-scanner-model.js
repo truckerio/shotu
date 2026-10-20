@@ -11,7 +11,7 @@ export function inventoryScannerAvailable(environment = globalThis) {
 export function inventoryUsageStatusLabel(status) {
   return {
     issued: "Reserved",
-    reserved: "Reserved — awaiting Office approval",
+    reserved: "Reserved — ready to install",
     installed_pending_approval: "Installed — awaiting Office approval",
     installed: "Installed",
     consumed: "Consumed after Office approval",

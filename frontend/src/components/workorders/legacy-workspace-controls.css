@@ -113,14 +113,18 @@
 }
 
 .status-accepted,
-.status-in_progress {
+.status-in_progress,
+.status-ready,
+.status-active {
   background: #eff8ff;
   border-color: #84caff;
   color: #175cd3;
 }
 
 .status-waiting_office,
-.status-parts_requested {
+.status-parts_requested,
+.status-waiting_parts,
+.status-on_hold {
   background: #fef3f2;
   border-color: #fecdca;
   color: #b42318;

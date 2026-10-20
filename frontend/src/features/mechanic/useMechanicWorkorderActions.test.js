@@ -294,3 +294,20 @@ test("submit finish allows blank diagnosis and repair details", async () => {
   assert.deepEqual(JSON.parse(apiCall[2].body), { diagnosis: "", workPerformed: "" });
   assert.deepEqual(calls.at(-1), ["finish", { open: false, name: "", message: "" }]);
 });
+
+test("confirmed finish sends the explicit all-parts installation attestation after progress flush", async () => {
+  const { actions, calls } = actionHarness();
+  assert.equal(await actions.submitMechanicFinish(undefined, { confirmPartsInstalled: true }), true);
+  const apiIndex = calls.findIndex(([name, path]) => name === "api" && path.endsWith("/mark-done"));
+  assert.equal(JSON.parse(calls[apiIndex][2].body).confirmPartsInstalled, true);
+  assert.ok(calls.findIndex(([name]) => name === "flush") < apiIndex);
+});
+
+test("failed progress or completion preserves the confirmation and never continues a failed flush", async () => {
+  const flushFailure = actionHarness({ mechanicProgress: { flush: async () => { throw new Error("Save failed"); } } });
+  assert.equal(await flushFailure.actions.submitMechanicFinish(undefined, { confirmPartsInstalled: true }), false);
+  assert.equal(flushFailure.calls.some(([name]) => name === "api" || name === "finish"), false);
+  const completionFailure = actionHarness({ apiRequest: async () => { throw new Error("Part changed"); } });
+  assert.equal(await completionFailure.actions.submitMechanicFinish(undefined, { confirmPartsInstalled: true }), false);
+  assert.equal(completionFailure.calls.some(([name]) => name === "finish"), false);
+});

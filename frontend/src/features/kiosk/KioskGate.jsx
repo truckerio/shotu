@@ -1,5 +1,5 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, LogIn01, RefreshCw01, User01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
@@ -43,7 +43,7 @@ function KioskMechanicButton({ locale, mechanic, onSelect }) {
   );
 }
 
-export function KioskGate({ context, onRefresh, onStandardLogin }) {
+export function KioskGate({ context, onRefresh, onStandardLogin, onReturnToRoster, onUnlockStart, onUnlockError, onUnlocked, unlocking, handoffError = "" }) {
   const [mechanic, setMechanic] = useState(null);
   const [pin, setPin] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -51,14 +51,32 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [deviceLocale, setDeviceLocale] = useState(kioskStoredLocale);
+  const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const unlockController = useRef(null);
   const activeLocale = normalizeLocale(mechanic?.locale || deviceLocale);
   const text = (key) => interfaceText(activeLocale, key);
+  const visibleError = error || (handoffError ? text("kiosk.error.tryLater") : "");
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; unlockController.current?.abort(); };
+  }, []);
+
+  useEffect(() => {
+    if (unlocking === false) {
+      unlockController.current?.abort();
+      inFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }, [unlocking]);
 
   function changeDeviceLocale(event) {
     setDeviceLocale(saveKioskLocale(event.target.value));
   }
 
   function selectMechanic(nextMechanic) {
+    if (inFlightRef.current) return;
     setMechanic(nextMechanic);
     setPin("");
     setNewPin("");
@@ -68,24 +86,40 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
 
   async function unlock(event) {
     event.preventDefault();
-    if (!mechanic || !isCompleteKioskPin(pin)) return;
+    if (inFlightRef.current || !mechanic || !isCompleteKioskPin(pin)) return;
     if (mechanic.requiresPinChange && (!isCompleteKioskPin(newPin) || newPin !== confirmPin)) return;
 
+    inFlightRef.current = true;
+    unlockController.current = new AbortController();
+    let accepted = false;
     setSubmitting(true);
     setError("");
+    onUnlockStart?.();
     try {
       await api("/api/auth/kiosk/unlock", {
         method: "POST",
+        signal: unlockController.current.signal,
         body: JSON.stringify({
           mechanicId: mechanic.id,
           pin,
           ...(mechanic.requiresPinChange ? { newPin } : {}),
         }),
       });
-      window.location.replace("/");
+      if (!mountedRef.current) return;
+      accepted = true;
+      setPin("");
+      setNewPin("");
+      setConfirmPin("");
+      document.activeElement?.blur();
+      window.history.replaceState(window.history.state, "", "/");
+      await onUnlocked?.(unlockController.current.signal);
     } catch (unlockError) {
-      setError(kioskUnlockError(unlockError.status, activeLocale));
+      if (!mountedRef.current) return;
+      if (accepted) setMechanic((current) => ({ ...current, requiresPinChange: false }));
+      setError(accepted ? text("kiosk.error.tryLater") : kioskUnlockError(unlockError.status, activeLocale));
       setSubmitting(false);
+      inFlightRef.current = false;
+      onUnlockError?.();
     }
   }
 
@@ -96,7 +130,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
     return (
       <main className="kiosk-shell">
         <section className="kiosk-panel kiosk-unlock-panel" aria-labelledby="kiosk-unlock-title">
-          <button className="kiosk-back" type="button" onClick={() => selectMechanic(null)}>
+          <button className="kiosk-back" type="button" disabled={submitting} onClick={() => { selectMechanic(null); onReturnToRoster?.(); }}>
             <ArrowLeft />
             <span>{text("kiosk.allMechanics")}</span>
           </button>
@@ -117,6 +151,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                 id="kiosk-pin"
                 autoFocus
                 autoComplete="one-time-code"
+                disabled={submitting}
                 inputMode="numeric"
                 minLength="4"
                 pattern="[0-9]{4,}"
@@ -126,7 +161,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                   setPin(kioskPinValue(event.target.value));
                   setError("");
                 }}
-                aria-describedby={error ? "kiosk-unlock-error" : undefined}
+                aria-describedby={visibleError ? "kiosk-unlock-error" : undefined}
                 required
               />
             </label>
@@ -139,6 +174,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                     {...textEntryProps("identifier")}
                     id="kiosk-new-pin"
                     autoComplete="new-password"
+                    disabled={submitting}
                     inputMode="numeric"
                     minLength="4"
                     pattern="[0-9]{4,}"
@@ -157,6 +193,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                     {...textEntryProps("identifier")}
                     id="kiosk-confirm-pin"
                     autoComplete="new-password"
+                    disabled={submitting}
                     inputMode="numeric"
                     minLength="4"
                     pattern="[0-9]{4,}"
@@ -171,7 +208,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                 </label>
               </div>
             ) : null}
-            {error ? <p className="kiosk-error" id="kiosk-unlock-error" role="alert">{error}</p> : null}
+            {visibleError ? <p className="kiosk-error" id="kiosk-unlock-error" role="alert">{visibleError}</p> : null}
             <button
               className="kiosk-primary-action"
               type="submit"
@@ -180,7 +217,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
               {text(submitting ? "kiosk.unlocking" : "kiosk.unlockWorkorders")}
             </button>
           </form>
-          <button className="kiosk-standard-login" type="button" onClick={onStandardLogin}>
+          <button className="kiosk-standard-login" type="button" disabled={submitting} onClick={onStandardLogin}>
             <LogIn01 />
             <span>{text("kiosk.useStandardLogin")}</span>
           </button>

@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("workorder price column is limited to office/admin and offers exact batch or selling price", async () => {
+test("workorder price column is limited to office/admin/surveillance and offers distinct exact batch, internal and selling prices", async () => {
   const editor = await readFile(new URL("./UsedPartsEditor.jsx", import.meta.url), "utf8");
   const cell = await readFile(new URL("./WorkorderPartPriceCell.jsx", import.meta.url), "utf8");
-  assert.match(editor, /\["office",\s*"admin"\]\.includes\(role\)/);
-  assert.match(cell, /value="batch_cost"/);
-  assert.match(cell, /value="selling_price"/);
-  assert.match(cell, /usageKind === "no_stock"[\s\S]*?value="internal_cost"/);
+  assert.match(editor, /canViewWorkorderPrices\(role\)/);
+  const selector = await readFile(new URL("./PriceSourceDropdown.jsx", import.meta.url), "utf8");
+  assert.match(cell, /<PriceSourceDropdown/);
+  assert.match(selector, /\["batch_cost", "Batch cost"\]/);
+  assert.match(selector, /\["internal_cost", "Internal price"\]/);
+  assert.match(selector, /\["selling_price", "Selling price"\]/);
+  assert.match(cell, /includeBatch=\{usageKind !== "no_stock"\}/);
+  assert.match(selector, /showSelectionIndicator=\{false\}/);
+  assert.match(selector, /data-description=/);
+  assert.match(cell, /expectedFingerprint: preview\.fingerprint/);
   assert.match(cell, /selection === "internal_cost" \? "Use configured internal cost"/);
   assert.match(cell, /FCFS/);
   assert.match(cell, /costAllocations/);
@@ -20,7 +26,7 @@ test("workorder price column is limited to office/admin and offers exact batch o
   assert.match(cell, /Unknown cost/);
   assert.match(cell, /allocationMoney\(lineTotal, allocation\.currency\)/);
   assert.match(cell, /className="detail-inline-price-control"/);
-  assert.match(cell, /aria-label="Part unit price" readOnly placeholder="Price" value=\{compactPriceValue\(current\)\}/);
-  assert.match(cell, /function compactPriceValue\(price\)[\s\S]*?price\?\.selection[\s\S]*?Number\.isFinite\(numeric\) \? numeric\.toFixed\(2\) : ""/);
+  assert.match(cell, /WorkorderUnitPriceInput label="Part unit price"/);
+  assert.match(cell, /customUnitPrice/);
   assert.match(cell, /className=\{compact \? "detail-price-source-menu" : undefined\}/);
 });

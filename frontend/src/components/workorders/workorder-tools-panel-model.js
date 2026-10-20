@@ -1,8 +1,7 @@
-export function getVisibleWorkorderToolViews(views, activeView) {
+export function getVisibleWorkorderToolViews(views) {
   return views.filter((view) => (
     view?.id
     && view?.label
-    && (view.id !== "completion" || view.id === activeView)
   ));
 }
 

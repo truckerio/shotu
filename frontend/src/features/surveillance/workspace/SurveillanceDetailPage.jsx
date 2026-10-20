@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { WorkorderDetailSurface } from "../../../components/workorders/WorkorderDetailSurface.jsx";
 import { ChatThread } from "../../../components/workorders/ChatThread.jsx";
 import { timelineEventCount } from "../../../components/workorders/workorder-timeline-model.js";
-import { WorkorderStatusPill } from "../../../components/workorders/WorkorderStatusPill.jsx";
+import { api } from "../../../lib/api.js";
 import {
   buildCompactPhoneDetailSections,
   buildSurveillanceWorkorderDetailSections,
@@ -23,6 +23,9 @@ import { WorkorderDetailModuleHost } from "../../workorder-modules/WorkorderDeta
 import { useUnitServiceHistory } from "../../workorder-modules/unit/useUnitServiceHistory.js";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
 import { localDate, missingFields, progressTimestamp } from "./surveillance-workspace-model.js";
+import { WorkorderActivityStatus } from "../../workorder-detail/WorkorderActivityStatus.jsx";
+import { useWorkorderWorkLog } from "../../workorder-detail/useWorkorderWorkLog.js";
+import "../../workorder-detail/workorder-work-log.css";
 
 function valueOrDash(value) {
   return value || "-";
@@ -43,6 +46,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     setDetailSection,
   } = controller;
   const workorder = detail.workorder;
+  const workLog = useWorkorderWorkLog({ request: api, syncToken: workorder.updatedAt || workorder.updated_at || "", workorderId: workorder.id });
   const formData = workorder.formData || {};
   const unitType = workorder.asset?.unitType || formData.unitType || "Vehicle";
   const mechanicNames = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
@@ -198,6 +202,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       onSelect: setDetailSection,
     },
     parts: {
+      actorRole: actor?.role || "surveillance",
       activeWorkorder: detail,
       actorId: actor?.id || "",
       detailSection: selectedSection,
@@ -238,7 +243,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
           current: workorder.serial || "Workorder",
           title: canRead("unit") ? valueOrDash(assetLabel || workorder.serial) : workorder.serial,
           subtitle: workorder.serial,
-          status: <WorkorderStatusPill status={workorder.status} />,
+          status: <WorkorderActivityStatus controller={workLog} lifecycleStatus={workorder.status} />,
           actions: (
             <>
               <nav className="surveillance-batch-nav" aria-label="Batch navigation">

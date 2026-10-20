@@ -962,3 +962,110 @@
     justify-items: stretch;
   }
 }
+
+/* Source menus need readable labels even when anchored to an arrow-only button. */
+.workorder-price-source-popover {
+  min-width: min(240px, calc(100vw - 32px));
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+
+/* Keep row actions inside the shared table's compact trailing column. */
+.used-parts-editor :is(.used-part-serialized-actions, .aggregate-part-actions) {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  min-width: 0;
+}
+.used-parts-editor .used-part-row-status {
+  color: var(--text-secondary, #667085);
+  font-size: 12px;
+  font-weight: 400;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Align the serialized row's first line with its repair and price controls. */
+.used-parts-editor .used-part-serialized-row > strong,
+.used-parts-editor .used-part-serialized-identity > strong,
+.used-parts-editor .used-part-serialized-value {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  line-height: 20px;
+}
+
+.used-parts-editor .used-part-serialized-identity > strong,
+.used-parts-editor .used-part-serialized-value > strong {
+  font-weight: 600;
+}
+
+.used-parts-editor .used-part-install {
+  min-height: 40px;
+  width: 100%;
+}
+
+.used-parts-editor .used-part-serialized-row > strong {
+  justify-content: center;
+}
+
+@media (max-width: 700px) {
+  .used-parts-editor .used-part-install {
+    min-height: 44px;
+  }
+}
+
+.used-parts-editor .used-part-serialized-value > .quantity-unit-input {
+  flex: 1;
+}
+.used-parts-editor .used-part-serialized-value input[aria-haspopup="dialog"] {
+  cursor: pointer;
+}
+.used-parts-editor .used-part-serial-details {
+  display: grid;
+  min-width: 0;
+  border-left: 2px solid var(--border-secondary, #e4e7ec);
+}
+.used-parts-editor .used-part-group-price {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary, #667085);
+}
+
+@media (max-width: 700px) {
+  .used-parts-editor .used-part-serialized-value :is(input, .quantity-unit-trigger) {
+    min-height: 44px;
+  }
+}
+
+/* Saved part identities follow the Create parts field and serial hierarchy. */
+.used-parts-editor .used-part-name-field {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle, #d0d5dd);
+  border-radius: 0;
+  box-sizing: border-box;
+  color: inherit;
+  display: block;
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.5;
+  min-height: 38px;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  text-align: start;
+  width: 100%;
+}
+.used-parts-editor button.used-part-name-field { cursor: pointer; }
+.used-parts-editor button.used-part-name-field:focus-visible {
+  outline: 2px solid var(--brand-primary, #1570ef);
+  outline-offset: 2px;
+}
+.used-parts-editor .used-part-serialized-identity > .used-part-serialized-serial {
+  color: #475467;
+  font-size: 11px;
+  line-height: 1.35;
+  padding-inline: 2px;
+}

@@ -6,9 +6,9 @@ const detailPage = readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta
 const toolbarCss = readFileSync(new URL("./workorder-detail-toolbar.css", import.meta.url), "utf8");
 const usedPartsCss = readFileSync(new URL("../../components/workorders/used-parts-editor.css", import.meta.url), "utf8");
 
-test("one-page Detail keeps its identity and lifecycle actions on the Create-sized frosted header", () => {
+test("one-page Detail keeps its identity and shared status actions on the Create-sized frosted header", () => {
   assert.match(detailPage, /subtitle: activeWorkorder\.workorder\.serial/);
-  assert.match(detailPage, /status: <WorkorderStatusPill status=\{detailStatus\}/);
+  assert.match(detailPage, /status: <>[\s\S]*<WorkorderActivityStatus controller=\{workLog\} lifecycleStatus=\{detailStatus\}/);
   assert.match(detailPage, /className="detail-save-button"/);
   assert.match(detailPage, /<WorkDoneButton/);
   assert.match(toolbarCss, /\.workorder-detail-page \.control-panel > \.detail-context-bar\s*\{[^}]*box-shadow: 0 4px 12px rgb\(16 24 40 \/ 6%\);/s);

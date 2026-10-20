@@ -5,6 +5,7 @@ import { api } from "../../../lib/api.js";
 import { serializedSelectionPatch } from "./create-parts-model.js";
 import { Button } from "../../../components/ui/Button.jsx";
 import { WorkorderSerializedPartDialog } from "../../../components/workorders/part-requests/WorkorderSerializedPartDialog.jsx";
+import { formatPriceAmount, knownPriceOption, missingPriceLabel, PART_PRICE_SOURCES } from "../../../components/workorders/part-requests/workorder-serialized-part-selection.js";
 
 const TEXT = {
   en: { empty: "No serialized units are available at this location.", error: "Serialized units could not be loaded." },
@@ -13,9 +14,11 @@ const TEXT = {
 };
 
 export function CreateSerializedUnitPicker({
+  canViewPrices = false,
   excludedUnitIds = [],
   locationId,
   locale = "en",
+  loadPricingPreview,
   maxSelected = 18,
   onClose,
   onSelectionChange,
@@ -32,6 +35,12 @@ export function CreateSerializedUnitPicker({
   const [locationName, setLocationName] = useState("");
   const [revision, setRevision] = useState(0);
   const [batch, setBatch] = useState(null);
+  const [pricingPreview, setPricingPreview] = useState(null);
+  const [priceSelection, setPriceSelection] = useState(canViewPrices ? part.priceSelection || "" : "");
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const pricingRequestRef = useRef(0);
+  const loadPricingPreviewRef = useRef(loadPricingPreview);
+  loadPricingPreviewRef.current = loadPricingPreview;
   const selectedIdsRef = useRef(new Set(Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : []));
   const endpoint = locationId && part.catalogPartId
     ? `/api/workorders/create-inventory/locations/${encodeURIComponent(locationId)}/parts/${encodeURIComponent(part.catalogPartId)}/units?limit=100`
@@ -42,6 +51,28 @@ export function CreateSerializedUnitPicker({
     : new Set(Array.isArray(excludedUnitIds) ? excludedUnitIds : []);
   const selectedUnitKey = partSelectedUnitIds.join("|");
   const excludedUnitKey = [...excludedIds].sort().join("|");
+
+  async function refreshPricing(unitList, selected) {
+    if (!canViewPrices || !loadPricingPreviewRef.current || !selected.size) {
+      setPricingPreview(null);
+      setPricingLoading(false);
+      return;
+    }
+    const requestId = ++pricingRequestRef.current;
+    setPricingLoading(true);
+    setMessage("");
+    try {
+      const preview = await loadPricingPreviewRef.current(serializedSelectionPatch(unitList, selected));
+      if (requestId === pricingRequestRef.current) setPricingPreview(preview?.result || preview || null);
+    } catch (error) {
+      if (requestId === pricingRequestRef.current) {
+        setPricingPreview(null);
+        setMessage(error?.message || text.error);
+      }
+    } finally {
+      if (requestId === pricingRequestRef.current) setPricingLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!open || !endpoint) return undefined;
@@ -62,6 +93,7 @@ export function CreateSerializedUnitPicker({
       selectedIdsRef.current = new Set(retainedIds);
       setSelectedIds(new Set(retainedIds));
       setUnits(nextUnits);
+      refreshPricing(nextUnits, new Set(retainedIds));
     }).catch((error) => {
       if (!active) return;
       setUnits([]);
@@ -76,6 +108,8 @@ export function CreateSerializedUnitPicker({
     setIntakeOpen(false);
     setIntakeAllowed(false);
     setBatch(null);
+    setPricingPreview(null);
+    setPriceSelection(canViewPrices ? part.priceSelection || "" : "");
     if (!open || !locationId || !part.catalogPartId) return undefined;
     let active = true;
     api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/locations/${encodeURIComponent(locationId)}/units`)
@@ -90,10 +124,18 @@ export function CreateSerializedUnitPicker({
   function updateSelection(nextIds) {
     selectedIdsRef.current = new Set(nextIds);
     setSelectedIds(new Set(nextIds));
+    refreshPricing(units, new Set(nextIds));
   }
 
   function commitSelection() {
-    onSelectionChange?.(serializedSelectionPatch(units, selectedIdsRef.current));
+    if (canViewPrices && !knownPriceOption(pricingPreview?.options, priceSelection)) {
+      setMessage("Choose a price source with a known amount before confirming these units.");
+      return;
+    }
+    onSelectionChange?.({
+      ...serializedSelectionPatch(units, selectedIdsRef.current),
+      ...(canViewPrices ? { priceSelection, customUnitPrice: "" } : {}),
+    });
     onClose?.();
   }
 
@@ -112,6 +154,19 @@ export function CreateSerializedUnitPicker({
     }}
   />;
   const addUnits = intakeAllowed ? <Button type="button" onClick={() => setIntakeOpen(true)}>{normalizeLocale(locale) === "es" ? "Agregar unidades" : normalizeLocale(locale) === "pa" ? "ਯੂਨਿਟ ਜੋੜੋ" : "Add units"}</Button> : null;
+  const pricePreviewsByUnitId = Object.fromEntries(units.flatMap((unit) => {
+    const preview = unit.pricePreview || unit.pricing;
+    return preview?.options ? [[unit.id, preview]] : [];
+  }));
+  const priceSourceOptions = PART_PRICE_SOURCES.map((source) => {
+    const option = knownPriceOption(pricingPreview?.options, source.value);
+    return {
+      ...source,
+      disabled: !option,
+      amount: option ? formatPriceAmount(option.price, locale) : selectedIds.size ? missingPriceLabel(source.value) : "Select a serial number",
+    };
+  });
+  const pricingReady = !canViewPrices || Boolean(knownPriceOption(pricingPreview?.options, priceSelection));
   return (
     <SerializedUnitNestedDropdown
       anchorToPartField
@@ -126,8 +181,15 @@ export function CreateSerializedUnitPicker({
       topContent={batch?.printUrl ? <a href={batch.printUrl} target="_blank" rel="noreferrer">Print QR labels</a> : null}
       onClose={onClose}
       onConfirm={commitSelection}
+      onPriceSelectionChange={setPriceSelection}
       onSelectionChange={updateSelection}
       partNumber={part.partNo}
+      pricePreviewsByUnitId={pricePreviewsByUnitId}
+      priceSelection={priceSelection}
+      priceSourceOptions={priceSourceOptions}
+      pricingLoading={pricingLoading}
+      pricingReady={pricingReady}
+      pricingRequired={canViewPrices}
       selectedUnitIds={selectedIds}
       showConfirmCount={false}
       units={units}

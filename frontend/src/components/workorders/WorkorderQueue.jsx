@@ -47,6 +47,16 @@ const STATUS_KEYS = Object.freeze({
   parts_requested: "status.partsRequested",
 });
 
+const ACTIVITY_STATUS_LABELS = Object.freeze({
+  ready: "Ready to start",
+  active: "Active",
+  on_hold: "On hold",
+  waiting_parts: "Waiting for parts",
+  waiting_office: "Waiting for office",
+});
+
+const TERMINAL_LIFECYCLES = new Set(["mechanic_done", "closed", "odoo_entered", "cancelled"]);
+
 export function workorderMatchesSearch(workorder, search) {
   const term = search.trim().toLowerCase();
   if (!term) return true;
@@ -63,6 +73,7 @@ export function workorderMatchesSearch(workorder, search) {
     workorder.mechanicName,
     workorder.mechanic?.name,
     workorder.statusLabel,
+    workorder.activityStatusLabel,
     workorder.lastMessage,
     createdDate ? formatUiDateTime(workorder.createdAt) : "",
     createdDate ? formatUiDate(workorder.createdAt) : "",
@@ -146,10 +157,15 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
     : STATUS_KEYS[lifecycle] ? t(STATUS_KEYS[lifecycle]) : statusLabel;
   const isSurveillance = variant === "surveillance";
   const hasOdooStage = ["closed", "odoo_entered"].includes(lifecycle);
+  const operationalStatus = workorder.activityStatus || "";
   const rowStatus = isSurveillance && hasOdooStage
     ? (workorder.odooStatus === "entered" ? "odoo_entered" : workorder.odooStatus === "missing_info" ? "waiting_office" : "closed")
-    : lifecycle;
-  const rowStatusLabel = isSurveillance && hasOdooStage ? odooLabel(workorder.odooStatus) : localizedStatusLabel;
+    : TERMINAL_LIFECYCLES.has(lifecycle) ? lifecycle : operationalStatus || lifecycle;
+  const rowStatusLabel = isSurveillance && hasOdooStage
+    ? odooLabel(workorder.odooStatus)
+    : TERMINAL_LIFECYCLES.has(lifecycle) || !operationalStatus
+      ? localizedStatusLabel
+      : workorder.activityStatusLabel || ACTIVITY_STATUS_LABELS[operationalStatus] || operationalStatus;
   const mobileMeta = workorderMobileMeta({ location: knownLocation, mechanic: knownMechanic });
   const openLabel = openLabelOverride || (variant === "mechanic"
     ? `${t("queue.openWorkorder")} ${workorder.serial || unit}${workorder.concern ? `: ${workorder.concern}` : ""}`

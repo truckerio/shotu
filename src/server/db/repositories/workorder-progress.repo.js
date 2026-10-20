@@ -136,8 +136,14 @@ export async function saveMechanicWorkorderProgress({
             progress_version = progress_version + $6,
             progress_activity_version = case when $7::boolean then progress_version + $6 else progress_activity_version end,
             progress_pending_fields = case when $7::boolean then '[]'::jsonb else $8::jsonb end,
-            status = case when status = 'accepted' then 'in_progress' else status end,
-            started_at = coalesce(started_at, now()),
+            status = case
+              when status = 'accepted' and activity_status = 'active' then 'in_progress'
+              else status
+            end,
+            started_at = case
+              when status = 'accepted' and activity_status = 'active' then coalesce(started_at, now())
+              else started_at
+            end,
             updated_at = now()
         where id = $1
           and progress_version = $5

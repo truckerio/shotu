@@ -1,5 +1,6 @@
 import { resolveWorkorderModuleDecisions } from "../modules/workorders/workorder-module-access.service.js";
-import { projectProtectedWorkorderDetail } from "../modules/workorders/workorder-module-projection.js";
+import { projectLoadedProtectedWorkorderDetail } from "../modules/workorders/workorder-module-runtime.service.js";
+import { effectiveCompanyContext } from "../auth/company-role.js";
 import { surveillanceDashboard, surveillanceWorkorderDetail } from "../modules/surveillance/surveillance.service.js";
 
 function workorderIdFrom(pathname, suffix = "") {
@@ -20,10 +21,13 @@ export async function handleSurveillanceApi(req, res, url, helpers, dependencies
 
   const detailId = workorderIdFrom(url.pathname);
   if (req.method === "GET" && detailId) {
-    const { decisions } = await resolveModules(requestContext, detailId);
-    sendJson(res, 200, projectProtectedWorkorderDetail(
-      await surveillanceWorkorderDetail(detailId, userId),
+    const { workorder, decisions } = await resolveModules(requestContext, detailId);
+    const targetContext = effectiveCompanyContext(requestContext, workorder.companyId);
+    sendJson(res, 200, await projectLoadedProtectedWorkorderDetail(
+      await (dependencies.loadDetail || surveillanceWorkorderDetail)(detailId, userId),
       decisions,
+      { viewerRole: targetContext.actor.role },
+      dependencies,
     ));
     return true;
   }

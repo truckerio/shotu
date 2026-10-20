@@ -17,12 +17,15 @@ export function WorkorderDiagnosisRepairModule({
   locale = "en",
   localeText = (key) => interfaceText(locale, key),
   mechanicProgress,
+  laborLogContent = null,
+  laborOnly = false,
   onChange,
   onSelect,
   presentation = "panel",
   workPerformed,
 }) {
-  if (!access) return null;
+  if (!access || access === WORKORDER_MODULE_ACCESS.HIDDEN) return null;
+  if (laborOnly) return laborLogContent;
   const canWrite = writable(access) && Boolean(allowedActions.saveNotes);
 
   return (
@@ -47,7 +50,7 @@ export function WorkorderDiagnosisRepairModule({
           >
             <NarrativeField locale={locale} id="mechanic-work-performed" rows={presentation === "one-page" ? 2 : 4} value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
           </FormField>
-          {mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={localeText} /> : null}
+          {presentation !== "one-page" && mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={localeText} /> : null}
         </div>
       ) : (
         <dl className="workorder-readonly-details">
@@ -55,6 +58,7 @@ export function WorkorderDiagnosisRepairModule({
           <div><dt>{localeText("detail.workPerformed")}</dt><dd>{workPerformed || localeText("detail.notRecorded")}</dd></div>
         </dl>
       )}
+      {laborLogContent}
     </ProgressiveWorkorderSection>
   );
 }

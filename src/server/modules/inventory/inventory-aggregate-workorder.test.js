@@ -163,6 +163,35 @@ test("lifecycle command binds exact workorder and adjustment target", async () =
   assert.equal(command.targetQuantity, 0.875);
 });
 
+test("quantity install uses the guarded aggregate lifecycle and maps physical-state failures", async () => {
+  let command;
+  const result = await releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
+    operation: "aggregateUsageLifecycle",
+    usageId: USAGE_ID, action: "install", reason: "Marked installed in Workorder",
+    idempotencyKey: "aggregate-install-1",
+  }, context(), { ...scopeDeps, releaseAggregateUsage: async (input) => {
+    command = input;
+    return { kind: "installed_pending_approval" };
+  } });
+  assert.equal(result.status, "installed_pending_approval");
+  assert.equal(command.workorderId, WORKORDER_ID);
+  assert.equal(command.action, "install");
+  assert.equal(command.reason, "Marked installed in Workorder");
+
+  for (const [kind, code] of [
+    ["unsupported_tracking", "AGGREGATE_USAGE_INSTALL_UNSUPPORTED"],
+    ["physical_return_required", "AGGREGATE_USAGE_PHYSICAL_RETURN_REQUIRED"],
+  ]) {
+    await assert.rejects(
+      releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
+        usageId: USAGE_ID, action: kind === "unsupported_tracking" ? "install" : "release",
+        reason: "Lifecycle guard", idempotencyKey: `aggregate-${kind}`,
+      }, context(), { ...scopeDeps, releaseAggregateUsage: async () => ({ kind }) }),
+      (error) => error.code === code && error.statusCode === 409,
+    );
+  }
+});
+
 test("adjustment rejects zero target and maps negative-stock protection to 409", async () => {
   await assert.rejects(
     releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
@@ -191,12 +220,25 @@ test("repository contract locks workorder identity and keeps event/movement delt
   assert.match(source, /usage\.company_id=\$1 and usage\.workorder_id=\$2 and usage\.location_id=\$3/);
   assert.match(source, /Math\.max\(1, Math\.min\(Number\(limit\) \|\| 200, 201\)\)/);
   const listProjection = source.slice(source.indexOf("export async function listAggregateWorkorderUsages"), source.indexOf("function publicUsage"));
+  assert.match(listProjection, /usage\.tracking_mode/);
+  assert.match(listProjection, /trackingMode: row\.tracking_mode/);
   assert.match(listProjection, /receiptReference/);
   assert.doesNotMatch(listProjection, /external_id|invoiceRunId/);
   assert.match(source, /catalog\.tracking_mode/);
   assert.match(source, /QUANTITY_CATEGORIES/);
   assert.match(source, /Number\.isInteger\(input\.quantity\)/);
   assert.match(source, /supportsLegacyMeasured/);
+  assert.match(source, /input\.action === "install" && usage\.tracking_mode !== "quantity"/);
+  assert.match(source, /pickAggregateInventoryPositions[\s\S]*pickAggregateCostLayers/);
+  assert.match(source, /tracking_mode='measured_bulk' or tracking_mode is null/);
+});
+
+test("workorder completion and cancellation guard quantity physical state", async () => {
+  const source = await readFile(new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url), "utf8");
+  assert.match(source, /WORKORDER_QUANTITY_PARTS_PENDING/);
+  assert.match(source, /\["reserved"\][\s\S]*Mark every quantity-tracked part installed/);
+  assert.match(source, /WORKORDER_INSTALLED_QUANTITY_PARTS_PENDING/);
+  assert.match(source, /\["installed_pending_approval"\][\s\S]*physical removal or return/);
 });
 
 test("quantity aggregate persistence stores policy and enforces whole-number adjustments", async () => {

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { DraftLeaveDialog } from "../../components/drafts/index.js";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
@@ -19,7 +20,6 @@ import { CustomerDocumentDiscountEditor } from "../customer-documents/CustomerDo
 import { DocumentsPanel } from "../customer-documents/DocumentsPanel.jsx";
 import {
   customerDocumentAdjustmentsFromForm,
-  customerEstimateActionPending,
   customerEstimateErrorMessage,
   customerEstimateSourceKey,
   isCurrentCustomerEstimateRequest,
@@ -146,16 +146,16 @@ export function CreateWorkorderPage({
     [actor.id, actor.role, canAssign, locale, locationPolicy],
   );
   const hasWritableCreateModule = createSections.some((section) => section.modulePolicy?.canWrite);
-  const pricingBlocksCreate = createPricing?.hasPriceableRows && !createPricing.complete;
+  const pricingBlocksCreate = !isMechanicCreate && createPricing?.hasPriceableRows && !createPricing.complete;
   const authorizationClassification = form.authorizationClassification || "";
   const authorizationResolved = Boolean(authorizationClassification);
   const authorizationException = ["internal_fleet", "exempt"].includes(authorizationClassification);
   const authorizationExceptionReady = authorizationException && Boolean(form.authorizationExceptionReason?.trim());
-  const canDirectCreate = authorizationResolved && authorizationClassification !== "required_external_customer" && (!authorizationException || authorizationExceptionReady);
+  const canDirectCreate = isMechanicCreate || authorizationResolved && authorizationClassification !== "required_external_customer" && (!authorizationException || authorizationExceptionReady);
   const canCreate = hasWritableCreateModule && !pricingBlocksCreate && canDirectCreate;
   const selectedDocumentLocation = useMemo(() => officeLocations.find((location) => (location.id || location.location?.id) === form.locationId), [form.locationId, officeLocations]);
   const customerDocumentCompanyId = selectedDocumentLocation?.company_id || selectedDocumentLocation?.companyId || selectedDocumentLocation?.location?.company_id || selectedDocumentLocation?.location?.companyId || "";
-  const directoryAvailable = ["office", "admin"].includes(actor.role) && Boolean(customerDocumentCompanyId);
+  const directoryAvailable = ["office", "admin", "mechanic"].includes(actor.role) && Boolean(customerDocumentCompanyId);
   const selectedDirectoryCustomer = useMemo(() => selectedCustomer(customerDirectory.customers, form.customerAccountId), [customerDirectory.customers, form.customerAccountId]);
   const selectedDirectoryContact = useMemo(() => (selectedDirectoryCustomer?.contacts || []).find((contact) => String(contact.id) === String(form.customerContactId || "")) || null, [form.customerContactId, selectedDirectoryCustomer]);
   const vehicleCustomerSuggestions = useMemo(
@@ -385,9 +385,13 @@ export function CreateWorkorderPage({
     finally { setCustomerActivationBusy(false); }
   }
 
-  const estimateActionPending = customerEstimateActionPending({ busy: customerDocumentBusy, draft: savedDraft, draftStatus: workorderDraft?.status });
-  const estimateActionLabel = customerRevisionId ? "View estimate" : "Review estimate";
-  const customerDocumentAction = !isMechanicCreate ? <button className={`button secondary customer-estimate-preview-action${estimateActionPending ? " is-loading" : ""}`} type="button" disabled={!customerSourceReady || customerDocumentBusy} aria-busy={estimateActionPending} aria-label={estimateActionPending ? `${estimateActionLabel}, loading` : estimateActionLabel} onClick={() => previewCustomerEstimate()}><span>{estimateActionLabel}</span></button> : null;
+  const customerDocumentAction = !isMechanicCreate ? <PreviewToggle
+    open={customerPreviewOpen}
+    onToggle={() => customerPreviewOpen ? setCustomerPreviewOpen(false) : previewCustomerEstimate()}
+    controls="workorder-documents-panel"
+    openLabel="Open documents"
+    closeLabel="Close documents"
+  /> : null;
   const customerDiscountControl = !isMechanicCreate && !customerRevisionId ? <CustomerDocumentDiscountEditor
     adjustments={customerAdjustments}
     projection={customerProjection}
@@ -409,6 +413,7 @@ export function CreateWorkorderPage({
     loading={customerDirectory.loading}
     error={officeCreateErrors?.customerCompanyName || customerDirectory.error}
     exceptionControls={exceptionControls}
+    showApprovalControl={!isMechanicCreate}
     approvalClassification={authorizationClassification}
     suggestions={vehicleCustomerSuggestions}
     suggestionsLabel={t("create.unit.vehicleTags")}
@@ -418,6 +423,7 @@ export function CreateWorkorderPage({
     onUnmatchedDetailsChange={updateCustomerSelection}
   /> : null;
 
+  const mechanicCustomerIntake = isMechanicCreate && Boolean(form.customerCompanyName?.trim() || form.customerAccountId);
   const ensureFocusedFieldVisible = useFocusedFieldVisibility({
     enabled: true,
     containerRef: mobileScrollRef,
@@ -438,7 +444,7 @@ export function CreateWorkorderPage({
           : officeCreateState.code === "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED"
             ? t("create.validation.mechanicCustomerCompanyName")
             : t("create.failed")
-        : t("create.createdAssigned")
+        : officeCreateState.customerIntake ? t("create.sentToOffice") : t("create.createdAssigned")
     : officeCreateState.message;
 
   useLayoutEffect(() => {
@@ -490,6 +496,7 @@ export function CreateWorkorderPage({
             assignment={assignment}
             backLabel={backLabel}
             canCreate={canCreate}
+            createLabel={mechanicCustomerIntake ? t("create.sendToOffice") : undefined}
             canSaveDraft={["admin", "office"].includes(actor.role)}
             controlRef={formRef}
             form={form}

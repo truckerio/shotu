@@ -25,6 +25,11 @@ function fixedFour(value) {
   return `${value / PRICE_SCALE}.${(value % PRICE_SCALE).toString().padStart(4, "0")}`;
 }
 
+function priceActivityValue(price) {
+  const source = { batch_cost: "batch cost", internal_cost: "internal price", selling_price: "selling price" }[price.selection];
+  return `${price.currency} ${fixedFour(scaled(price.unit_price, 4))} ${price.manual_override ? `custom price (${source})` : source}`;
+}
+
 function publicSnapshot(row, allocations = []) {
   return row && {
     id: row.id,
@@ -104,10 +109,111 @@ export async function listWorkorderNoStockPartPrices(input) {
   }
 }
 
+export async function readWorkorderPartPricingSource(input, transactionClient = null) {
+  const client = transactionClient || await getPool().connect();
+  try {
+    if (input.usageKind === "no_stock") {
+      const result = await client.query(
+        `select workorder.company_id,workorder.location_id,catalog.id catalog_part_id,
+                catalog.part_number,catalog.uom_code,(source.part->>'qty') quantity
+           from operational_workorders workorder
+           join lateral (
+             select candidate part from jsonb_array_elements(coalesce(workorder.form_data->'parts','[]'::jsonb)) candidate
+             where candidate->>'noStockLineId'=$2 limit 1
+           ) source on true
+           join parts_catalog catalog on catalog.company_id=workorder.company_id
+             and catalog.id=(source.part->>'catalogPartId')::uuid and catalog.tracking_mode='no_stock'
+          where workorder.id=$1 and workorder.company_id=any($3::uuid[])
+            and ($5::boolean or workorder.location_id=any($4::uuid[]))`,
+        [input.workorderId, input.noStockLineId, input.companyIds, input.locationIds, input.isAdmin],
+      );
+      return result.rows[0] || null;
+    }
+    const serialized = input.usageKind === "serialized";
+    const table = serialized ? "workorder_serialized_part_usages" : "workorder_aggregate_part_usages";
+    const serializedJoin = serialized
+      ? `join inventory_serialized_units unit on unit.company_id=usage.company_id and unit.id=usage.unit_id
+         join inventory_receipt_lines line on line.company_id=unit.company_id and line.id=unit.receipt_line_id`
+      : "";
+    const result = await client.query(
+      `select usage.company_id,usage.location_id,usage.catalog_part_id,catalog.part_number,usage.uom_code,
+              ${serialized ? "1" : "usage.quantity+usage.adjustment_total"} quantity,
+              ${serialized ? "usage.unit_id" : "null::uuid"} unit_id,
+              ${serialized ? "line.id" : "null::uuid"} receipt_line_id,
+              ${serialized ? "line.unit_cost" : "null::numeric"} unit_cost,
+              ${serialized ? "line.currency" : "null::varchar"} currency
+         from ${table} usage
+         join parts_catalog catalog on catalog.company_id=usage.company_id and catalog.id=usage.catalog_part_id
+         ${serializedJoin}
+        where usage.id=$1 and usage.workorder_id=$2 and usage.company_id=any($3::uuid[])
+          and ($5::boolean or usage.location_id=any($4::uuid[]))`,
+      [input.usageId, input.workorderId, input.companyIds, input.locationIds, input.isAdmin],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    if (serialized) row.allocations = [{ receiptLineId: row.receipt_line_id, quantity: "1",
+      unitCost: row.unit_cost === null ? null : String(row.unit_cost), currency: row.currency }];
+    else row.allocations = await listAggregateUsageCostAllocations(client, {
+      companyId: row.company_id,
+      usageId: input.usageId,
+    });
+    return row;
+  } finally {
+    if (!transactionClient) client.release();
+  }
+}
+
+export async function readWorkorderPartConfiguredSources(input, transactionClient = null) {
+  const client = transactionClient || await getPool().connect();
+  try {
+    const result = await client.query(
+      `select catalog.id catalog_part_id,catalog.part_number,catalog.uom_code,
+              configured.id configured_price_version_id,configured.amount configured_amount,
+              configured.currency configured_currency,
+              policy.id selling_policy_version_id,policy.method policy_method,
+              policy.value policy_value,policy.currency policy_currency
+         from parts_catalog catalog
+         left join lateral (
+           select candidate.* from inventory_part_price_versions candidate
+           where candidate.company_id=catalog.company_id and candidate.catalog_part_id=catalog.id
+             and candidate.price_kind='internal'
+             and (candidate.location_id is null or candidate.location_id=$3)
+           order by (candidate.location_id is not null) desc,candidate.version desc limit 1
+         ) configured on true
+         left join lateral (
+           select candidate.* from inventory_part_selling_policy_versions candidate
+           where candidate.company_id=catalog.company_id and candidate.catalog_part_id=catalog.id
+             and (candidate.location_id is null or candidate.location_id=$3)
+           order by (candidate.location_id is not null) desc,candidate.version desc limit 1
+         ) policy on true
+        where catalog.company_id=$1 and catalog.id=$2`,
+      [input.companyId, input.catalogPartId, input.locationId],
+    );
+    return result.rows[0] || null;
+  } finally {
+    if (!transactionClient) client.release();
+  }
+}
+
+export async function readWorkorderPartPriceCommandReplay(input) {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `select * from workorder_part_price_snapshots
+        where company_id=any($1::uuid[]) and created_by=$2 and idempotency_key=$3 limit 1`,
+      [input.companyIds, input.actorId, input.idempotencyKey],
+    );
+    if (!result.rows[0]) return null;
+    if (result.rows[0].request_hash !== input.requestHash) return { kind: "idempotency_conflict" };
+    const allocations = await snapshotAllocations(client, result.rows[0].company_id, result.rows[0].id);
+    return { kind: "saved", snapshot: publicSnapshot(result.rows[0], allocations), replayed: true };
+  } finally { client.release(); }
+}
+
 export async function saveWorkorderPartPriceSnapshot(input, transactionClient = null) {
   const client = transactionClient || await getPool().connect();
   try {
-    if (!transactionClient) await client.query("begin");
+    if (!transactionClient) await client.query("begin isolation level repeatable read");
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [
       `workorder-part-price:${input.actorId}:${input.idempotencyKey}`,
     ]);
@@ -178,11 +284,13 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
        for update of workorder,catalog`,
       [input.workorderId, input.noStockLineId, input.companyIds, input.locationIds, input.isAdmin],
     ) : await client.query(
-      `select usage.id usage_id,usage.company_id,usage.workorder_id,usage.catalog_part_id,
+      `select usage.id usage_id,usage.company_id,usage.workorder_id,usage.catalog_part_id,usage.uom_code,
               ${serialized ? "1" : "usage.quantity+usage.adjustment_total"} quantity,
               workorder.status workorder_status,
               line.id receipt_line_id,line.unit_cost,line.currency batch_currency,
-              policy.id policy_id,policy.method,policy.value policy_value,policy.currency policy_currency
+              policy.id policy_id,policy.method,policy.value policy_value,policy.currency policy_currency,
+              configured.id configured_price_id,configured.amount configured_price_amount,
+              configured.currency configured_price_currency
        from ${usageTable} usage
        join operational_workorders workorder
          on workorder.company_id=usage.company_id and workorder.id=usage.workorder_id
@@ -196,6 +304,15 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) policy on true
+       left join lateral (
+         select candidate.*
+         from inventory_part_price_versions candidate
+         where candidate.company_id=usage.company_id
+           and candidate.catalog_part_id=usage.catalog_part_id and candidate.price_kind='internal'
+           and (candidate.location_id is null or candidate.location_id=usage.location_id)
+         order by (candidate.location_id is not null) desc,candidate.version desc
+         limit 1
+       ) configured on true
        where usage.id=$1 and usage.workorder_id=$2 and usage.company_id=any($3::uuid[])
          and ($5::boolean or usage.location_id=any($4::uuid[]))
        limit 1
@@ -220,6 +337,11 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
         return { kind: "not_found" };
       }
       row.quantity = sourcePart.qty;
+    }
+
+    if (input.revalidatePreview && !(await input.revalidatePreview(client))) {
+      if (!transactionClient) await client.query("rollback");
+      return { kind: "pricing_changed" };
     }
 
     const costAllocations = serialized || noStock ? [] : await listAggregateUsageCostAllocations(client, {
@@ -257,6 +379,14 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
         currency = row.policy_currency;
         policyId = row.policy_id;
       }
+    } else if (input.selection === "internal_cost") {
+      if (!row.configured_price_id || row.configured_price_amount === null || !row.configured_price_currency) {
+        if (!transactionClient) await client.query("rollback");
+        return { kind: "configured_price_unavailable" };
+      }
+      unitPrice = String(row.configured_price_amount);
+      currency = row.configured_price_currency;
+      configuredPriceId = row.configured_price_id;
     } else if (serialized && input.selection === "batch_cost") {
       if (!row.receipt_line_id || row.unit_cost === null || !row.batch_currency) {
         if (!transactionClient) await client.query("rollback");
@@ -382,8 +512,31 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
           allocation.quantity, allocation.unitPrice, allocation.totalPrice, allocation.currency],
       );
     }
+    if (input.recordPriceActivity !== false) {
+      const lineColumn = noStock ? "no_stock_line_id" : serialized ? "serialized_usage_id" : "aggregate_usage_id";
+      const lineId = noStock ? input.noStockLineId : row.usage_id;
+      const previous = (await client.query(
+        `select * from workorder_part_price_snapshots
+          where company_id=$1 and workorder_id=$2 and ${lineColumn}=$3 and id<>$4
+          order by created_at desc,id desc limit 1`,
+        [row.company_id, row.workorder_id, lineId, saved.rows[0].id],
+      )).rows[0];
+      const baseline = previous || { selection: input.selection, unit_price: selectedUnitPrice, currency };
+      await client.query(
+        `insert into workorder_field_events(
+           workorder_id,field_key,field_label,old_value,new_value,changed_by_user_id,created_at
+         ) values($1,$2,concat((select part_number from parts_catalog where company_id=$3 and id=$4),' price'),$5,$6,$7,$8)`,
+        [row.workorder_id, `pricing.part.${input.usageKind}.${lineId}`, row.company_id, row.catalog_part_id,
+          previous || manualOverride ? priceActivityValue(baseline) : "",
+          priceActivityValue(saved.rows[0]), input.actorId, saved.rows[0].created_at],
+      );
+    }
     if (!transactionClient) await client.query("commit");
-    return { kind: "saved", snapshot: publicSnapshot(saved.rows[0], pricedAllocations), replayed: false };
+    return { kind: "saved", snapshot: publicSnapshot({
+      ...saved.rows[0],
+      catalog_part_id: saved.rows[0].catalog_part_id || row.catalog_part_id,
+      uom_code: saved.rows[0].uom_code || (input.selection === "internal_cost" ? row.uom_code : null),
+    }, pricedAllocations), replayed: false };
   } catch (error) {
     if (!transactionClient) await client.query("rollback").catch(() => {});
     throw error;

@@ -53,6 +53,13 @@
 .inventory-needs-ordering-table .shared-checkbox {min-width:44px;min-height:44px;margin:0;}
 .inventory-needs-ordering-table small {display:block;color:#667085;margin-top:3px;}
 .inventory-purchases-shell {min-width:0;}
+.purchasing-expandable-section {border-top:1px solid #eaecf0;border-bottom:1px solid #eaecf0;}
+.purchasing-expandable-section + .purchasing-expandable-section {border-top:0;}
+.purchasing-expandable-section > summary {display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 4px;cursor:pointer;color:#344054;font-size:14px;font-weight:600;}
+.purchasing-expandable-section > summary strong {display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:24px;padding:0 8px;border-radius:14px;background:#f2f4f7;color:#475467;font-size:12px;}
+.purchasing-expandable-section > div {display:grid;gap:12px;padding:4px 0 16px;}
+.purchasing-expandable-section .inventory-inbound-toolbar {grid-template-columns:minmax(160px,220px) minmax(220px,1fr);}
+.purchase-orders-table small {display:block;margin-top:3px;color:#667085;}
 /* Purchase order layout */
 .purchase-orders-toolbar > label {flex:0 1 320px;}
 .purchase-orders-toolbar .purchase-refresh {width:44px;min-width:44px;height:44px;padding:10px;justify-content:center;}
@@ -92,6 +99,7 @@
  .purchase-order-summary .purchase-status {font-size:11px;text-align:center;}
  .purchase-order-actions .inventory-workflow-toolbar {align-items:stretch;}
  .purchase-order-actions .inventory-workflow-toolbar .button {flex:1 1 auto;}
+ .purchasing-expandable-section .inventory-inbound-toolbar {grid-template-columns:1fr;}
 }
 
 .purchase-draft-actions {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding-top:4px;}
@@ -207,3 +215,66 @@
 .purchase-delivery-condition textarea { width: 100%; padding: 10px; border: 1px solid #d0d5dd; border-radius: 8px; font: inherit; resize: vertical; }
 .purchase-delivery-condition small { color: #667085; }
 .purchase-delivery-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Keep disclosure and order identity compact while preserving touch targets. */
+.purchasing-expandable-section > summary {justify-content:flex-start;}
+.purchasing-expandable-section > summary::-webkit-details-marker {display:none;}
+.purchasing-expandable-section > summary::marker {content:"";}
+.purchasing-expandable-section > summary > svg {width:16px;height:16px;flex:none;}
+.purchasing-expandable-section[open] > summary > svg {transform:rotate(90deg);}
+.purchasing-expandable-section > summary strong {margin-left:auto;}
+.purchase-orders-table .purchase-order-link.purchase-order-identity {display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:44px;white-space:normal;text-align:left;overflow-wrap:anywhere;}
+.purchase-orders-table .purchase-order-identity small {margin:0;font-weight:400;}
+
+/* Purchasing comparison workspace */
+.purchase-orders-page {container-type:inline-size;}
+.purchasing-split-view {--purchasing-left-ratio:50%;display:grid;grid-template-columns:minmax(0,calc(var(--purchasing-left-ratio) - 5px)) 10px minmax(0,calc(100% - var(--purchasing-left-ratio) - 5px));min-width:0;min-height:420px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;overflow:hidden;}
+.purchasing-split-pane {min-width:0;max-height:min(72vh,760px);overflow:auto;padding:14px;scroll-padding:16px;}
+.purchasing-split-divider {position:relative;display:grid;place-items:center;min-width:10px;background:#f2f4f7;border:0;border-left:1px solid #eaecf0;border-right:1px solid #eaecf0;cursor:col-resize;touch-action:none;outline-offset:-2px;}
+.purchasing-split-divider::before {content:"";position:absolute;inset:0 -5px;}
+.purchasing-split-divider span {width:3px;height:42px;border-radius:3px;background:#98a2b3;}
+.purchasing-split-divider:hover,.purchasing-split-divider:focus-visible {background:#eaf2ff;}
+.purchasing-split-divider:hover span,.purchasing-split-divider:focus-visible span {background:#175cd3;}
+.purchasing-pane-list,.inventory-inbound-workspace {display:grid;gap:12px;min-width:0;}
+.purchasing-pane-header {display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;}
+.purchasing-pane-header h3 {margin:0;font-size:15px;overflow-wrap:anywhere;}
+.purchasing-pane-header p {margin:3px 0 0;color:#667085;font-size:12px;overflow-wrap:anywhere;}
+.purchasing-pane-header .button {width:auto;min-height:34px;padding:6px 10px;font-size:12px;flex:none;}
+.purchasing-inline-detail {display:grid;gap:12px;min-width:0;}
+.purchasing-pair-state {display:grid;align-content:start;gap:10px;min-height:180px;padding:12px;border:1px solid #eaecf0;border-radius:6px;background:#f9fafb;}
+.purchasing-pair-state h3,.purchasing-pair-state p,.purchasing-pair-message {margin:0;}
+.purchasing-pair-state p,.purchasing-pair-message {color:#475467;font-size:13px;line-height:1.5;}
+.purchasing-pair-state .button {width:max-content;}
+.purchasing-split-pane .inventory-data-frame .operational-data-table,.purchasing-split-pane .inventory-data-table {min-width:0;width:100%;table-layout:fixed;}
+.purchasing-split-pane .inventory-data-table th,.purchasing-split-pane .inventory-data-table td {white-space:normal;overflow-wrap:anywhere;}
+.purchasing-split-pane .purchase-filter-bar {grid-template-columns:1fr 1fr;}
+.purchasing-split-pane .purchase-filter-bar > label:first-child {grid-column:1/-1;}
+.purchasing-split-pane .inventory-inbound-toolbar {grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+.purchasing-split-pane .purchase-order-detail {gap:14px;}
+.purchasing-split-pane .purchase-order-meta span {flex-wrap:wrap;}
+
+@container (max-width: 780px) {
+ .purchasing-split-view {grid-template-columns:minmax(0,1fr);min-height:0;overflow:visible;}
+ .purchasing-split-divider {display:none;}
+ .purchasing-split-pane {max-height:none;overflow:visible;padding:12px;}
+ .purchasing-split-pane.is-inbound {border-top:1px solid #d0d5dd;}
+}
+@media(max-width:700px) {
+ .purchasing-split-view {grid-template-columns:minmax(0,1fr);min-height:0;overflow:visible;}
+ .purchasing-split-divider {display:none;}
+ .purchasing-split-pane {max-height:none;overflow:visible;padding:12px;}
+ .purchasing-split-pane.is-inbound {border-top:1px solid #d0d5dd;}
+ .purchasing-split-pane .inventory-inbound-toolbar,.purchasing-split-pane .purchase-filter-bar {grid-template-columns:1fr;}
+ .purchasing-split-pane .purchase-filter-bar > label:first-child {grid-column:auto;}
+}
+
+/* Each purchasing list scrolls above its own count footer. */
+@media (min-width: 961px) {
+ .purchasing-split-view { height:min(72vh,760px); }
+ .purchasing-split-pane:has(.is-footer-status) { display:flex; flex-direction:column; overflow:hidden; }
+ .purchasing-split-pane:has(.is-footer-status) > :is(.purchasing-pane-list,.inventory-inbound-workspace) { display:flex; flex-direction:column; flex:1; min-height:0; }
+ .purchasing-split-pane .is-footer-status { row-gap:12px; }
+ .purchasing-split-pane .is-footer-status > .checkpoint-collection-viewport { max-height:none; }
+}
+.inbound-invoice-upload-control { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+.inbound-invoice-upload-control p { margin:0; font-size:12px; color:#475467; }

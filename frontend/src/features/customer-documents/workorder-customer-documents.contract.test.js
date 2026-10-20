@@ -64,7 +64,7 @@ test("dirty and changed-discount work cannot enter the final Invoice review or i
   assert.match(detail, /const canReadCustomerDocuments = isOfficeDetail && activeWorkorder\.customerDocumentAccess\?\.canRead === true/);
   assert.match(detail, /active: canReadCustomerDocuments/);
   assert.match(detail, /\.\.\.\(canReadCustomerDocuments \? \[\{/);
-  assert.match(detail, /\{canReadCustomerDocuments \? \(/);
+  assert.match(detail, /<PreviewToggle open=\{officeToolsOpen\}/);
 });
 
 test("refresh reconciles a newer issued Estimate using the current saved-intent reference", () => {

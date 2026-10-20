@@ -72,3 +72,12 @@ test("pricing previews and reusable tax profiles use financial permissions", () 
   assert.equal(permissionForRequest("PUT", "/api/office/inventory/tax-profiles/profile-1"), PERMISSION.INVENTORY_PRICE_WRITE);
   assert.equal(permissionForRequest("PATCH", "/api/office/inventory/tax-profiles/profile-1/archive"), PERMISSION.INVENTORY_PRICE_WRITE);
 });
+
+
+test("customer selection reads reach company-role checks while directory writes remain Office-only", () => {
+  assert.equal(permissionForRequest("GET", "/api/customers"), PERMISSION.AUTHENTICATED);
+  assert.equal(permissionForRequest("GET", "/api/customers/customer-1/contacts"), PERMISSION.AUTHENTICATED);
+  for (const method of ["POST", "PATCH", "DELETE"]) {
+    assert.equal(permissionForRequest(method, "/api/customers"), PERMISSION.WORKORDER_OFFICE);
+  }
+});

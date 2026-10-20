@@ -13,6 +13,7 @@ import { WorkorderPhotosModule } from "./photos/WorkorderPhotosModule.jsx";
 import { WorkorderScheduleModule } from "./schedule/WorkorderScheduleModule.jsx";
 import { WorkorderUnitModule } from "./unit/WorkorderUnitModule.jsx";
 import { WorkorderConcernModule } from "./work/WorkorderConcernModule.jsx";
+import { inlineLaborPlacement } from "./inline-labor-placement.js";
 import { moduleRenderer } from "./module-renderer-catalog.js";
 
 const ONE_PAGE_CORE_IDS = ["unit", "schedule", "concern", "diagnosisRepair", "parts", "assignment"];
@@ -47,12 +48,15 @@ function orderedOnePageSections(sections) {
 export function WorkorderDetailModuleHost({ moduleProps = {}, renderers = DETAIL_MODULE_RENDERERS, sections = [], supportingOnly = false, conversation = null }) {
   const presentation = useContext(WorkorderPresentationContext);
   const onePage = presentation.mode === "one-page";
+  const laborHost = inlineLaborPlacement(sections);
+  const repairLaborProps = laborHost === "diagnosisRepair" ? { laborLogContent: moduleProps.parts?.laborLogContent } : {};
+  const inlineLaborProps = (id) => id === "diagnosisRepair" ? repairLaborProps : id === "parts" ? { laborLogContent: laborHost === "parts" ? moduleProps.parts?.laborLogContent : null } : {};
   const orderedSections = onePage ? orderedOnePageSections(sections) : sections;
   const renderSection = (section, { allowSupporting = false, presentation: sectionPresentation, ...extraProps } = {}) => {
     if (!allowSupporting && section.modulePolicy?.descriptor?.placementBySurface?.detail === "supporting") return null;
     const Renderer = detailModuleRenderer(section.id, renderers);
     if (!Renderer) return null;
-    return <Renderer key={section.id} access={section.access} {...moduleProps[section.id]} {...extraProps} presentation={sectionPresentation} />;
+    return <Renderer key={section.id} access={section.access} {...moduleProps[section.id]} {...inlineLaborProps(section.id)} {...extraProps} presentation={sectionPresentation} />;
   };
 
   if (supportingOnly) {
@@ -77,7 +81,7 @@ export function WorkorderDetailModuleHost({ moduleProps = {}, renderers = DETAIL
         conversation={conversation}
         schedule={coreSections.filter(({ id }) => id === "schedule").map((section) => renderSection(section, { presentation: "one-page" }))}
         assignment={coreSections.filter(({ id }) => id === "assignment").map((section) => renderSection(section, { presentation: "one-page" }))}
-        parts={coreSections.filter(({ id }) => id === "parts").map((section) => renderSection(section, { presentation: "one-page" }))}
+        parts={coreSections.filter(({ id }) => id === "parts").map((section) => renderSection(section, { presentation: "one-page" })).concat(laborHost === "diagnosisRepair" ? coreSections.filter(({ id }) => id === "diagnosisRepair").map((section) => renderSection(section, { presentation: "one-page", laborOnly: true })) : [])}
       />
     );
   }
@@ -88,7 +92,7 @@ export function WorkorderDetailModuleHost({ moduleProps = {}, renderers = DETAIL
         if (section.modulePolicy?.descriptor?.placementBySurface?.detail === "supporting") return null;
         const Renderer = detailModuleRenderer(section.id, renderers);
         if (!Renderer) return null;
-        return <Renderer key={section.id} access={section.access} {...moduleProps[section.id]} />;
+        return <Renderer key={section.id} access={section.access} {...moduleProps[section.id]} {...inlineLaborProps(section.id)} />;
       })}
     </div>
   );

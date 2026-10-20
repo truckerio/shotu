@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { formatChatTime } from "../../lib/dates.js";
 import { shouldRenderMessageReceipt } from "../../lib/chat-receipts.js";
@@ -8,27 +8,8 @@ import {
   nextChatScrollTop,
 } from "./chat/chat-composer-behavior.js";
 import { MessageReceipt } from "./chat/MessageReceipt.jsx";
+import { getImageAttachments } from "./chat/chat-photo-filter.js";
 import "./chat/chat.css";
-
-function getImageAttachments(message, fallbackName) {
-  const attachments = Array.isArray(message.attachments)
-    ? message.attachments
-    : message.attachment
-      ? [message.attachment]
-      : [];
-
-  return attachments
-    .map((attachment, index) => ({
-      id: attachment.id || `${message.id}-attachment-${index}`,
-      fileName: attachment.fileName || attachment.filename || fallbackName,
-      mimeType: attachment.mimeType || attachment.contentType || "",
-      source: attachment.dataUrl || attachment.url || attachment.src || "",
-    }))
-    .filter((attachment) => (
-      attachment.source
-      && (attachment.mimeType.startsWith("image/") || attachment.source.startsWith("data:image/"))
-    ));
-}
 
 export function ChatThread({
   messages,
@@ -40,7 +21,12 @@ export function ChatThread({
   viewportHeight = 0,
 }) {
   const t = (key) => interfaceText(locale, key);
-  const visibleMessages = visibleConversationMessages(messages || []);
+  const allVisibleMessages = visibleConversationMessages(messages || []);
+  const [filter, setFilter] = useState("all");
+  const photoCount = allVisibleMessages.filter((message) => getImageAttachments(message).length > 0).length;
+  const visibleMessages = filter === "photos"
+    ? allVisibleMessages.filter((message) => getImageAttachments(message).length > 0)
+    : allVisibleMessages;
   const threadRef = useRef(null);
   const nearBottomRef = useRef(true);
   const scrollTopRef = useRef(0);
@@ -66,7 +52,12 @@ export function ChatThread({
   }
 
   return (
-    <div
+    <div className="chat-thread-surface">
+      {photoCount ? <div className="chat-thread-filters" aria-label="Filter chat messages">
+        <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All</button>
+        <button type="button" aria-pressed={filter === "photos"} onClick={() => setFilter("photos")}>Photos <span>{formatLocaleNumber(photoCount, locale)}</span></button>
+      </div> : null}
+      <div
       ref={threadRef}
       className={`chat-thread ${visibleMessages.length ? "" : "is-empty"}`.trim()}
       aria-label={t("chat.conversation")}
@@ -129,7 +120,8 @@ export function ChatThread({
             </div>
           </div>
         );
-      }) : <p className="chat-empty">{empty ?? t("chat.noMessages")}</p>}
+      }) : <p className="chat-empty">{filter === "photos" ? "No photos in this chat." : empty ?? t("chat.noMessages")}</p>}
+      </div>
     </div>
   );
 }

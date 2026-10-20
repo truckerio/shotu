@@ -52,7 +52,7 @@ function MissingFields({ draft }) {
 
 function DraftActions({ draft, role, actorId, canOpen, busy, onOpen, onDiscard, onTakeover }) {
   const ownerId = draftOwnerId(draft);
-  const canTakeover = role === "admin"
+  const canTakeover = (role === "admin" || (role === "office" && draft.payload?.intakeSource === "mechanic_customer" && draftOwnerId(draft) === String(draft.creator?.id || "")))
     && typeof onTakeover === "function"
     && Boolean(ownerId)
     && ownerId !== String(actorId || "")

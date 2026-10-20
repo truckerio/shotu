@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import { ChevronDown, Clock, Key01, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Dialog, DialogTrigger, Popover, Separator } from "react-aria-components";
 import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
@@ -8,6 +8,8 @@ import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
 import { PasskeyManager } from "./PasskeyManager.jsx";
 import { UserActivityDialog } from "../../features/activity/UserActivityDialog.jsx";
 import { interfaceText } from "../../i18n/index.js";
+import { InterfacePreferencesContext } from "../../i18n/InterfacePreferencesContext.jsx";
+import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import "./profile-menu.css";
 
 function initials(name = "") {
@@ -28,6 +30,7 @@ function roleLabel(role, locale) {
 export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false, locale = "en" }) {
   const t = (key) => interfaceText(locale, key);
   const kioskSession = useKioskSession();
+  const interfacePreferences = useContext(InterfacePreferencesContext);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -75,6 +78,16 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
                 <small>{actor?.email || roleLabel(actor?.role, locale)}</small>
               </span>
             </div>
+            {actor?.role === "mechanic" && interfacePreferences ? (
+              <div className="profile-menu-language">
+                <LocaleSelector
+                  locale={interfacePreferences.locale}
+                  onChange={interfacePreferences.onLocaleChange}
+                  error={interfacePreferences.error}
+                  disabled={!interfacePreferences.ready}
+                />
+              </div>
+            ) : null}
             <Separator className="profile-menu-separator" />
             <div className="profile-menu-list" role="menu" aria-label={t("account.profileActions")}>
               {menuActions.map((item) => {

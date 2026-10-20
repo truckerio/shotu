@@ -32,7 +32,7 @@ export function useRoleRouterCommands({
       setCreateState({ busy: false, message: "Choose whether this workorder requires customer approval.", error: true });
       return;
     }
-    if (form.authorizationClassification === "required_external_customer") {
+    if (actor.role !== "mechanic" && form.authorizationClassification === "required_external_customer") {
       setCreateState({ busy: false, message: "Customer Workorders are activated only from an accepted Estimate.", error: true });
       return;
     }
@@ -52,10 +52,16 @@ export function useRoleRouterCommands({
     setCreateState({ busy: true, message: "Creating workorder...", error: false });
     try {
       if (!["admin", "office"].includes(actor.role)) {
-        const result = await api("/api/workorders", {
+        const customerIntake = actor.role === "mechanic" && Boolean(form.customerCompanyName?.trim() || form.customerAccountId);
+        const result = await api(customerIntake ? "/api/workorders/customer-intake" : "/api/workorders", {
           method: "POST",
           body: JSON.stringify(workorderDraftPayload),
         });
+        if (customerIntake) {
+          setCreateState({ busy: false, error: false, customerIntake: true, message: "Work sent to Office for estimate review." });
+          finishRoleWorkspace();
+          return;
+        }
         setCreateState({
           busy: false,
           error: false,

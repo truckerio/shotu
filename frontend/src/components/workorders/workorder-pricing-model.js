@@ -1,3 +1,11 @@
+export function formatWorkorderUnitPrice(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  const [whole, fraction] = amount.toFixed(4).split(".");
+  return `${whole}.${fraction.replace(/0+$/, "").padEnd(2, "0")}`;
+}
+
 export function formatWorkorderMoney(value, currency) {
   if (value === null || value === undefined || value === "" || !currency) return null;
   const amount = Number(value);

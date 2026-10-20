@@ -124,7 +124,7 @@ test("catalog units are independently selectable and submit every selected eligi
   assert.match(dialog, /async function reserveSelectedUnits\(\)/);
   assert.match(dialog, /issueSelectedSerializedUnits\(\{/);
   assert.match(dialog, /keyByUnitId: unitRequestKeysRef\.current/);
-  assert.match(dialog, /body: JSON\.stringify\(\{ unitId, idempotencyKey \}\)/);
+  assert.match(dialog, /unitId,[\s\S]*idempotencyKey,[\s\S]*selection: priceSelection,[\s\S]*expectedFingerprint: pricingByUnitId\.get\(unitId\)\.fingerprint/);
   assert.match(dialog, /onIssued: \(result\) => onReserved\?\.\(result\.usage, result\)/);
   assert.match(dialog, /if \(!failures\.length\) \{[\s\S]*onClose\?\.\(\)/);
 });
@@ -180,5 +180,15 @@ test("manual intake uses one shared nested hierarchy across chooser and label-re
 test("zero-stock state presents one next action without an unusable selection footer", () => {
   assert.match(dialog, /emptyAction=\{canCreate \? <Button[\s\S]*text\.addUnits/);
   assert.match(nestedDropdown, /!loading && !error && !visibleUnits\.length/);
-  assert.match(nestedDropdown, /disabled=\{busy \|\| \(onConfirm && selectedCount === 0\)\}/);
+  assert.match(nestedDropdown, /disabled=\{busy \|\| pricingLoading \|\| \(onConfirm && selectedCount === 0\) \|\| \(pricingRequired && \(!priceSelection \|\| !pricingReady\)\)\}/);
+});
+
+test("financial roles preview each exact serial and commit only a server fingerprint", () => {
+  assert.match(dialog, /operation: "partPricingPreview"/);
+  assert.match(dialog, /usageKind: "serialized"/);
+  assert.match(dialog, /serializedUnitIds: unitList\.map\(\(unit\) => unit\.id\)/);
+  assert.match(dialog, /serializedPricingSelection\(pricePreviewsByUnitId/);
+  assert.match(dialog, /error\?\.code === "WORKORDER_PRICING_CHANGED"/);
+  assert.match(nestedDropdown, /showSelectionIndicator=\{false\}/);
+  assert.match(childPicker, /serialized-unit-child-price/);
 });

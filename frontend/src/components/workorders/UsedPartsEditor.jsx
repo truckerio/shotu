@@ -1,3 +1,4 @@
+import { canViewWorkorderPrices } from "../../../../shared/workorder-pricing-access.js";
 import { Plus, Trash01 } from "@untitledui/icons";
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../../lib/api.js";
@@ -6,12 +7,14 @@ import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import { IconButton } from "../ui/IconButton.jsx";
+import { PartRowActions } from "./PartRowActions.jsx";
 import { PartRemovalDialog } from "./PartRemovalDialog.jsx";
 import {
   availableUsedPartDraftCount,
   canAddUsedPartDraft,
   emptyUsedPart,
   initialUsedPartRows,
+  groupSerializedUsageRows,
   noStockUsedPartDraft,
   readonlyUsedParts,
   removeUsedPartDraft,
@@ -56,6 +59,7 @@ export function UsedPartsEditor({
   locationId = "",
   laborRepairOrder = "",
   laborRepairOrderDisabled = false,
+  laborLogContent = null,
   installedParts = [],
   onLaborHoursChange = () => {},
   onLaborProductChange,
@@ -86,6 +90,7 @@ export function UsedPartsEditor({
   const [removalTarget, setRemovalTarget] = useState(null);
   const [draftRows, setDraftRows] = useState(() => role === "mechanic" ? [] : initialUsedPartRows([]));
   const [activeDraftIndex, setActiveDraftIndex] = useState(-1);
+  const [expandedSerializedGroups, setExpandedSerializedGroups] = useState(new Set());
   const [serializedHistoryOpen, setSerializedHistoryOpen] = useState(false);
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
@@ -134,7 +139,8 @@ export function UsedPartsEditor({
   useEffect(() => {
     if (!focusedSerializedUsageId) return undefined;
     const frame = window.requestAnimationFrame(() => {
-      const row = document.getElementById(`serialized-part-${focusedSerializedUsageId}`);
+      const row = document.getElementById(`serialized-part-${focusedSerializedUsageId}`)
+        || document.querySelector(`[data-serialized-usage-ids~="${CSS.escape(focusedSerializedUsageId)}"]`);
       row?.scrollIntoView?.({ block: "nearest" });
       row?.focus?.({ preventScroll: true });
       serializedParts?.onUsageFocused?.();
@@ -166,7 +172,7 @@ export function UsedPartsEditor({
   const serializedUsageState = serializedParts?.usageSnapshotReady
     ? serializedUsageTableState(serializedParts.usages, serializedParts.actionsFor)
     : { active: installedParts.map((part) => ({ ...part, status: "installed" })), completed: [] };
-  const activeSerializedParts = serializedUsageState.active;
+  const activeSerializedParts = groupSerializedUsageRows(serializedUsageState.active);
   const completedSerializedUsages = serializedUsageState.completed;
   const reusableReturnedIds = reusableReturnedUsageIds(serializedParts?.usages);
   const returnedUsageKey = [...reusableReturnedIds].join(":");
@@ -174,11 +180,11 @@ export function UsedPartsEditor({
   const noStockPartPrices = detail?.modules?.parts?.data?.noStockPartPrices || [];
   const noStockPriceByLineId = new Map(noStockPartPrices.map((entry) => [entry.noStockLineId, entry.price]));
   const recordedManualParts = readonlyUsedParts(parts);
-  const recordedPartCount = activeSerializedParts.length + recordedManualParts.length + aggregatePartUsages.length;
+  const recordedPartCount = serializedUsageState.active.length + recordedManualParts.length + aggregatePartUsages.length;
   const visibleDraftRows = draftRows.slice(0, availableUsedPartDraftCount(recordedPartCount, draftRows.length));
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0 || aggregatePartUsages.length > 0;
   const onePage = presentation === "one-page";
-  const canViewPrices = ["office", "admin"].includes(role);
+  const canViewPrices = canViewWorkorderPrices(role);
   const laborUomCode = laborProduct?.uomCode === "ea" ? "ea" : "hr";
   const laborQuantityLabel = laborUomCode === "ea" ? "Service quantity" : t("parts.laborHours");
   const laborPrice = detail?.modules?.diagnosisRepair?.data?.laborPrice || detail?.laborPrice || null;
@@ -212,17 +218,38 @@ export function UsedPartsEditor({
     if (returnedUsageKey) setSerializedHistoryOpen(true);
   }, [returnedUsageKey]);
 
-  function renderSerializedPartRow(part, index, ordinal = index + 2, compact = false) {
+  function addSerializedUnits(part) {
+    setActiveDraftIndex(-1);
+    setSerializedDialogPart({ id: part.catalogPartId, partNumber: part.partNo, uomCode: part.uomCode });
+  }
+
+  function toggleSerializedGroup(key) {
+    setExpandedSerializedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function renderSerializedPartRow(part, index, ordinal = index + 2, compact = false, nested = false) {
+    const members = part.memberParts || [part];
+    const grouped = !nested && members.length > 1;
+    const groupKey = `${part.catalogPartId}:${part.uomCode}`;
+    const expanded = grouped && expandedSerializedGroups.has(groupKey);
+    const canAddUnits = !nested && partsEditable && Boolean(serializedParts && part.catalogPartId);
+    const manageUnits = <Button type="button" aria-expanded={expanded} onClick={() => toggleSerializedGroup(groupKey)}>{t("parts.serialDetails")} ({members.length})</Button>;
     const usage = part.usage;
     const actions = usage && serializedParts ? serializedParts.actionsFor(usage) : {};
     const installed = ["installed_pending_approval", "installed"].includes(part.status);
-    const status = usage && serializedParts ? serializedParts.statusLabel(usage.status) : t("parts.installed");
+    const status = grouped ? t("parts.selectedSerializedUnits") : usage && serializedParts ? serializedParts.statusLabel(usage.status) : t("parts.installed");
     const rowBusy = Boolean(serializedParts?.busy);
-    const rowId = usage?.id ? `serialized-part-${usage.id}` : undefined;
+    const rowId = grouped ? `serialized-group-${part.catalogPartId}-${part.uomCode}` : usage?.id ? `serialized-part-${usage.id}` : undefined;
     return (
       <div className="used-part-serialized-group" key={`serialized-${part.usageId || part.catalogPartId || part.partNo}-${index}`}>
         <WorkorderPartsRow
           id={rowId}
+          data-serialized-usage-ids={members.map((member) => member.usageId).filter(Boolean).join(" ")}
           className="used-part-serialized-row"
           tabIndex={rowId ? -1 : undefined}
           aria-label={`${part.partNo}, ${formatQuantityUnit(part.qty, part.uomCode)}, ${status}`}
@@ -230,17 +257,34 @@ export function UsedPartsEditor({
           <strong>{ordinal}</strong>
           <div className="used-part-field used-part-serialized-identity">
             <span className="used-part-cell-label">{t("parts.part")}</span>
-            <strong>{part.partNo}</strong>
-            {part.serialNumber ? <small className="used-part-serialized-serial">{part.serialNumber}</small> : null}
-            <small className="used-part-serialized-kind">{t("parts.serialized")}</small>
+            {grouped || canAddUnits ? <button type="button" className="used-part-name-field"
+              aria-label={`${t("parts.serialDetails")}: ${part.partNo}`}
+              aria-expanded={grouped ? expanded : undefined}
+              onClick={() => grouped ? toggleSerializedGroup(groupKey) : addSerializedUnits(part)}
+              disabled={rowBusy}>{part.partNo}</button> : <span className="used-part-name-field">{part.partNo}</span>}
+            {grouped ? <small className="used-part-serialized-serial">{members.length} {t("parts.serialNumbers")}</small> : part.serialNumber ? <small className="used-part-serialized-serial">{t("parts.serial")}: {part.serialNumber}</small> : null}
+            {savingSerializedUsageId === part.usageId ? <small className="used-part-row-status">{t("progress.saving")}</small> : part.status !== "reserved" ? <small className="used-part-row-status">{status}</small> : null}
           </div>
           <div className="used-part-field used-part-serialized-value">
             <span className="used-part-cell-label">{t("parts.quantityUnit")}</span>
-            <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
+            <QuantityUnitInput
+              id={`serialized-quantity-${part.usageId}${nested ? "-detail" : ""}`}
+              quantity={part.qty}
+              uomCode={part.uomCode}
+              quantityLabel={`${t("parts.quantity")}: ${part.partNo}${nested ? ` ${part.serialNumber}` : ""}`}
+              unitLabel={t("parts.unit")}
+              quantityReadOnly
+              unitReadOnly
+              disabled={rowBusy || !canAddUnits}
+              onQuantityActivate={canAddUnits ? () => addSerializedUnits(part) : undefined}
+              quantityHint={canAddUnits ? t("parts.selectMoreSerializedUnits") : undefined}
+              compact
+              locale={locale}
+            />
           </div>
           <div className="used-part-field used-part-repair">
             <span className="used-part-cell-label">{t("parts.repairOrder")}</span>
-            {installed ? (
+            {grouped ? manageUnits : installed ? (
               <PartRepairOrderField
                 historyEnabled={suggestionsEnabled && Boolean(part.usageId)}
                 workorderId={detail.workorder.id}
@@ -263,26 +307,29 @@ export function UsedPartsEditor({
                   disabled={disabled || !part.usageId}
                 />
               </PartRepairOrderField>
+            ) : actions.install ? (
+              <Button
+                type="button"
+                className="used-part-install"
+                onClick={() => serializedParts.finalize(usage, "installed")}
+                disabled={rowBusy}
+              >
+                {t("parts.markInstalled")}
+              </Button>
             ) : <span className="used-part-pending-repair">{t("parts.repairAfterInstalled")}</span>}
           </div>
           {!compact ? <span className="used-part-pickup-empty" aria-hidden="true"></span> : null}
-          {canViewPrices ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} price={part.price} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} /> : null}
+          {canViewPrices ? grouped ? <span className="used-part-group-price">{t("parts.pricePerSerial")}</span> : <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} catalogPartId={part.catalogPartId} partLabel={part.partNo} locationId={effectiveLocationId} uomCode={part.uomCode} price={part.price} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} /> : null}
           <div className="used-part-serialized-actions">
-            <span className="used-part-cell-label used-part-status-label">{t("parts.statusAction")}</span>
-            <span className="used-part-serialized-status">
-              {savingSerializedUsageId === part.usageId ? t("progress.saving") : status}
-            </span>
-            {actions.install ? <Button type="button" variant="primary" onClick={() => serializedParts.finalize(usage, "installed")} disabled={rowBusy}>
-              {t("parts.markInstalled")}
-            </Button> : null}
-            {actions.returnUnused ? <Button type="button" icon={Trash01} onClick={() => serializedParts.finalize(usage, "returned")} disabled={rowBusy}>
-              {t("parts.returnUnused")}
-            </Button> : null}
-            {actions.remove ? <Button type="button" icon={Trash01} onClick={() => serializedParts.requestRemove(usage)} disabled={rowBusy}>
-              {t("parts.removeFromUnit")}
-            </Button> : null}
+            {!grouped ? <PartRowActions label={`More actions for ${part.partNo}`} disabled={rowBusy} actions={[
+              actions.returnUnused && { id: "return", label: t("parts.returnUnused"), onAction: () => serializedParts.finalize(usage, "returned") },
+              actions.remove && { id: "remove", label: t("parts.removeFromUnit"), onAction: () => serializedParts.requestRemove(usage) },
+            ]} /> : null}
           </div>
         </WorkorderPartsRow>
+        {expanded ? <div className="used-part-serial-details" role="group" aria-label={`${t("parts.serialDetails")}: ${part.partNo}`}>
+          {members.map((member, memberIndex) => renderSerializedPartRow(member, memberIndex, `${ordinal}.${memberIndex + 1}`, compact, true))}
+        </div> : null}
       </div>
     );
   }
@@ -297,12 +344,12 @@ export function UsedPartsEditor({
         aria-label={`${partNumber}, ${quantity}`}
       >
         <strong>{ordinal}</strong>
-        <div className="used-part-field used-part-recorded-identity"><span className="used-part-cell-label">{t("parts.part")}</span><strong>{partNumber}</strong></div>
+        <div className="used-part-field used-part-recorded-identity"><span className="used-part-cell-label">{t("parts.part")}</span><span className="used-part-name-field">{partNumber}</span></div>
         <div className="used-part-field used-part-recorded-value"><span className="used-part-cell-label">{t("parts.quantityUnit")}</span><strong>{quantity}</strong></div>
         <div className="used-part-field used-part-recorded-repair"><span className="used-part-cell-label">{t("parts.repairOrder")}</span>{part.repairOrder || <span aria-hidden="true">—</span>}</div>
         {!compact ? <span className="used-part-pickup-empty" aria-hidden="true"></span> : null}
         {canViewPrices ? part.trackingMode === "no_stock" && part.noStockLineId
-          ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="no_stock" noStockLineId={part.noStockLineId} price={noStockPriceByLineId.get(part.noStockLineId) || null} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} />
+          ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="no_stock" noStockLineId={part.noStockLineId} catalogPartId={part.catalogPartId} partLabel={part.partNo} locationId={effectiveLocationId} uomCode={part.uomCode} price={noStockPriceByLineId.get(part.noStockLineId) || null} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} />
           : <span className="used-part-price-unavailable">Price unavailable · not linked to inventory</span> : null}
         {partsEditable && part.trackingMode === "no_stock" && part.noStockLineId
           ? <IconButton icon={Trash01} tone="danger" label={`${t("parts.removePartRow")}: ${partNumber}`} onClick={() => { setMessage(""); setRemovalTarget({ part }); }} disabled={savingNoStock || !onSave} />
@@ -612,6 +659,7 @@ export function UsedPartsEditor({
   }
 
   const serializedDialog = serializedDialogPart ? <WorkorderSerializedPartDialog
+    canViewPrices={canViewPrices}
     open
     actorId={actorId}
     workorderId={detail.workorder.id}
@@ -639,6 +687,7 @@ export function UsedPartsEditor({
     onRemove={() => removalTarget.part ? removeNoStockPart(removalTarget.part) : deleteDraftRow(removalTarget.index)}
   /> : null;
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
+    canViewPrices={canViewPrices}
     allowStockIntake={canViewPrices}
     open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locationId={locationId || detail.workorder.locationId}
     assetId={detail.workorder.asset?.id || detail.workorder.assetId}
@@ -668,6 +717,7 @@ export function UsedPartsEditor({
             {renderReadonlyLaborRow()}
           </WorkorderPartsTable>
         </section> : null}
+        {laborLogContent}
         <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
           <div className="used-parts-section-heading">
             <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
@@ -693,7 +743,6 @@ export function UsedPartsEditor({
   if (presentation === "one-page") {
     return (
       <div className="used-parts-editor workorder-parts-surface is-one-page" aria-label={t("parts.usedTitle")}>
-        {!partsEditable && role !== "mechanic" ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
         <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
           <div className="used-parts-section-heading">
             <h3 id={partsSectionTitleId}>{t("detail.parts")}</h3>
@@ -702,6 +751,7 @@ export function UsedPartsEditor({
           {serializedFeedback}
           <WorkorderPartsEntryTable
             className="detail-operational-parts-editor used-parts-items-table used-parts-one-page-table"
+            afterLaborContent={laborLogContent}
             showPrice={canViewPrices}
             labels={{
               [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("parts.part"),
@@ -712,12 +762,12 @@ export function UsedPartsEditor({
             laborAriaLabel={laborQuantityLabel}
             laborProduct={<div className="used-part-field operational-part-labor-name">
                 <span className="used-part-label">{t("parts.labor")}</span>
-                <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange || (() => {})} disabled={!laborEditable || !onLaborProductChange} locale={locale} />
+                <LaborProductSelector canViewPrices={canViewPrices} locationId={locationId} value={laborProduct} onChange={onLaborProductChange || (() => {})} disabled={!laborEditable || !onLaborProductChange} locale={locale} />
               </div>}
             laborQuantity={<QuantityUnitInput id="workorder-labor-hours" quantity={laborHours} uomCode={laborUomCode} onValueChange={({ quantity }) => onLaborHoursChange(quantity)} quantityLabel={laborQuantityLabel} unitLabel={t("parts.unit")} disabled={laborControlsDisabled} unitReadOnly compact max={9999} />}
             laborRepair={<div className="used-part-field used-part-repair"><NarrativeField locale={locale} singleLine value={laborRepairOrder} onChange={(event) => onLaborRepairOrderChange(event.target.value)} aria-label={t("parts.repairOrderWorkPerformed")} placeholder={t("parts.repairOrderWorkPerformed")} disabled={laborControlsDisabled} /></div>}
             laborPrice={canViewPrices ? <LaborPriceCell compact workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : null}
-            laborAction={<span className="used-part-recorded-status" aria-hidden="true"></span>}
+            laborAction={<IconButton icon={Trash01} tone="danger" label="Remove labor selection" onClick={() => onLaborProductChange?.(null)} disabled={!laborEditable || !onLaborProductChange || !laborProduct} />}
           >
             {activeSerializedParts.map((part, index) => renderSerializedPartRow(part, index, index + 2, true))}
             {recordedManualParts.map((part, index) => renderRecordedPartRow(part, index, index + activeSerializedParts.length + 2, true))}
@@ -745,12 +795,13 @@ export function UsedPartsEditor({
       {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
       <section className="used-parts-section used-parts-labor-section" aria-labelledby={laborSectionTitleId}>
         <h3 id={laborSectionTitleId}>{t("parts.labor")}</h3>
-        <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table" columns={laborColumns} gridTemplate={laborGridTemplate}>
+        <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table" columns={laborColumns} gridTemplate={laborGridTemplate ? `${laborGridTemplate} 64px` : undefined}>
           <WorkorderPartsRow className="used-part-labor-row" aria-label={laborQuantityLabel}>
             <strong>1</strong>
             <div className="used-part-field operational-part-labor-name">
               <span className="used-part-label">{t("parts.labor")}</span>
               <LaborProductSelector
+                canViewPrices={canViewPrices}
                 locationId={locationId}
                 value={laborProduct}
                 onChange={onLaborProductChange || (() => {})}
@@ -781,10 +832,12 @@ export function UsedPartsEditor({
                 disabled={!laborEditable || laborRepairOrderDisabled}
               />
             </div>
-            {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : <span aria-hidden="true"></span>}
+            {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : null}
+            <IconButton icon={Trash01} tone="danger" label="Remove labor selection" onClick={() => onLaborProductChange?.(null)} disabled={!laborEditable || !onLaborProductChange || !laborProduct} />
           </WorkorderPartsRow>
         </WorkorderPartsTable>
       </section>
+      {laborLogContent}
       <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
         <div className="used-parts-section-heading">
           <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
@@ -880,6 +933,7 @@ export function UsedPartsEditor({
             {t("parts.addPart")}
           </Button>
         </WorkorderPartsActions> : null}
+        {!intakeOpen ? serializedDialog : null}
         {serializedHistory}
         <div className="used-parts-feedback" aria-live="polite">
           {message ? <span>{message}</span> : <span></span>}

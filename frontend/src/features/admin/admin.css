@@ -1,7 +1,7 @@
 .admin-shell { min-height: 100vh; overflow-x: clip; background: var(--workspace-background); color: #182230; }
 .admin-shell-layout { --role-navigation-expanded-width: 200px; display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; }
 .admin-shell .role-navigation-rail { position: sticky; }
-.admin-shell .role-navigation-rail::after { border-right: 1px solid #e4e7ec; border-top: 1px solid #e4e7ec; border-top-right-radius: 6px; box-sizing: border-box; content: ""; height: 6px; left: 10px; pointer-events: none; position: absolute; right: 0; top: 112px; }
+.admin-shell .role-navigation-rail::after { border-right: 1px solid #e4e7ec; border-top: 1px solid #e4e7ec; border-top-right-radius: 6px; box-sizing: border-box; content: ""; height: 6px; left: 10px; pointer-events: none; position: absolute; right: 0; top: 68px; }
 .admin-shell .role-navigation-divider { background: transparent; }
 .admin-shell-content { min-width: 0; }
 .admin-workspace-header { box-sizing: border-box; margin: 0; max-width: none; padding: 20px 32px 0; width: 100%; }

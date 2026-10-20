@@ -80,7 +80,7 @@ export function timelineEventTitle(event, locale = "en") {
   }
   if (event.type === "field") {
     if (event.field_key === "work_details_updated") return t("timeline.workDetailsUpdated");
-    if (String(event.field_key || "").startsWith("pricing.")) return "Workorder price changed";
+    if (String(event.field_key || "").startsWith("pricing.")) return event.old_value ? "Workorder price changed" : "Workorder price recorded";
     return `${event.field_label || event.action || t("timeline.field")} ${t("timeline.changed")}`;
   }
   if (event.type === "assignment") {
@@ -139,6 +139,7 @@ export function timelineEventDescription(event, locale = "en") {
       }
     }
     if (String(event.field_key || "").startsWith("pricing.")) {
+      if (!event.old_value) return `${event.field_label || "Price"} recorded as ${event.new_value || "unknown"}.`;
       return `${event.field_label || "Price"} changed from ${event.old_value || "unknown"} to ${event.new_value || "unknown"}.`;
     }
     const label = event.field_label || t("timeline.field");

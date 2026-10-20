@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
@@ -20,7 +20,7 @@ export function loginReturnTarget(search = window.location.search) {
   return `/?inventoryScan=${encodeURIComponent(token)}`;
 }
 
-export function LoginPage() {
+export function LoginPage({ onSignInStart, onSignInError, onSignedIn, signingIn, handoffError = "" } = {}) {
   const {
     keyboardOpen,
     viewportHeight,
@@ -34,6 +34,23 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const shellRef = useRef(null);
+  const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const handoffController = useRef(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; handoffController.current?.abort(); };
+  }, []);
+
+  useEffect(() => {
+    if (signingIn === false) {
+      handoffController.current?.abort();
+      inFlightRef.current = false;
+      setSubmitting(false);
+      setPasskeySubmitting(false);
+    }
+  }, [signingIn]);
 
   useFocusedFieldVisibility({
     enabled: true,
@@ -44,52 +61,82 @@ export function LoginPage() {
 
   async function submit(event) {
     event.preventDefault();
-    if (!identifier.trim() || !password) return;
+    if (inFlightRef.current || !identifier.trim() || !password) return;
+    inFlightRef.current = true;
+    handoffController.current = new AbortController();
 
     setSubmitting(true);
     setError("");
+    onSignInStart?.();
 
-    const result = identifier.includes("@")
-      ? await authClient.signIn.email({
-        email: identifier.trim(),
-        password,
-        rememberMe: true,
-      })
-      : await authClient.signIn.username({
-        username: identifier.trim(),
-        password,
-        rememberMe: true,
-      });
+    try {
+      const result = identifier.includes("@")
+        ? await authClient.signIn.email({
+          email: identifier.trim(),
+          password,
+          rememberMe: true,
+        })
+        : await authClient.signIn.username({
+          username: identifier.trim(),
+          password,
+          rememberMe: true,
+        });
 
-    if (result.error) {
-      setError(loginErrorMessage(result.error));
+      if (!mountedRef.current) return;
+      if (result.error) {
+        setError(loginErrorMessage(result.error));
+        setSubmitting(false);
+        inFlightRef.current = false;
+        onSignInError?.();
+        return;
+      }
+
+      setPassword("");
+      document.activeElement?.blur();
+      window.history.replaceState(window.history.state, "", loginReturnTarget());
+      await onSignedIn?.(handoffController.current.signal);
+    } catch {
+      if (!mountedRef.current) return;
+      setError("Unable to sign in. Check your connection and try again.");
       setSubmitting(false);
-      return;
+      inFlightRef.current = false;
+      onSignInError?.();
     }
-
-    window.location.replace(loginReturnTarget());
   }
 
   async function signInWithPasskey() {
+    if (inFlightRef.current) return;
     if (!window.PublicKeyCredential) {
       setError("Passkeys are not available in this browser. Use your password instead.");
       return;
     }
 
+    inFlightRef.current = true;
+    handoffController.current = new AbortController();
     setPasskeySubmitting(true);
     setError("");
+    onSignInStart?.();
 
     try {
       const result = await authClient.signIn.passkey();
+      if (!mountedRef.current) return;
       if (result?.error) {
         setError("Passkey sign-in was not completed. Try again or use your password.");
         setPasskeySubmitting(false);
+        inFlightRef.current = false;
+        onSignInError?.();
         return;
       }
-      window.location.replace(loginReturnTarget());
+      setPassword("");
+      document.activeElement?.blur();
+      window.history.replaceState(window.history.state, "", loginReturnTarget());
+      await onSignedIn?.(handoffController.current.signal);
     } catch {
+      if (!mountedRef.current) return;
       setError("Passkey sign-in was not completed. Try again or use your password.");
       setPasskeySubmitting(false);
+      inFlightRef.current = false;
+      onSignInError?.();
     }
   }
 
@@ -159,7 +206,7 @@ export function LoginPage() {
             <FieldError />
           </TextField>
 
-          {error ? <p className="auth-error auth-login-error" role="alert">{error}</p> : null}
+          {error || handoffError ? <p className="auth-error auth-login-error" role="alert">{error || handoffError}</p> : null}
 
           <Button className="auth-submit" type="submit" isDisabled={submitting || passkeySubmitting || !identifier.trim() || !password}>
             {submitting ? "Signing in..." : "Sign in"}

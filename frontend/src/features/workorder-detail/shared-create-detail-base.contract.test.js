@@ -19,7 +19,7 @@ test("Office saves stay announced in the header without adding a success paragra
   const sections = source("./WorkorderDetailSections.jsx");
   const page = source("./WorkorderDetailPage.jsx");
   assert.match(sections, /concern: \{[\s\S]*?message: officeDetailState\.error \|\| isOfficeDetail \? "" : officeDetailState\.message/);
-  assert.match(page, /<span className="sr-only" role="status">\{officeDetailState\.message\}<\/span>/);
+  assert.match(page, /<span className="detail-action-feedback" role="status">\{officeDetailState\.message\}<\/span>/);
   assert.match(page, /title=\{officeDetailState\.busy \? "Saving workorder" : officeDetailState\.message \|\| "Save workorder"\}/);
 });
 

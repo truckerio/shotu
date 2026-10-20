@@ -17,6 +17,7 @@ import {
   confidenceState,
   firstInvoiceLineId,
   invoiceDeliveryFullyReceived,
+  invoiceAllowsPhysicalReceipt,
   invoiceFieldNeedsReview,
   invoiceLineNeedsReview,
   invoiceReviewErrorMessage,
@@ -269,7 +270,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     purchaseOrderSuggestionRequestRef.current?.abort();
     setPurchaseOrderSuggestion(null);
     setPurchaseOrderSuggestionError("");
-    if (!run?.id || run.status !== "reviewed") {
+    if (!run?.id || run.status !== "reviewed" || !invoiceAllowsPhysicalReceipt(run)) {
       setPurchaseOrderSuggestionLoading(false);
       return undefined;
     }
@@ -290,7 +291,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
         if (!controller.signal.aborted) setPurchaseOrderSuggestionLoading(false);
       });
     return () => controller.abort();
-  }, [run?.id, run?.version, run?.status, receipt?.status, purchaseOrderSuggestionReload]);
+  }, [run?.id, run?.version, run?.status, run?.sourcePurpose, receipt?.status, purchaseOrderSuggestionReload]);
 
   useEffect(() => {
     setReceiptPositions([]);
@@ -298,7 +299,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   }, [receiptPositionIdentity]);
 
   useEffect(() => {
-    if (!receiptPositionIdentity || run?.status !== "reviewed") {
+    if (!receiptPositionIdentity || run?.status !== "reviewed" || !invoiceAllowsPhysicalReceipt(run)) {
       setReceiptPositionsLoading(false);
       return undefined;
     }
@@ -316,7 +317,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
         if (active) setReceiptPositionsLoading(false);
       });
     return () => { active = false; };
-  }, [receiptPositionIdentity, receiptPositionsReload, run?.status]);
+  }, [receiptPositionIdentity, receiptPositionsReload, run?.status, run?.sourcePurpose]);
 
   useEffect(() => {
     const activeUploadId = batchRuns[batchIndex]?.uploadId;
@@ -674,6 +675,10 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   }
 
   async function confirmPhysicalReceipt(posting = {}) {
+    if (!invoiceAllowsPhysicalReceipt(run)) {
+      setError("Record any additional delivery through the purchase order.");
+      return;
+    }
     setBusy("receive");
     setError("");
     setMessage("Adding reviewed parts to local inventory…");
@@ -846,9 +851,10 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   );
 
   if (draft) {
+    const billReviewOnly = !invoiceAllowsPhysicalReceipt(run);
     const deliveryComplete = invoiceFullyReceived;
     const deliveryReversed = receipt?.status === "reversed";
-    const deliveryPending = run.status === "reviewed" && !deliveryComplete && !deliveryReversed;
+    const deliveryPending = !billReviewOnly && run.status === "reviewed" && !deliveryComplete && !deliveryReversed;
     const partialReceiptPosted = receipt?.status === "posted" && deliveryPending;
     const reviewSections = orderInvoiceReviewSections([
       { id: "details", unresolved: invoiceDetailIssues > 0 },
@@ -918,9 +924,9 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
                 })}</div>
               </ReviewSection>;
               if (section.id === "totals") return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-totals" title="Totals" summary={reviewAmount(draft.total, reviewValue(draft.currency, ""))} issueCount={totalsIssues} readOnly={run.status === "reviewed"} defaultOpen={totalsIssues > 0}><div className="invoice-fields-grid">{orderReviewFields(totalFields, draft).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}</div></ReviewSection>;
-              return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-delivery" title="Delivery" summary={partialReceiptPosted ? "Partial receipt posted · receive remaining quantities" : deliveryPending ? "Confirm received quantities and purchase order route" : deliveryComplete ? "Inventory receipt completed" : deliveryReversed ? "Receipt reversed · inventory not added" : reviewValue(draft.purchaseOrderNumber, "No purchase order")} issueCount={deliveryIssues} status={deliveryPending ? "Pending" : deliveryComplete ? "Complete" : deliveryReversed ? "Reversed" : ""} readOnly={run.status === "reviewed"} defaultOpen={deliveryPending || deliveryIssues > 0}>
+              return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-delivery" title="Delivery" summary={billReviewOnly ? "PO bill · review only" : partialReceiptPosted ? "Partial receipt posted · receive remaining quantities" : deliveryPending ? "Confirm received quantities and purchase order route" : deliveryComplete ? "Inventory receipt completed" : deliveryReversed ? "Receipt reversed · inventory not added" : reviewValue(draft.purchaseOrderNumber, "No purchase order")} issueCount={deliveryIssues} status={billReviewOnly ? "Review only" : deliveryPending ? "Pending" : deliveryComplete ? "Complete" : deliveryReversed ? "Reversed" : ""} readOnly={run.status === "reviewed"} defaultOpen={billReviewOnly || deliveryPending || deliveryIssues > 0}>
                 <div className="invoice-fields-grid">{deliveryFields.map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}</div>
-                {deliveryPending ? <PhysicalReceiptConfirmation receiptEpisode={receiptEpisode} busy={busy === "receive"} disabled={Boolean(busy) && busy !== "receive"} runId={run.id} runVersion={run.version} draft={draft} suggestion={purchaseOrderSuggestion} suggestionLoading={purchaseOrderSuggestionLoading} suggestionError={purchaseOrderSuggestionError} onRetrySuggestions={() => setPurchaseOrderSuggestionReload((value) => value + 1)} positions={receiptPositions} positionLoading={receiptPositionsLoading} positionError={receiptPositionsError} onRetryPositions={() => setReceiptPositionsReload((value) => value + 1)} onConfirm={confirmPhysicalReceipt} /> : deliveryComplete ? <p className="invoice-review-complete">All invoice quantities received</p> : deliveryReversed ? <p className="invoice-review-reversed">Receipt reversed · Inventory not added</p> : null}
+                {billReviewOnly ? <p role="status">This bill was uploaded after purchase order receiving. Review its details here; record any additional delivery through the purchase order.</p> : deliveryPending ? <PhysicalReceiptConfirmation receiptEpisode={receiptEpisode} busy={busy === "receive"} disabled={Boolean(busy) && busy !== "receive"} runId={run.id} runVersion={run.version} draft={draft} suggestion={purchaseOrderSuggestion} suggestionLoading={purchaseOrderSuggestionLoading} suggestionError={purchaseOrderSuggestionError} onRetrySuggestions={() => setPurchaseOrderSuggestionReload((value) => value + 1)} positions={receiptPositions} positionLoading={receiptPositionsLoading} positionError={receiptPositionsError} onRetryPositions={() => setReceiptPositionsReload((value) => value + 1)} onConfirm={confirmPhysicalReceipt} /> : deliveryComplete ? <p className="invoice-review-complete">All invoice quantities received</p> : deliveryReversed ? <p className="invoice-review-reversed">Receipt reversed · Inventory not added</p> : null}
               </ReviewSection>;
             })}
             {createPartLineId ? (() => {

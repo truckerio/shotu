@@ -12,12 +12,27 @@ const purchaseLine = z.object({ catalogPartId: id.optional(), partNumber:z.strin
   const planned=line.demandSources.reduce((sum,source)=>sum+source.plannedQuantity,0);
   if(line.demandSources.length&&Math.abs(planned-line.quantity)>0.0005)context.addIssue({code:'custom',path:['demandSources'],message:'Demand sources must explain the full purchase quantity.'});
 });
-export const purchaseScopeSchema = z.object({ locationId: id, supplierId: z.union([id,z.literal('')]).default(''), query: z.string().trim().max(200).default(''), page: z.coerce.number().int().min(1).max(100000).default(1),view:z.enum(['purchases','receiving']).default('purchases'),status:z.enum(['all','draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled']).default('all') }).strict();
+const purchaseLineAmendment = z.object({
+  id: id.optional(),
+  catalogPartId: id.optional(),
+  partNumber: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(1000),
+  uomCode: z.string().trim().min(1).max(50),
+  trackingMode: z.enum(["quantity","serialized","measured_bulk"]),
+  quantity: z.number().positive().max(999999.999),
+  unitPrice: money,
+}).strict();
+export const purchaseScopeSchema = z.object({ locationId: id, orderId: z.union([id,z.literal('')]).default(''), supplierId: z.union([id,z.literal('')]).default(''), query: z.string().trim().max(200).default(''), page: z.coerce.number().int().min(1).max(100000).default(1),view:z.enum(['purchases','receiving']).default('purchases'),status:z.enum(['all','draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled']).default('all') }).strict();
 export const purchaseCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("supplier"), locationId: id, idempotencyKey: id, name: z.string().trim().min(1).max(240), contact: z.string().trim().max(500).default("") }).strict(),
   z.object({ action: z.enum(["create","revise"]), orderId:id.optional(), expectedVersion:z.number().int().positive().optional(), locationId: id, idempotencyKey: id, supplierId: id, currency: z.string().regex(/^[A-Z]{3}$/), notes: z.string().trim().max(2000).default(""), expectedDeliveryDate: z.iso.date().nullable().default(null), placeOrder: z.boolean().default(false),
     lines: z.array(purchaseLine).min(1).max(100),
   }).strict(),
+  z.object({ action: z.literal("amend_lines"), locationId:id, idempotencyKey:id, orderId:id, expectedVersion:z.number().int().positive(), lines:z.array(purchaseLineAmendment).min(1).max(100) }).strict()
+    .superRefine((command,context)=>{
+      const existingIds=command.lines.flatMap(line=>line.id?[line.id]:[]);
+      if(new Set(existingIds).size!==existingIds.length)context.addIssue({code:"custom",path:["lines"],message:"Each existing purchase line can appear only once."});
+    }),
   z.object({ action: z.enum(["submit","approve","cancel","place","record_sent","receive"]), locationId: id, idempotencyKey: id, orderId: id, expectedVersion: z.number().int().positive(), confirmation: z.literal("all_ordered_goods_received").optional(), deliveryCondition: z.enum(["undamaged","damaged"]).optional(), damageDetails: z.string().trim().max(500).default(""), reason: z.string().trim().max(2000).default("") }).strict(),
 ]);
 

@@ -80,6 +80,16 @@ Boundary rule: Workorder Generator may store workflow state and projections. It 
 
 ## Current Verified State
 
+Serialized Mark installed buttons fill the repair-order column, and serialized ordinals center in the same number column as labor and draft rows.
+
+Serialized quantity fields open the existing scoped inventory picker to add exact units. Saved active usages of the same catalog part/UOM share one parent row, with per-unit lifecycle, repair and pricing controls under Serial details. Display quantity is computed from persisted exact-unit usages.
+
+Serialized workorder rows expose Mark installed in the repair column for installable units. Detail part names use the Create-style regular underlined field and Serial-prefixed identity; redundant reserved status text is hidden. Work done opens one shared Yes/No parts-installed confirmation. Yes explicitly attests installation and installs reserved quantity and eligible serialized rows in the same completion transaction; No leaves the workorder and part states unchanged. Per-row installation remains available for partial progress; measured bulk and no-stock rows do not show Mark installed. Mechanic confirms installation; Office approval still finalizes inventory consumption. Installed quantity evidence survives revision and blocks cancellation/release that would imply an unrecorded physical return. See INV-20261019 — Serialized workorder row installation action.
+
+### Unified Purchasing workspace — 2026-10-19 local implementation
+
+Purchasing is the single operational destination for ordering demand, purchase orders, deliveries and supplier-invoice follow-up. Needs ordering starts collapsed above adjacent Purchase orders and Deliveries & invoices panes, sharing one selected shop. Their divider supports pointer/keyboard resizing and saves the actor’s width preference; narrow screens stack. Selecting an order or a linked inbound record opens both exact records inline. The PO uses a document layout with supplier, destination and dates above compact part/quantity/price/amount rows and the merchandise total; line-level received/open/cancelled quantities remain visible. Unlinked invoice/receipt records remain explicitly unlinked. Demand reuses the PO response instead of fetching a second purchasing list. Admin, Office and Inventory navigation expose one Purchasing destination; historical Inbound and exact receipt/delivery links retain compatibility. Existing PO editors, approval policy, encrypted bill attachments, invoice intake, no-PO intake and canonical physical receiving remain their mutation owners. Open, unreceived POs open Edit parts in a wide dialog using the shared Workorder parts grid for catalog part/description, quantity and nullable unit cost. Add line appends draft rows; Save updates existing stable line IDs and inserts server-identified new lines atomically through the versioned, idempotent purchasing command. Posted delivery activity locks line amendments, demand-linked lines retain their identity and quantity, and non-draft amendments re-run approval policy without changing existing stock costs. The delivery pane renders supplier invoice details from the uploaded bill’s canonical reviewed/extracted draft, with separate bill selection and original-file access. PO bill upload atomically queues the existing extraction worker; legacy attachments use an explicit Read uploaded bill action. Physical delivery evidence remains separately labelled. The PO list limits receiving to placed orders with remaining quantities. This consolidation introduces no allocation schema, projected stock, new financial matching or stock ledger. Source and isolated fixture checks are distinct from authenticated lifecycle and hosted release proof; see the change entry and `docs/specs/PURCHASING_CONSOLIDATION.md`.
+
 ### Collection loading (2026-10-11, local implementation and focused checks)
 
 Stock's By part / By location page tabs remain unchanged. In By part, counted availability is a Queue dropdown, Location and Sort are accessible icon-only dropdowns, and the initial table load uses reduced-motion-aware skeleton rows. These controls retain existing read scopes and checkpoint loading; no stock or pricing commands changed.
@@ -1404,3 +1414,109 @@ Each implementation slice records applicable evidence:
 - Remaining gaps: Hosted activation requires the same existing Admin module settings.
 
 - Removal follow-up: Blank drafts remove immediately; filled drafts can cancel confirmation without losing input. Removing a selected draft clears its selection dialogs; removing an earlier row rebases the selected index. Save-in-flight blocks deletion. Saved no-stock removal uses its existing canonical save, retains history and shows failures. Serialized Return/Remove controls retain stock semantics and add the trash icon; aggregate Release/Reverse/Adjust remain explicit lifecycle controls. No hard deletion or request-history cancellation added.
+
+### INV-20261019-01 — Consolidate operational purchasing
+
+- Status: IMPLEMENTED
+- Decision/requirement: Audit purchasing surfaces and combine them into one minimal Purchasing destination.
+- Before: Separate Needs ordering / Purchase orders views, separate Inbound destination, duplicated shop selection and demand load; PO list offered receiving before placement.
+- After: Shared shop/refresh/actions, expandable demand and canonical inbound queue, compact PO identity/date/status/next action, contextual receipt and invoice workflows, legacy source-link compatibility.
+- Canonical owners: InventoryWorkspace, InventoryPurchases, InventoryNeedsOrdering, InventoryInboundWorkspace, existing invoice/receipt/bill owners; Admin/Office navigation.
+- Data/API changes: None. Existing read, command, approval, receipt and document APIs remain authoritative.
+- User-experience changes: One Purchasing destination; no internal purchasing page tabs; eligible next actions and visible disclosure affordances.
+- Authorization/security changes: None. Existing backend company/location and approval checks remain unchanged.
+- Failure/reconciliation behavior: Preserve saved demand drafts, uncertain command recovery, exact source lookup, partial receipt handling and existing invoice checks.
+- Verification: Targeted contracts and isolated responsive UI verification recorded in the external purchasing-consolidation orchestrator task; final independent review and broad check results tracked there.
+- Release evidence: Local working tree only; no commit, push or hosted deployment.
+- Remaining gaps: Authenticated Office/Admin workflow unavailable in the local kiosk browser. New allocation/ETA/forecast and three-way invoice matching remain separate planned slices.
+
+### INV-20261019 — Serialized workorder row installation action
+
+- Status: IMPLEMENTED locally.
+- Current UI: shared UsedPartsEditor shows Mark installed in the reserved row repair column; reserved status reads Reserved — ready to install. Installed pending approval retains Office inventory approval wording.
+- Before: install action hidden in row menu, redundant Serialized parts label, mismatched first-line alignment.
+- After: direct existing install action, no redundant type label, semibold identity/quantity and aligned first-line controls.
+- Canonical owners: UsedPartsEditor.jsx, used-parts-editor.css, inventory-code-scanner-model.js.
+- Data/API/authorization: unchanged; mechanic records installation, Office approval finalizes stock consumption.
+- Verification: 59 focused tests passed; Vite production build passed; authenticated local browser shows the direct button, revised wording and 600-weight identity/quantity. Desktop first-line cells share the same top and 40px height. Narrow viewport actual innerWidth/scrollWidth = 433/433; install target height 44px. Restarted stale localhost server to clear pre-existing partPricingPreview schema mismatch. Installation was not triggered on the real unit. No release action requested.
+
+### INV-20261019 — Serialized quantity fields and grouped selected units
+
+- Status: IMPLEMENTED locally.
+- Requirement: quantity/unit fields match surrounding rows; increase serialized quantity by selecting more exact inventory units.
+- Owners: UsedPartsEditor, QuantityUnitInput, groupSerializedUsageRows; existing WorkorderSerializedPartDialog owns selection/reservation.
+- UI: quantity activates inventory selection by click/Enter/Space/arrow; UOM fixed; same catalog/UOM shows one parent quantity. Serial details retains every unit's status, install/return/remove, repair and price controls.
+- Data/API/security: existing scoped endpoints, eligibility, price fingerprints and idempotency unchanged; no fabricated quantities or automatic unit selection; per-unit retries retain existing behavior.
+- Verification: final focused suite 79/79; independent reviewer affected suite 95/95; Vite build and structure check passed. Authenticated live picker opens by click/Enter and cancel preserves qty. Isolated actual-component fixture covers grouped count2, unit-specific return to count1/reload, default panel picker mounting and 433px no-overflow/44px targets. Full verify: 3504 pass, 101 skipped, three stale source assertions; corrected prior serialized-kind assertion passes now, two unrelated baseline assertions remain (price source markup and detail toolbar status). No real workorder inventory mutation performed.
+- Release: no commit/push/deploy requested.
+
+### INV-20261019 — Parts row control consistency
+
+- Status: IMPLEMENTED locally. Mark installed fills its repair-order cell; serialized ordinals center in the shared number column. CSS only, no lifecycle or data changes.
+- Owner: used-parts-editor.css. Verified: build and 9 layout tests pass; live 996px browser button/cell widths both 206.54px; row-number text centers all 67.88px. No inventory or release actions.
+
+### INV-20261019-02 — Linked Purchasing comparison panes
+
+- Status: IMPLEMENTED locally; acceptance evidence recorded in the external purchasing-split task.
+- Decision/requirement: Compare purchase orders with deliveries/invoices in one minimal card; drag the middle divider and keep Needs ordering collapsed initially.
+- Before: PO list, modal PO detail and separate expandable inbound queue required switching surfaces to compare records.
+- After: Adjacent PO and delivery/invoice panes with inline selected records. Authoritative saved links synchronize selection in either direction; unlinked documents explicitly remain unlinked. Width starts at 50/50, supports pointer and keyboard adjustment, and persists per actor. Compact layouts stack.
+- Canonical owners: InventoryPurchases.jsx, InventoryInboundWorkspace.jsx, PurchasingSplitView.jsx, existing invoice/receipt/bill owners.
+- Data/API changes: Optional strict UUID orderId filter on the existing purchasing read retrieves one exact order under company/shop scope regardless of list filters/page. No schema, physical command, accounting or stock changes.
+- Failure/reconciliation behavior: Newer selections and shop changes invalidate prior pair loads. Existing command/draft recovery, receipt destination validation and exact source links remain required. Selecting records does not perform financial reconciliation or post stock.
+- Verification: Focused route/schema authorization tests, frontend contracts/build, independent review and read-only rendered checks are tracked in the external task; these do not establish a physical receiving lifecycle.
+- Release evidence: Working tree only; no commit, push or deployment.
+- Remaining gaps: Manual allocations, projected inventory, line delivery schedules and automatic invoice reconciliation remain separate feature slices.
+
+
+### INV-20261019-03 — Readable purchase order document
+
+- Status: IMPLEMENTED locally.
+- Requirement: Show the selected PO like an invoice/form, following the existing Workorder document hierarchy.
+- After: One document header and status, supplier/delivery/date facts, compact line table, merchandise total and notes. Unknown prices stay unknown; per-line receipt/cancellation progress remains visible. Existing bill and eligible command controls follow the document, with the paired delivery pane beside it.
+- Canonical owners: InventoryPurchases.jsx and presentational PurchaseOrderDocument.jsx; existing purchasing/receipt/bill APIs unchanged.
+- Scope: Display only; no new pricing, tax, allocation, stock or invoice-matching rules.
+- Verification: Focused existing contracts, build and rendered local document checks recorded in the external purchasing-form task. No business mutation or hosted delivery.
+
+
+### INV-20261019-04 — Supplier invoice from uploaded delivery bill
+
+- Status: IMPLEMENTED locally; acceptance evidence tracked in external delivery-invoice task.
+- Requirement: Delivery/invoice pane reads as a supplier invoice derived from the uploaded bill.
+- After: Invoice identity, vendor/date/printed PO reference, part/quantity/UOM/price/line-amount table and evidenced subtotal/tax/shipping/total. Unknown values remain Not read, zero/credit values preserved, extracted drafts distinguished from reviewed drafts. Bills remain individually selectable with original-file access. Recorded physical delivery and exact delivery observations remain separate.
+- Canonical owners: InventoryInboundWorkspace, InboundInvoiceDocument and model; PurchaseOrderBills; purchase-order-bills.service; invoice-extractions repository and existing worker/public draft read.
+- Data/API: No migration. PO bill upload saves attachment, canonical extraction run, encrypted source and durable worker job in one transaction. GET bills stays read-only and returns latest exact-file extraction under company/shop/MIME/hash scope plus separately allocated invoices. Explicit POST bills/:documentId/extract prepares legacy files idempotently. Latest processing or failed attempt remains visible; original PO values never substitute for invoice evidence.
+- Concurrency/security: Existing Office/Admin company/shop and received-PO upload guards retained. PO/hash transaction locks serialize duplicate PO upload extraction; no system-wide generic-upload deduplication claim. File hash establishes source identity only, never inventory receipt, accounting or allocation ownership.
+- Failure behavior: Missing bill, processing, failed/empty extraction, unavailable source, read errors and stale selection are explicit. Canonical review/re-extract remains the correction owner; no automatic review, stock posting, payment, allocation or PO reconciliation.
+- Verification: Focused UI/model/route checks, disposable PostgreSQL transaction/concurrency/rollback/encryption/scope tests, fresh build, read-only local UI and isolated rendering checks recorded externally. Existing app data is not sent for a new extraction during verification. No commit, push or deployment.
+
+- Receipt eligibility: Runs created by PO-bill ingestion carry a scoped source purpose through re-extraction. These bills are review-only in invoice review; the authoritative receipt transaction rejects a new stock receipt while preserving existing idempotent outcome recovery. An ordinary invoice extraction reused by bill preparation stays eligible for its existing receiving flow. This flag does not establish quantities received or allocate invoice lines.
+
+
+### INV-20261020-01 — Editable purchase order document lines
+
+- Status: IMPLEMENTED locally.
+- Requirement: Edit PO part details, quantities and costs directly from the readable form, including an ordered PO with an unknown cost.
+- After: Edit parts opens inline catalog/description, quantity and unit-price fields with live amounts, Save changes and Cancel. Blank prices remain unknown; zero stays a priced value. The captured version is retained during refresh; a newer order version blocks stale submission without discarding entered values.
+- Canonical owners: PurchaseOrderDocument, PurchaseOrderLineEditor and edit model; InventoryPurchases canonical saved command; inventory-purchasing schema/repository.
+- Data/API: New amend_lines action updates the complete exact set of existing line IDs in place. No migration, line deletion/recreation, stock mutation, financial matching or changes to the catalog master. Catalog identity is validated; description remains a PO snapshot.
+- Authorization/security: Existing Office/Admin company/shop scope, version checks, command recovery/idempotency and append-only purchase events retained; amendment audit records before/after values. Non-draft changes re-evaluate configured approval currency/threshold/unknown prices while preserving original placement metadata.
+- History protection: Only draft/awaiting-approval/ordered POs before any posted delivery or received/cancelled quantity. Demand-backed lines allow cost changes but retain identity and quantity. Existing physical receipts and their cost snapshots are not edited.
+- Verification: Focused model/contracts, disposable PostgreSQL amendment/approval regression, fresh build and local authenticated UI save/persistence/responsive checks tracked in the external purchase-order-line-edit task. No production or hosted deployment evidence.
+- Remaining gaps: Adding/removing lines and amendments after delivery remain separate workflows. No supplier-part matching changes in this slice.
+
+
+### INV-20261020-02 — PO edit dialog with shared parts grid and Add line
+
+- Status: IMPLEMENTED locally.
+- Requirement: Move PO editing out of the narrow document pane into a dialog, add lines, and reuse the Workorder parts container.
+- After: The PO document remains read-only while an accessible wide ModalFrame dialog presents WorkorderPartsTable/Row/ColumnHead, catalog search, descriptions, quantity, unit cost and live amounts. Add line focuses a new draft row; only unsaved additions can be removed. The footer keeps total, Save and Cancel together; narrow screens stack row fields.
+- Canonical owners: PurchaseOrderDocument, PurchaseOrderLineEditor, existing WorkorderPartsTable and PartCatalogCombobox; edit model; InventoryPurchases saved-command recovery; purchasing schema/repository.
+- Data/API: amend_lines permits new rows with omitted id while requiring every existing line id exactly once. UUIDs are generated inside the transaction and stored in its idempotent outcome. No schema migration or posted-stock mutation. Duplicate, cross-company, no-stock, UOM/tracking/precision, total-line-limit and physical-history checks include additions. Approval is re-evaluated on the resulting full order.
+- Failure/reconciliation: Failed saves show errors in the dialog. An uncertain saved command freezes row changes but keeps Retry saved changes and Cancel available; retries use the existing immutable saved request. Stale edits stay visible and cannot overwrite a newer order. Existing demand links, receipt history and audit before/after remain intact.
+- Verification: Focused model/schema/component checks, disposable PostgreSQL add-line/rollback/replay/approval regression, build and rendered dialog checks are recorded in the external po-edit-dialog task. Synthetic previews are distinct from authenticated application writes.
+- Release: Local only; no commit, push or deployment.
+- Remaining gaps: Deleting existing PO lines and editing after physical delivery remain separate workflows.
+
+
+Approval completeness: Final Office approval checks current canonical part prices and labor quantity/rate before posting inventory consumption or closing. Missing values remain unknown; an explicit selected zero price is valid. Every workorder requires a valid positive labor quantity and a current labor price at final approval. Waived charges are recorded through the existing Discount section; discounts never waive quantity or price completeness. Work done remains a handoff for Office review. Existing closed history is not rewritten.

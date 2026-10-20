@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatWorkorderMoney, workorderLineTotal, workorderPricingPresentation } from "./workorder-pricing-model.js";
+import { formatWorkorderMoney, formatWorkorderUnitPrice, workorderLineTotal, workorderPricingPresentation } from "./workorder-pricing-model.js";
+
+test("unit price display pads cents and removes unused precision without losing sub-cent rates", () => {
+  for (const [value, expected] of [["100.0000", "100.00"], ["69.9900", "69.99"], ["0", "0.00"], ["7.5", "7.50"], ["1.2340", "1.234"], ["1.2345", "1.2345"], [null, ""], ["", ""]]) {
+    assert.equal(formatWorkorderUnitPrice(value), expected);
+  }
+});
 
 test("line pricing accepts an explicit zero but never treats an absent price as zero", () => {
   assert.equal(workorderLineTotal({ selection: "selling_price", unitPrice: "0", currency: "USD" }, "2"), "$0.00");

@@ -1,7 +1,7 @@
 import { getOperationalWorkorderById, getWorkorderTimeline } from "../../db/repositories/operational-workorders.repo.js";
 import { listChatMessages } from "../../db/repositories/chat.repo.js";
 import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.js";
-import { statusLabel } from "../workorders/workorder.presenter.js";
+import { activityStatusLabel, statusLabel } from "../workorders/workorder.presenter.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
 import {
@@ -53,6 +53,8 @@ export async function surveillanceDashboard(context) {
     status: item.lifecycle,
     lifecycle: item.lifecycle,
     statusLabel: statusLabel(item.lifecycle),
+    activityStatus: item.activityStatus || "ready",
+    activityStatusLabel: activityStatusLabel(item.activityStatus || "ready"),
     attentionReasons: item.attentionReasons,
     locationId: item.locationId,
     locationName: item.location?.name || "",

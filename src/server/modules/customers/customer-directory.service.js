@@ -7,8 +7,8 @@ import {
   createCustomerContactSchema, updateCustomerContactSchema,
 } from "./customer-directory.schemas.js";
 
-function scope(context, companyId) {
-  requireCompanyRole(context, companyId, ["office", "admin"]);
+function scope(context, companyId, { read = false } = {}) {
+  requireCompanyRole(context, companyId, read ? ["office", "admin", "mechanic"] : ["office", "admin"]);
   requireCompanyAccess(context, companyId);
   return context.actor.id;
 }
@@ -20,7 +20,7 @@ function mutationResult(value) {
 
 export async function listCustomers(context, rawInput, dependencies = {}) {
   const input = customerDirectoryQuerySchema.parse(rawInput);
-  scope(context, input.companyId);
+  scope(context, input.companyId, { read: true });
   return (dependencies.listCustomers || repository.listCustomers)(input);
 }
 
@@ -38,7 +38,7 @@ export async function updateCustomer(context, customerId, rawInput, dependencies
 
 export async function listCustomerContacts(context, customerId, rawInput, dependencies = {}) {
   const input = customerDirectoryQuerySchema.parse(rawInput);
-  scope(context, input.companyId);
+  scope(context, input.companyId, { read: true });
   return (dependencies.listContacts || repository.listCustomerContacts)({ ...input, customerId });
 }
 

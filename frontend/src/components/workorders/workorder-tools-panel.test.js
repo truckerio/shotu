@@ -33,7 +33,7 @@ test("completion is contextual: it is available only while selected", () => {
     { id: "completion", label: "Review" },
     { id: "chat", label: "Chat" },
   ];
-  assert.deepEqual(getVisibleWorkorderToolViews(views, "chat").map(({ id }) => id), ["preview", "chat"]);
+  assert.deepEqual(getVisibleWorkorderToolViews(views, "chat").map(({ id }) => id), ["preview", "completion", "chat"]);
   assert.deepEqual(getVisibleWorkorderToolViews(views, "completion").map(({ id }) => id), ["preview", "completion", "chat"]);
 });
 
@@ -61,4 +61,5 @@ test("the persistent native dialog supplies modal focus behavior and desktop rec
 
 test("the chat composer keeps a comfortable inset from the viewport edge", () => {
   assert.match(css, /\.workorder-tools-panel-view:has\(> \.chat-content\)\s*\{[^}]*padding-bottom:\s*24px;/s);
+  assert.match(css, /\.workorder-tools-panel-view \.chat-thread-surface\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;/s);
 });

@@ -5,6 +5,8 @@ import {
   addLaborProduct,
   changeLaborProductPin,
   readLaborProducts,
+  readLaborProductRates,
+  reviseLaborProductRate,
   trustedLocalLaborProduct,
 } from "./labor-products.service.js";
 
@@ -157,4 +159,39 @@ test("trusted selection reloads the active record and emits a server snapshot", 
     uomCode: "hr",
     description: "Diagnose the no-start condition.",
   });
+});
+
+test("location-scoped labor rates are financial-role only and append exact versions", async () => {
+  const dependencies = {
+    findLocation: async () => location,
+    findProduct: async () => ({ id: PRODUCT_ID }),
+    readRates: async () => [{ id: PRODUCT_ID, labor_product_id: PRODUCT_ID, location_id: LOCATION_ID,
+      price_kind: "selling_price", version: 2, amount: "125.0000", currency: "USD" }],
+  };
+  const read = await readLaborProductRates(PRODUCT_ID, { locationId: LOCATION_ID }, context(), dependencies);
+  assert.equal(read.currentRates.selling_price.amount, "125.0000");
+  let command;
+  const saved = await reviseLaborProductRate(PRODUCT_ID, {
+    locationId: LOCATION_ID, priceKind: "internal_cost", expectedVersion: 0,
+    amount: "80.0000", currency: "USD", reason: "Approved shop cost", idempotencyKey: "labor-rate-create-1",
+  }, context(), { ...dependencies, appendRate: async (value) => { command = value; return { kind: "saved", rate: { version: 1 } }; } });
+  assert.equal(command.companyId, COMPANY_ID);
+  assert.equal(command.locationId, LOCATION_ID);
+  assert.match(command.requestHash, /^[0-9a-f]{64}$/);
+  assert.equal(saved.rate.version, 1);
+  await assert.rejects(readLaborProductRates(PRODUCT_ID, { locationId: LOCATION_ID }, context("mechanic"), dependencies),
+    (error) => error.statusCode === 403);
+});
+
+test("labor rate write hides foreign locations and rejects stale versions", async () => {
+  const body = { locationId: LOCATION_ID, priceKind: "selling_price", expectedVersion: 1,
+    amount: "140.0000", currency: "USD", reason: "Approved update", idempotencyKey: "labor-rate-create-2" };
+  await assert.rejects(reviseLaborProductRate(PRODUCT_ID, body, context(), {
+    findLocation: async () => null,
+    appendRate: async () => assert.fail("foreign location reached persistence"),
+  }), (error) => error.statusCode === 404);
+  await assert.rejects(reviseLaborProductRate(PRODUCT_ID, body, context(), {
+    findLocation: async () => location,
+    appendRate: async () => ({ kind: "version_conflict" }),
+  }), (error) => error.statusCode === 409 && error.code === "LABOR_RATE_VERSION_CONFLICT");
 });

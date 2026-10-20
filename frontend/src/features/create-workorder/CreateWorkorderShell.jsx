@@ -21,6 +21,7 @@ export function CreateWorkorderShell({
   activeSection,
   backLabel,
   canCreate = true,
+  createLabel,
   canSaveDraft,
   form,
   isPhone,
@@ -77,10 +78,10 @@ export function CreateWorkorderShell({
               disabled={officeCreateState.busy || !canCreate}
             >
               <Plus />
-              <span>{officeCreateState.busy ? t("create.creating") : t("create.create")}</span>
+              <span>{officeCreateState.busy ? t("create.creating") : createLabel || t("create.create")}</span>
             </button>
           ) : null}
-          {!isPhone ? customerDocumentAction : null}
+          {customerDocumentAction}
           </>
         ),
       }}
@@ -97,10 +98,9 @@ export function CreateWorkorderShell({
               disabled={officeCreateState.busy || !canCreate}
             >
               <Plus aria-hidden="true" />
-              <span>{officeCreateState.busy ? t("create.creating") : t("create.title")}</span>
+              <span>{officeCreateState.busy ? t("create.creating") : createLabel || t("create.title")}</span>
             </button>
           </div>
-          {customerDocumentAction ? <div className="create-workorder-mobile-action">{customerDocumentAction}</div> : null}
           {presentation === "panel" ? (
             <div className="create-workorder-mobile-nav">
               <WorkorderSectionNav

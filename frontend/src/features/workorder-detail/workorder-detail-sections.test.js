@@ -26,15 +26,15 @@ test("workorder detail sections keep shared tab contract across roles", () => {
 
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false }).map((section) => section.id),
-    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity"],
   );
   const mechanic = buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false });
   assert.equal(mechanic.find(({ id }) => id === "chat").label, "Help");
   assert.deepEqual(mechanic.filter(({ alwaysPrimary }) => alwaysPrimary).map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
-  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: false, isOfficeDetail: true }).map((section) => section.id),
-    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity"],
   );
 });
 
@@ -51,7 +51,6 @@ test("mechanic detail navigation localizes every static section label", () => {
   const labels = Object.fromEntries(sections.map(({ id, label }) => [id, label]));
   assert.deepEqual({
     concern: labels.concern,
-    photos: labels.photos,
     location: labels.location,
     assignment: labels.assignment,
     schedule: labels.schedule,
@@ -59,7 +58,6 @@ test("mechanic detail navigation localizes every static section label", () => {
     unit: labels.unit,
   }, {
     concern: "Problema",
-    photos: "Fotos",
     location: "Ubicación",
     assignment: "Asignación",
     schedule: "Horario",
@@ -80,7 +78,7 @@ test("eligible Admin detail exposes Odoo in manifest order with resolved write a
 
   assert.deepEqual(
     sections.map(({ id }) => id),
-    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "odoo"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity", "odoo"],
   );
   assert.equal(sections.find(({ id }) => id === "odoo")?.access, "write");
 });
@@ -185,18 +183,18 @@ test("compact phone detail keeps role actions visible and moves supporting secti
   ];
 
   const office = buildCompactPhoneDetailSections(sections, "office");
-  assert.deepEqual(office.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
-  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(office.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
+  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
 
   const mechanic = buildCompactPhoneDetailSections(sections, "mechanic");
-  assert.deepEqual(mechanic.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(mechanic.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
   assert.deepEqual(mechanic.filter(({ alwaysPrimary }) => alwaysPrimary).map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
-  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
 
   const surveillance = buildCompactPhoneDetailSections(sections, "surveillance");
-  assert.deepEqual(surveillance.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(surveillance.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
   assert.equal(surveillance[0].label, "Truck");
-  assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity"]);
+  assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "location", "activity"]);
 });
 
 test("compact detail keeps an eligible Odoo action in manifest order", () => {
@@ -235,7 +233,7 @@ test("surveillance detail uses the same canonical registry modules", () => {
     usedPartCount: 2,
   });
 
-  assert.deepEqual(sections.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "odoo"]);
+  assert.deepEqual(sections.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity", "odoo"]);
   assert.equal(sections.find(({ id }) => id === "odoo").access, "write");
   assert.equal(sections.find(({ id }) => id === "odoo").label, "Odoo");
   assert.equal(sections.find(({ id }) => id === "odoo").attention, true);

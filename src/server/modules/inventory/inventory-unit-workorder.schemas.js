@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 const idempotencyKey = z.string().trim().min(8).max(120);
+const pricingSelection = z.object({
+  selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
+  expectedFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  reason: z.string().trim().min(2).max(500),
+}).strict();
 export const inventoryWorkorderEntityIdSchema = z.string().uuid();
 
 export const resolveWorkorderInventoryUnitSchema = z.object({
@@ -8,8 +13,8 @@ export const resolveWorkorderInventoryUnitSchema = z.object({
 }).strict();
 
 export const issueWorkorderInventoryUnitSchema = z.union([
-  z.object({ code: z.string().trim().min(8).max(2000), idempotencyKey }).strict(),
-  z.object({ unitId: inventoryWorkorderEntityIdSchema, idempotencyKey }).strict(),
+  z.object({ code: z.string().trim().min(8).max(2000), idempotencyKey, pricing: pricingSelection.optional() }).strict(),
+  z.object({ unitId: inventoryWorkorderEntityIdSchema, idempotencyKey, pricing: pricingSelection.optional() }).strict(),
 ]);
 
 export const listWorkorderInventoryUnitsSchema = z.object({

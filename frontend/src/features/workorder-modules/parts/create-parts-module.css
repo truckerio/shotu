@@ -611,3 +611,6 @@
 .create-stock-batch-allocation strong { font-size: 13px; overflow-wrap: anywhere; }
 .create-stock-batch-allocation small { color: #667085; font-size: 12px; }
 .create-stock-dropdown .create-stock-batch-warning { color: #b42318; font-size: 12px; font-weight: 600; }
+.create-stock-price-source { color: #344054; display: grid; font-size: 13px; font-weight: 700; gap: 6px; }
+.create-stock-price-source .dropdown-select-trigger { min-height: 44px; }
+.create-stock-price-popover { max-width: calc(100vw - 32px); min-width: min(22rem, calc(100vw - 32px)); width: min(22rem, calc(100vw - 32px)); }

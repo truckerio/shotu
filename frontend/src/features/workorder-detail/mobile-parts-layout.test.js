@@ -64,7 +64,7 @@ test("serialized repair order follows the detail table and retains an accessible
 test("serialized part identity uses separate wrapping lines and top-aligned row fields", () => {
   assert.match(editor, /className="used-part-field used-part-serialized-identity"/);
   assert.match(editor, /className="used-part-serialized-serial"/);
-  assert.match(editor, /className="used-part-serialized-kind"/);
+  assert.doesNotMatch(editor, /className="used-part-serialized-kind"/);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*grid-template-columns:\s*24px minmax\(0, 1\.1fr\) minmax\(126px, 0\.85fr\) minmax\(0, 1fr\) minmax\(220px, 0\.9fr\);/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);

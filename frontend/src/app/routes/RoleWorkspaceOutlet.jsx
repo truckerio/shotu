@@ -3,6 +3,7 @@ import { RefreshCw01 } from "@untitledui/icons";
 
 import { AppLoadingFallback } from "../AppErrorBoundary.jsx";
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
+import { InterfacePreferencesContext } from "../../i18n/InterfacePreferencesContext.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { productModuleCapabilities } from "./product-module-access.js";
 import "./role-phone-profile-dock.css";
@@ -22,7 +23,13 @@ const InventoryScanWorkspace = lazy(() => import("../../features/inventory/Inven
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
 
-export function RoleWorkspaceOutlet({
+export function RoleWorkspaceOutlet(props) {
+  return <InterfacePreferencesContext.Provider value={props.interfacePreferences}>
+    <RoleWorkspaceContent {...props} />
+  </InterfacePreferencesContext.Provider>;
+}
+
+function RoleWorkspaceContent({
   activeWorkorder,
   actor,
   createPageProps,

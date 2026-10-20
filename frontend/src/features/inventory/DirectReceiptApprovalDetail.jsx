@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import {
@@ -14,7 +14,7 @@ import "./direct-receipt-approval-detail.css";
 
 const quantity = (value, uom) => `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}${uom ? ` ${uom}` : ""}`;
 
-export function DirectReceiptApprovalDetail({ approvalId, onClose }) {
+export function DirectReceiptApprovalDetail({ approvalId, onClose, onResolvedLocation }) {
   const [detail, setDetail] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [reason, setReason] = useState("");
@@ -22,12 +22,16 @@ export function DirectReceiptApprovalDetail({ approvalId, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const onResolvedLocationRef = useRef(onResolvedLocation);
+  onResolvedLocationRef.current = onResolvedLocation;
 
   const load = useCallback(async ({ refreshed = false } = {}) => {
     setLoading(true); setError("");
     try {
       const next = await api(directReceiptApprovalUrl(approvalId));
       setDetail(next);
+      const resolvedLocationId = next.location?.id || next.approvalRequest?.locationId || "";
+      if (resolvedLocationId) onResolvedLocationRef.current?.(resolvedLocationId);
       if (refreshed) setNotice("Request refreshed. Review the current status before deciding.");
     } catch (next) { setError(next.message || "Approval request could not be loaded."); }
     finally { setLoading(false); }

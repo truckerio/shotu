@@ -247,7 +247,7 @@ export function createMechanicWorkorderActions({
     }
   }
 
-  async function markMechanicWorkDone() {
+  async function markMechanicWorkDone({ confirmPartsInstalled = false } = {}) {
     try {
       await mechanicProgress.flush({ recordActivity: true });
     } catch (error) {
@@ -261,6 +261,7 @@ export function createMechanicWorkorderActions({
         method: "POST",
         body: JSON.stringify({
           diagnosis: form.diagnosis,
+          ...(confirmPartsInstalled ? { confirmPartsInstalled: true } : {}),
           workPerformed: resolveWorkPerformed({
             ...form,
             parts: [...(form.parts || []), ...installedSerializedUsedParts(detail)],
@@ -271,9 +272,9 @@ export function createMechanicWorkorderActions({
     );
   }
 
-  async function submitMechanicFinish(event) {
-    event.preventDefault();
-    const finished = await markMechanicWorkDone();
+  async function submitMechanicFinish(event, options) {
+    event?.preventDefault?.();
+    const finished = await markMechanicWorkDone(options);
     if (finished) setMechanicFinish({ open: false, name: "", message: "" });
     return finished;
   }

@@ -6,13 +6,10 @@ const source = readFileSync(new URL("./customer-estimate-api.js", import.meta.ur
 const page = readFileSync(new URL("../create-workorder/CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const review = readFileSync(new URL("./CustomerDocumentReview.jsx", import.meta.url), "utf8");
 
-test("estimate loading keeps a compact stable label instead of an adjacent saving sentence", () => {
-  assert.doesNotMatch(page, /Saving changes before the Estimate|Loading Estimate…|previewSaveMessage/);
-  assert.match(page, /aria-busy=\{estimateActionPending\}/);
-  assert.match(page, /<span>\{estimateActionLabel\}<\/span>/);
-  const css = readFileSync(new URL("../workorder-detail/workorder-detail-toolbar.css", import.meta.url), "utf8");
-  assert.match(css, /estimate-preview-pulse 1\.4s ease-in-out infinite/);
-  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*customer-estimate-preview-action\.is-loading > span \{ animation: none; \}/);
+test("Estimate opens through the shared Documents toggle with loading inside the panel", () => {
+  assert.doesNotMatch(page, /Saving changes before the Estimate|Loading Estimate…|previewSaveMessage|estimateActionLabel/);
+  assert.match(page, /<PreviewToggle[\s\S]*openLabel="Open documents"[\s\S]*closeLabel="Close documents"/);
+  assert.match(page, /<DocumentsPanel[\s\S]*customerDocumentBusy && !customerProjection/);
 });
 
 test("Estimate commands use the saved draft source and no client-authoritative financial values", () => {

@@ -27,8 +27,13 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.match(detailPage, /WorkDoneButton/);
   assert.match(workDoneButton, /label = "Work done"/);
   assert.match(detailPage, /completion\.workDone/);
-  assert.match(detailPage, /completion\.yes/);
-  assert.match(detailPage, /completion\.keepWorking/);
+  const confirmation = readFileSync(new URL("../../components/workorders/WorkDoneConfirmationDialog.jsx", import.meta.url), "utf8");
+  assert.match(confirmation, /completion\.installedTitle/);
+  assert.match(confirmation, /completion\.confirmInstalled/);
+  assert.match(confirmation, /completion\.notInstalled/);
+  assert.match(detailPage, /markOfficeWorkorderDone\(\{ confirmPartsInstalled: true \}\)/);
+  assert.match(detailPage, /submitMechanicFinish\(undefined, \{ confirmPartsInstalled: true \}\)/);
+  assert.match(detailPage, /markOfficeWorkorderDone=\{markWorkDone\}/);
   assert.doesNotMatch(detailPage, /Write your name to confirm|expectedMechanicName|mechanicFinishNameMatches/);
   assert.doesNotMatch(detailPage, /Finish workorder|Finish work|Finishing/);
   assert.match(mechanicActions, /\/mark-done/);

@@ -5,8 +5,7 @@ import { WorkorderDetailModuleHost } from "../workorder-modules/WorkorderDetailM
 import { workorderNeedsChatAttention } from "./workorder-detail-sections.js";
 export function WorkorderDetailSections({
   activeWorkorder,
-  actorId,
-  actorRole,
+  actorId, actorRole,
   assignedMechanicIds,
   conversationMessages,
   detailMechanicNames,
@@ -17,8 +16,8 @@ export function WorkorderDetailSections({
   filledPartCount,
   form, financialFooter = null,
   isCompact,
-  isMechanicDetail,
-  isOfficeDetail,
+  isMechanicDetail, isOfficeDetail,
+  laborLogContent,
   locale = "en",
   mapsConfig,
   mechanicAction,
@@ -114,7 +113,7 @@ export function WorkorderDetailSections({
       activeSection: detailSection,
       activeWorkorder,
       allowedActions: activeWorkorder.allowedActions,
-      concern: form.mechanicConcern, mechanicProgress: isMechanicDetail ? mechanicProgress : null,
+      concern: form.mechanicConcern,
       busy: officeDetailState.busy,
       message: officeDetailState.error || isOfficeDetail ? "" : officeDetailState.message,
       missingInfoAttention: Boolean(missingInfoAttention),
@@ -172,6 +171,7 @@ export function WorkorderDetailSections({
       isMechanicDetail,
       isOfficeDetail,
       locale,
+      laborLogContent,
       pendingPartCount,
       onChanged: () => reloadActiveWorkorder({
         preserveForm: Boolean(isMechanicDetail && mechanicProgress?.hasUnsyncedChanges),

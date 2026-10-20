@@ -2,6 +2,16 @@
   gap: 12px;
 }
 
+.chat-thread-surface { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+
+.chat-thread-filters { align-items: center; background: #fff; border-bottom: 1px solid #eaecf0; display: flex; gap: 6px; padding: 8px 12px; }
+
+.chat-thread-filters button { background: transparent; border: 1px solid transparent; border-radius: 999px; color: #475467; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; min-height: 32px; padding: 5px 10px; }
+
+.chat-thread-filters button[aria-pressed="true"] { background: #eff8ff; border-color: #b2ddff; color: #175cd3; }
+
+.chat-thread-filters span { background: #fff; border-radius: 999px; margin-left: 3px; padding: 1px 5px; }
+
 .chat-thread {
   align-content: start;
   background: #f8fafc;
@@ -273,14 +283,18 @@
   color: #717680;
 }
 
-.chat-content:has(> .chat-thread + .chat-prompt-composer) {
+.chat-content:has(> .chat-thread-surface + .chat-prompt-composer) {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
 }
 
-.chat-content:has(> .chat-thread + .chat-prompt-composer) > .chat-thread {
+.chat-content:has(> .chat-thread-surface + .chat-prompt-composer) > .chat-thread-surface {
+  min-height: 0;
+}
+
+.chat-content:has(> .chat-thread-surface + .chat-prompt-composer) > .chat-thread-surface > .chat-thread {
   max-height: none;
   min-height: 0;
   overscroll-behavior-y: contain;
@@ -508,14 +522,14 @@
     padding: 0;
   }
 
-  .workorder-detail-page .chat-content:has(> .chat-thread + .chat-prompt-composer) {
+  .workorder-detail-page .chat-content:has(> .chat-thread-surface + .chat-prompt-composer) {
     height: 100%;
     max-width: 100%;
     overflow-x: clip;
     width: 100%;
   }
 
-  .workorder-detail-page .chat-content > .chat-thread {
+  .workorder-detail-page .chat-content > .chat-thread-surface > .chat-thread {
     background: #fff;
     border: 0;
     border-radius: 0;
@@ -525,7 +539,7 @@
     touch-action: pan-y pinch-zoom;
   }
 
-  .workorder-detail-page .chat-content > .chat-thread.is-empty {
+  .workorder-detail-page .chat-content > .chat-thread-surface > .chat-thread.is-empty {
     align-content: center;
     min-height: 0;
   }
@@ -581,7 +595,7 @@
     min-height: 0;
   }
 
-  .workorder-detail-page.is-keyboard-open .chat-content > .chat-thread {
+  .workorder-detail-page.is-keyboard-open .chat-content > .chat-thread-surface > .chat-thread {
     max-height: none;
     min-height: 0;
     overflow-y: auto;

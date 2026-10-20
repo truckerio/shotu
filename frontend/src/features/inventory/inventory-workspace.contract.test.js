@@ -33,7 +33,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.doesNotMatch(workspace, /Inventory views/);
   assert.doesNotMatch(workspace, /inventory-workspace-header|inventory-workspace-heading|inventory-workspace-actions|inventory-stock-controls|inventory-stock-filters|inventory-stock-list|inventory-stock-head|inventory-stock-results/);
   assert.match(workspace, /stockStateLabel/);
-  assert.match(workspace, />Upload invoice<\/Button>/);
+  assert.match(await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"), />Upload invoice<\/Button>/);
   assert.doesNotMatch(workspace, /id="inventory-invoice-action"/);
   assert.doesNotMatch(workspace, /<span>Local inventory<\/span>/);
   assert.match(workspace, /<IconButton className="inventory-invoice-upload-button" icon=\{UploadCloud02\} label="Upload invoices" aria-haspopup="dialog"/);
@@ -42,7 +42,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /invoiceWorkflowOpen \? \(\s*!workflowDetail \? <IconButton/);
   assert.match(workspace, /const \[invoiceRunId, setInvoiceRunId\] = useState\(\(\) => initialParams\.get\("invoiceRun"\) \|\| ""\)/);
   assert.match(workspace, /setInvoiceRunId\(invoiceRun\)/);
-  assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} initialLocationId=\{locations\.some\(\(location\) => location\.id === locationId\) \? locationId : ""\} initialRunId=\{invoiceRunId\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
+  assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} initialLocationId=\{locations\.some\(\(location\) => location\.id === invoiceLocationId\) \? invoiceLocationId : ""\} initialRunId=\{invoiceRunId\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
   assert.match(workspace, /inventoryAction", "upload-invoice"/);
   assert.match(workspace, /<ContextBreadcrumbs/);
   assert.match(workspace, /invoiceWorkflowOpen \? \(\s*<Button type="button" className="inventory-invoice-back-button" icon=\{ArrowLeft\} onClick=\{backFromInvoiceWorkflow\}>Back<\/Button>/);
@@ -100,38 +100,41 @@ test("stock filters preserve search priority and compact the secondary controls 
   assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
 });
 
-test("Inbound owns the global arrival and invoice entry points while Purchasing keeps contextual supplier intake", async () => {
-  const [workspace, purchases, needsOrdering] = await Promise.all([
+test("Purchasing combines demand, orders and canonical delivery work with preserved recovery", async () => {
+  const [workspace, purchases, needsOrdering, inbound, admin, office] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"),
     readFile(new URL("./InventoryNeedsOrdering.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryInboundWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8"),
   ]);
-  assert.match(purchases, /label:'Needs ordering'/);
-  assert.match(purchases, /label:'Purchase orders'/);
-  assert.doesNotMatch(purchases, /label:'Expected deliveries'/);
-  assert.doesNotMatch(purchases, /InventoryPurchaseRequests|New request|Approval waiting/);
-  assert.match(purchases, /onInvoice\?\.\(locationId\)/);
-  assert.match(needsOrdering, /onInvoice\?\.\(locationId\)/);
-  assert.match(needsOrdering, />Add supplier invoice<\/Button>/);
-  assert.match(needsOrdering, />Create order<\/Button>/);
-  assert.doesNotMatch(needsOrdering, /Add to PO|Create PO from selected/);
-  assert.match(purchases, /demandDraftId=\{demandDraft\?\.key\|\|''\}/);
+  assert.doesNotMatch(purchases, /ariaLabel="Purchases views"|InventoryPurchaseRequests|New request|Approval waiting/);
+  assert.match(purchases, /<InventoryNeedsOrdering[^>]*embedded[^>]*controlledLocationId=\{locationId\}[^>]*controlledData=\{data\}/);
+  assert.match(purchases, /<InventoryInboundWorkspace[^>]*embedded[^>]*controlledLocationId=\{locationId\}/);
+  assert.match(needsOrdering, /if\(embedded\|\|!locationId\)return/);
+  assert.match(purchases, /purchase-needs-section/);
+  assert.match(purchases, /<PurchasingSplitView/);
+  assert.match(purchases, /<InventoryInboundWorkspace[^>]*comparison/);
+  assert.match(purchases, /<details className="purchasing-expandable-section purchase-needs-section">/);
   assert.match(purchases, /onDemandOrderFinished=\{finishDemandOrder\}/);
   assert.match(purchases, /storageKey\}:demand:\$\{demandDraftId\}/);
   assert.match(purchases, /localStorage\.removeItem\(draftStorageKey\)/);
   assert.match(purchases, /inventory-purchase-demand-handoff:/);
   assert.match(purchases, /localStorage\.getItem\(demandHandoffKey\)/);
   assert.match(purchases, /localStorage\.removeItem\(demandHandoffKey\)/);
-  assert.match(workspace, /onInvoice=\{\(requestedLocationId\)=>openInvoiceWorkflow\("", requestedLocationId\)\}/);
-  assert.match(workspace, /setLocationId\(requestedLocationId\)/);
-  assert.match(workspace, /<InventoryInboundWorkspace/);
-  assert.match(workspace, /onReceivePurchaseOrder=\{\(poId, requestedLocationId, poNumber\) => \{ setInboundReceiptHandoff\(createPurchaseReceiptHandoff\(poId, requestedLocationId, poNumber, crypto\.randomUUID\(\)\)\); selectInventorySection\('purchases'\); \}\}/);
-  assert.match(workspace, /initialReceiptHandoff=\{inboundReceiptHandoff\} onReceiptHandoffConsumed=\{consumeInboundReceiptHandoff\}/);
-  assert.match(purchases, /initialLocationId=\{props\.initialReceiptHandoff\?\.locationId\|\|demandDraft\?\.locationId\|\|\(props\.initialPurchaseOrderId&&props\.initialPurchaseLocationId\)\|\|''\}/);
-  assert.match(purchases, /searchFilter,setSearchFilter\]=useState\(initialReceiptHandoff\?\.poNumber\|\|initialPurchaseOrderNumber\)/);
-  assert.match(purchases, /Purchase order \$\{initialReceiptHandoff\.poNumber\|\|initialReceiptHandoff\.poId\} was not found in this shop/);
+  assert.match(purchases, /sendInventoryCommand\(\{request,recover:!!pending/);
+  assert.match(workspace, /<InventoryPurchases/);
+  assert.doesNotMatch(workspace, /id: "inbound", label: "Inbound"/);
+  assert.doesNotMatch(admin, /id: "inventory-inbound"/);
+  assert.doesNotMatch(office, /id: "inventory-inbound"/);
   assert.match(workspace, /initialPurchaseLocationId=\{reportPurchaseOrderLocationId\}/);
-  assert.match(workspace, /onAddInventory=\{\(requestedLocationId\) => setReceivingPart\(\{ receiptLocationId: requestedLocationId \}\)\}/);
+  assert.match(workspace, /initialInboundSource=\{inboundSource\}/);
+  assert.match(workspace, /setReceivingPart\(\{\s*receiptLocationId:\s*requestedLocationId\s*\}\)/);
+  assert.match(purchases, /findPurchaseReceiptHandoffOrder/);
+  assert.match(purchases, /was not found in this shop/);
+  assert.match(inbound, /controlledLocationId/);
+  assert.match(inbound, /refreshKey/);
 });
 
 test("Inbound is a server-backed list and detail handoff workspace", async () => {
@@ -172,7 +175,7 @@ test("Inventory Tasks is one actor-aware queue that routes work to canonical own
   assert.match(workspace, /task\.sourceType === "invoice_po_decision"/);
   assert.match(workspace, /task\.sourceType === "missing_invoice"/);
   assert.match(workspace, /task\.sourceType === "receipt_exception"/);
-  assert.match(workspace, /initialReceiptId=\{inboundSource\.receiptId\} initialDeliveryId=\{inboundSource\.deliveryId\}/);
+  assert.match(workspace, /initialInboundSource=\{inboundSource\}/);
   assert.match(workspace, /initialTaskId=\{taskWorkflow\.task\?\.sourceId \|\| ""\}/);
   assert.match(workspace, /initialCaseId=\{taskWorkflow\.task\.sourceId\}/);
   assert.match(workspace, /initialPositionId=\{stockLocationInitialPosition\}/);
@@ -230,7 +233,7 @@ test("inventory sections own their page titles and actions instead of a persiste
   assert.match(workspace, /showHeading=\{presentation !== "embedded"\}/);
   assert.match(workspace, /onSectionTitleChange\?\.\(\s*invoiceWorkflowOpen\s*\? "Invoice intake"\s*: countWorkflowOpen\s*\? "Starting inventory"\s*: INVENTORY_SECTIONS\.find\(\(section\) => section\.id === inventorySection\)\?\.label \|\| "Stock"/);
   assert.match(workspace, /\}, \[countWorkflowOpen, inventorySection, invoiceWorkflowOpen, onSectionTitleChange\]\);/);
-  assert.match(workspace, /inventorySection === "stock" \? stockActions : inventorySection === "inbound" \? inboundActions : inventorySection === "tasks" \? taskActions : null/);
+  assert.match(workspace, /inventorySection === "stock" \? stockActions : inventorySection === "tasks" \? taskActions : null/);
   assert.doesNotMatch(workspace, /InventoryLocationsWorkspace|Storage layout/);
   assert.match(workspace, /function openStockByLocation\(shopId = ""\)/);
   assert.match(workspace, /setStockMode\("location"\);/);
@@ -381,7 +384,7 @@ test("stock starts unified add stock and keeps location count handoffs", async (
   assert.match(workspace, />Add stock<\/Button>/);
   assert.doesNotMatch(workspace, /id="inventory-physical-count-action"/);
   assert.doesNotMatch(workspace, /const stockActions = <[^;]*>Starting inventory<\/Button>/s);
-  assert.match(workspace, />Record arrival<\/Button>/);
+  assert.match(await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"), />Record arrival without PO<\/Button>/);
   assert.match(workspace, /function openStockByLocation\(shopId = ""\)[\s\S]*setStockMode\("location"\)[\s\S]*stockMode: "location"/);
   assert.doesNotMatch(workspace, /openPhysicalCountByLocation|physicalCountMode|countIntent/);
   assert.match(workspace, /onOpenLocations=\{openStockByLocation\}/);
@@ -949,4 +952,24 @@ test("part activity is visibly scoped and owns stock history", async () => {
   assert.match(history, /emptyMessage = "No stock activity\."/);
   assert.match(styles, /\.inventory-part-location-summary \{ display: grid; gap: 18px; \}/);
   assert.match(styles, /\.inventory-shop-usage > header, \.inventory-audit-log-heading/);
+});
+
+
+test("Purchasing restores source shop and invoice shop across reload without leaking approval context", async () => {
+  const [workspace, purchases, inbound, approval] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryInboundWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./DirectReceiptApprovalDetail.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /purchaseLocationId, setPurchaseLocationId.*initialParams\.get\("taskLocation"\)/);
+  assert.match(workspace, /const invoiceLocationId = inventorySection === "purchases" \? purchaseLocationId \|\| locationId : locationId/);
+  assert.match(workspace, /initialLocationId=\{locations\.some\(\(location\) => location\.id === invoiceLocationId\) \? invoiceLocationId : ""\}/);
+  assert.match(purchases, /demandRecoveryReady\?<PurchaseOrders/);
+  assert.match(inbound, /onResolvedLocation/);
+  assert.match(approval, /onResolvedLocation/);
+  for (const owner of ["function changeInventorySection", "function openExactTaskUrl"]) {
+    const start=workspace.indexOf(owner), next=workspace.indexOf("\n  function ",start+owner.length);
+    assert.match(workspace.slice(start,next<0?undefined:next), /"approvalId"/);
+  }
 });

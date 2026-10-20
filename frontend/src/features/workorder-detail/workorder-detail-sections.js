@@ -133,7 +133,7 @@ export function buildWorkorderDetailSections({
     [WORKORDER_MODULE_IDS.SCHEDULE]: { label: isMechanicDetail ? mechanicLabel("detail.schedule") : undefined },
   };
   const sections = workorderModuleDescriptors(WORKORDER_SURFACES.DETAIL)
-    .filter((descriptor) => descriptor.id !== WORKORDER_MODULE_IDS.PREVIEW)
+    .filter((descriptor) => ![WORKORDER_MODULE_IDS.PREVIEW, WORKORDER_MODULE_IDS.PHOTOS].includes(descriptor.id))
     .map((descriptor) => {
       const sectionMetadata = metadata[descriptor.id] || {};
       return {
@@ -173,7 +173,7 @@ export function buildWorkorderDetailSections({
 export function buildCompactPhoneDetailSections(sections, role, { locale = "en", policyOverrides = [], userId = "" } = {}) {
   const normalizedRole = role === "manager" ? "office" : role;
   const compactModules = sections
-    .filter((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW)
+    .filter((section) => ![WORKORDER_MODULE_IDS.PREVIEW, WORKORDER_MODULE_IDS.PHOTOS].includes(section.id))
     .filter((section) => section.modulePolicy?.descriptor?.compactPlacement?.[normalizedRole]
       || resolveWorkorderModulePolicy({
         moduleId: section.id,

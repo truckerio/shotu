@@ -9,6 +9,8 @@ import { SerializedUnitNestedDropdown } from "./SerializedUnitNestedDropdown.jsx
 import {
   eligibleSelectedUnitIds,
   issueSelectedSerializedUnits,
+  serializedPriceSourceOptions,
+  serializedPricingSelection,
 } from "./workorder-serialized-part-selection.js";
 import "./workorder-serialized-part-dialog.css";
 
@@ -74,6 +76,7 @@ export function WorkorderSerializedPartDialog({
   initialUnitId = "",
   initialSerialNumber = "",
   anchorToPartField = false,
+  canViewPrices = false,
   onClose,
   onReserved,
   locale = "en",
@@ -88,8 +91,12 @@ export function WorkorderSerializedPartDialog({
   const [conditionEvidence, setConditionEvidence] = useState("");
   const [physicallyPresent, setPhysicallyPresent] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState(() => new Set());
+  const [pricePreviewsByUnitId, setPricePreviewsByUnitId] = useState({});
+  const [priceSelection, setPriceSelection] = useState("");
+  const [pricingLoading, setPricingLoading] = useState(false);
   const [serialQuery, setSerialQuery] = useState("");
   const unitRequestKeysRef = useRef(new Map());
+  const pricingRequestRef = useRef(0);
   const createKeyRef = useRef({ identity: "", key: "" });
   const quantityRef = useRef(null);
   const addUnitsRef = useRef(null);
@@ -114,6 +121,36 @@ export function WorkorderSerializedPartDialog({
   // stock, role, or the catalog result.
   const canCreate = data?.canCreateSerializedUnits === true;
 
+  async function loadPricing(unitList, { append = false } = {}) {
+    if (!canViewPrices || !workorderId || !partId || !unitList.length) {
+      if (!append) setPricePreviewsByUnitId({});
+      return;
+    }
+    const requestId = ++pricingRequestRef.current;
+    setPricingLoading(true);
+    try {
+      const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`, {
+        method: "POST",
+        body: JSON.stringify({
+          operation: "partPricingPreview",
+          usageKind: "serialized",
+          catalogPartId: partId,
+          serializedUnitIds: unitList.map((unit) => unit.id),
+        }),
+      });
+      if (requestId !== pricingRequestRef.current) return;
+      const previews = Object.fromEntries((result.result?.serializedUnits || []).map((entry) => [entry.unitId, entry]));
+      setPricePreviewsByUnitId((current) => append ? { ...current, ...previews } : previews);
+    } catch (error) {
+      if (requestId === pricingRequestRef.current) {
+        if (!append) setPricePreviewsByUnitId({});
+        setMessage(errorText(error, text));
+      }
+    } finally {
+      if (requestId === pricingRequestRef.current) setPricingLoading(false);
+    }
+  }
+
   async function load({ query = serialQuery, cursor = "", append = false } = {}) {
     if (!endpoint) return;
     setLoading(true);
@@ -124,9 +161,11 @@ export function WorkorderSerializedPartDialog({
       if (cursor) params.set("cursor", cursor);
       params.set("limit", "25");
       const result = await api(`${endpoint}${params.size ? `?${params}` : ""}`);
+      const nextUnits = unitsFrom(result);
       setData((current) => append
-        ? { ...result, units: [...unitsFrom(current), ...unitsFrom(result)] }
+        ? { ...result, units: [...unitsFrom(current), ...nextUnits] }
         : result);
+      await loadPricing(nextUnits, { append });
     } catch (error) {
       setMessage(errorText(error, text));
     } finally {
@@ -144,6 +183,8 @@ export function WorkorderSerializedPartDialog({
     setConditionEvidence("");
     setPhysicallyPresent(false);
     setSelectedUnitIds(new Set(initialUnitId ? [initialUnitId] : []));
+    setPricePreviewsByUnitId({});
+    setPriceSelection("");
     setSerialQuery(initialSerialNumber);
     unitRequestKeysRef.current = new Map();
     createKeyRef.current = { identity: "", key: "" };
@@ -238,6 +279,14 @@ export function WorkorderSerializedPartDialog({
 
   async function reserveSelectedUnits() {
     if (busy || !eligibleSelectedUnitIds(units, selectedUnitIds).length) return;
+    const selectedPricing = canViewPrices
+      ? serializedPricingSelection(pricePreviewsByUnitId, eligibleSelectedUnitIds(units, selectedUnitIds), priceSelection)
+      : [];
+    if (canViewPrices && !selectedPricing) {
+      setMessage("Choose a price source with a known amount before adding these units.");
+      return;
+    }
+    const pricingByUnitId = new Map(selectedPricing.map((entry) => [entry.unitId, entry]));
     setBusy(true);
     setMessage("");
     const { successes, failures } = await issueSelectedSerializedUnits({
@@ -247,7 +296,17 @@ export function WorkorderSerializedPartDialog({
       createKey: () => key("workorder-serialized-issue"),
       issue: (unitId, idempotencyKey) => api(`/api/workorders/${encodeURIComponent(workorderId)}/inventory-units/issue`, {
         method: "POST",
-        body: JSON.stringify({ unitId, idempotencyKey }),
+        body: JSON.stringify({
+          unitId,
+          idempotencyKey,
+          ...(canViewPrices ? {
+            pricing: {
+              selection: priceSelection,
+              expectedFingerprint: pricingByUnitId.get(unitId).fingerprint,
+              reason: "Selected before adding serialized inventory to workorder",
+            },
+          } : {}),
+        }),
       }),
       onIssued: (result) => onReserved?.(result.usage, result),
     });
@@ -258,6 +317,10 @@ export function WorkorderSerializedPartDialog({
       setData((current) => current ? { ...current, units: unitsFrom(current).filter((unit) => !succeeded.has(unit.id)) } : current);
       setSelectedUnitIds(new Set(failures.map(({ id }) => id)));
       const failureReason = errorText(failures[0]?.error, text);
+      if (failures.some(({ error }) => error?.code === "WORKORDER_PRICING_CHANGED")) {
+        setPriceSelection("");
+        await loadPricing(unitsFrom(data).filter((unit) => failures.some(({ id }) => id === unit.id)));
+      }
       setMessage(
         successes.length === 0 && failures.length === 1
           ? failureReason
@@ -273,6 +336,11 @@ export function WorkorderSerializedPartDialog({
   }
 
   const batch = data?.batch || data?.labelBatch;
+  const selectedEligibleIds = eligibleSelectedUnitIds(units, selectedUnitIds);
+  const priceSourceOptions = canViewPrices
+    ? serializedPriceSourceOptions(pricePreviewsByUnitId, selectedEligibleIds, locale)
+    : [];
+  const pricingReady = !canViewPrices || Boolean(serializedPricingSelection(pricePreviewsByUnitId, selectedEligibleIds, priceSelection));
   const IntakeContainer = createOnly ? "div" : "form";
   if (!open) return null;
   if (view !== "create") {
@@ -293,9 +361,16 @@ export function WorkorderSerializedPartDialog({
         onClose={close}
         onConfirm={reserveSelectedUnits}
         onQueryChange={setSerialQuery}
+        onPriceSelectionChange={setPriceSelection}
         onSearch={search}
         onSelectionChange={setSelectedUnitIds}
         partNumber={partNumber}
+        pricePreviewsByUnitId={pricePreviewsByUnitId}
+        priceSelection={priceSelection}
+        priceSourceOptions={priceSourceOptions}
+        pricingLoading={pricingLoading}
+        pricingReady={pricingReady}
+        pricingRequired={canViewPrices}
         query={serialQuery}
         selectedUnitIds={selectedUnitIds}
         topContent={view === "created" && batch?.printUrl ? <div className="workorder-serialized-ready"><strong>{text.ready}</strong><a ref={printRef} className="button primary" href={batch.printUrl} target="_blank" rel="noreferrer">{text.printed} {batch.itemCount || units.length} {text.labels}</a></div> : null}

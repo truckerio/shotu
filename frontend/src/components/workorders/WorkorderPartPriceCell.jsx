@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { Dropdown } from "../forms/Dropdown.jsx";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { WorkorderUnitPriceInput } from "./WorkorderUnitPriceInput.jsx";
+import { PriceSourceDropdown } from "./PriceSourceDropdown.jsx";
+import { PartRatesDialog } from "../pricing/PartRatesDialog.jsx";
 import { api } from "../../lib/api.js";
 import { formatWorkorderMoney, workorderLineTotal } from "./workorder-pricing-model.js";
 
@@ -20,12 +22,6 @@ function allocationMoney(value, currency) {
   return value === null || value === undefined || !currency ? "Unknown cost" : money(value, currency);
 }
 
-function compactPriceValue(price) {
-  if (!price?.selection) return "";
-  const numeric = Number(price.unitPrice);
-  return Number.isFinite(numeric) ? numeric.toFixed(2) : "";
-}
-
 function currencyPrefix(price) {
   if (!price?.currency || price.currency === "USD") return "$";
   return price.currency;
@@ -36,6 +32,10 @@ export function WorkorderPartPriceCell({
   usageKind,
   usageId,
   noStockLineId,
+  catalogPartId,
+  partLabel,
+  locationId,
+  uomCode,
   price,
   quantity,
   onChanged,
@@ -46,8 +46,28 @@ export function WorkorderPartPriceCell({
 }) {
   const [current, setCurrent] = useState(price || null);
   const [busy, setBusy] = useState(false);
+  const pendingPriceCommand = useRef(null);
   const [message, setMessage] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [ratesOpen, setRatesOpen] = useState(false);
+  const [needsPriceSelection, setNeedsPriceSelection] = useState(false);
+  const previewGeneration = useRef(0);
   useEffect(() => setCurrent(price || null), [price]);
+  const loadOptions = useCallback(async () => {
+    const generation = ++previewGeneration.current;
+    if (disabled) { setPreview(null); setMessage(""); return; }
+    try {
+      const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`, {
+        method: "POST",
+        body: JSON.stringify({ operation: "partPricingPreview", usageKind,
+          ...(usageKind === "no_stock" ? { noStockLineId } : { usageId }) }),
+      });
+      if (generation === previewGeneration.current) { setPreview(result.result || result); setMessage(""); }
+    } catch (error) {
+      if (generation === previewGeneration.current) { setPreview(null); setMessage(error?.message || "Prices could not be loaded."); }
+    }
+  }, [workorderId, usageKind, usageId, noStockLineId, disabled]);
+  useEffect(() => { setPreview(null); void loadOptions(); return () => { previewGeneration.current += 1; }; }, [loadOptions, price]);
   const visibleAllocations = costAllocations.length ? costAllocations : (current?.allocations || []);
   const allocationCurrencies = new Set(visibleAllocations.map((allocation) => allocation.currency).filter(Boolean));
   const hasKnownAllocationCosts = visibleAllocations.length > 0
@@ -67,30 +87,35 @@ export function WorkorderPartPriceCell({
     : null;
   const allocationCurrency = allocationCurrencies.size === 1 ? [...allocationCurrencies][0] : "";
 
-  async function select(event) {
+  async function select(event, customUnitPrice) {
     const selection = event.target.value;
-    if (!selection || busy) return;
+    if (!selection || busy || disabled || !preview?.fingerprint) return;
     setBusy(true);
     setMessage("");
     try {
-      const result = await api(
-        `/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            operation: "partPriceSelection",
-            usageKind,
-            ...(usageKind === "no_stock" ? { noStockLineId } : { usageId }),
-            selection,
-            reason: selection === "batch_cost"
-              ? "Use exact receipt batch cost"
-              : selection === "internal_cost" ? "Use configured internal cost" : "Use configured selling policy",
-            idempotencyKey: `part-price-${crypto.randomUUID()}`,
-          }),
-        },
-      );
-      setCurrent(result.snapshot);
-      await onChanged?.();
+      const command = {
+        operation: "partPriceSelection", usageKind,
+        ...(usageKind === "no_stock" ? { noStockLineId } : { usageId }),
+        selection,
+        ...(customUnitPrice !== undefined ? { customUnitPrice } : {}),
+        expectedFingerprint: preview.fingerprint,
+        reason: customUnitPrice !== undefined ? "Manually entered Workorder unit price" : selection === "batch_cost"
+          ? "Use exact receipt batch cost"
+          : selection === "internal_cost" ? "Use configured internal cost" : "Use configured selling policy",
+      };
+      const signature = JSON.stringify({ workorderId, ...command });
+      if (pendingPriceCommand.current?.signature !== signature) {
+        pendingPriceCommand.current = { signature, body: { ...command, idempotencyKey: `part-price-${crypto.randomUUID()}` } };
+      }
+      const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`, {
+        method: "POST",
+        body: JSON.stringify(pendingPriceCommand.current.body),
+      });
+      pendingPriceCommand.current = null;
+      setCurrent(result.result?.snapshot || result.snapshot);
+      setNeedsPriceSelection(false);
+      try { await onChanged?.(); }
+      catch { setMessage("Price saved. Refresh the workorder to update totals and activity."); }
     } catch (error) {
       setMessage(error?.message || "Price could not be selected.");
     } finally {
@@ -98,22 +123,21 @@ export function WorkorderPartPriceCell({
     }
   }
 
-  const selector = <Dropdown
+  const ratePartId = catalogPartId || preview?.catalogPartId || preview?.part?.catalogPartId;
+  const selector = <PriceSourceDropdown
     aria-label="Price source"
     className={compact ? "detail-price-source-menu" : undefined}
-    placement={compact ? "bottom end" : undefined}
-    value={current?.selection || ""}
+    value={needsPriceSelection ? "" : current?.selection || ""}
+    options={preview?.options || {}}
+    includeBatch={usageKind !== "no_stock"}
     onChange={select}
+    onSetRates={ratePartId && !disabled ? () => setRatesOpen(true) : undefined}
     disabled={busy || disabled}
-  >
-    <option value="">Select price</option>
-    {usageKind === "no_stock"
-      ? <option value="internal_cost">Internal cost</option>
-      : <option value="batch_cost" disabled={!canUseBatchCost}>
-        Batch cost{canUseBatchCost ? "" : " — cost unavailable"}
-      </option>}
-    <option value="selling_price">Selling price</option>
-  </Dropdown>;
+  />;
+  const ratesDialog = ratesOpen ? <PartRatesDialog open catalogPartId={ratePartId}
+    locationId={locationId || preview?.locationId} partLabel={partLabel || preview?.partNumber || "Part"}
+    uomCode={uomCode || preview?.uomCode} onClose={() => setRatesOpen(false)}
+    onSaved={async () => { setNeedsPriceSelection(true); await loadOptions(); setMessage("Rates saved. Choose a price source to apply them to this workorder."); try { await onChanged?.(); } catch { setMessage("Rates saved. Refresh the workorder before choosing its price."); } }} /> : null;
   const allocationHistory = visibleAllocations.length ? <details className="workorder-part-price-layers">
     <summary>FCFS · {visibleAllocations.length} {visibleAllocations.length === 1 ? "batch" : "batches"}{allocationTotal === null ? "" : ` · ${money(allocationTotal, allocationCurrency)} total`}</summary>
     <ul>{visibleAllocations.map((allocation) => {
@@ -129,26 +153,32 @@ export function WorkorderPartPriceCell({
     })}</ul>
   </details> : null;
 
+  const priceInput = <WorkorderUnitPriceInput label="Part unit price" price={current}
+    disabled={busy || disabled || !preview?.fingerprint || needsPriceSelection}
+    onCommit={(value) => select({ target: { value: current?.selection } }, value)} />;
+
   if (compact) return <div className="used-part-field workorder-part-price is-compact">
     <span className="used-part-cell-label">Price</span>
     <div className="detail-inline-price-control">
       <span aria-hidden="true">{currencyPrefix(current)}</span>
-      <input aria-label="Part unit price" readOnly placeholder="Price" value={compactPriceValue(current)} />
+      {priceInput}
       {selector}
     </div>
     {allocationHistory}
+    {ratesDialog}
     {message ? <small role="alert">{message}</small> : null}
   </div>;
 
   return (
     <div className="used-part-field workorder-part-price">
       <span className="used-part-cell-label">Price</span>
-      {selector}
+      <div className="detail-inline-price-control"><span aria-hidden="true">{currencyPrefix(current)}</span>{priceInput}{selector}</div>
       <div className="workorder-price-values">
         <span>Unit price <strong>{current?.selection ? formatWorkorderMoney(current.unitPrice, current.currency) || "Unknown" : "Not selected"}</strong></span>
         <span>Line total <strong>{workorderLineTotal(current, quantity) || "Incomplete"}</strong></span>
       </div>
       {allocationHistory}
+      {ratesDialog}
       {message ? <small role="alert">{message}</small> : null}
     </div>
   );

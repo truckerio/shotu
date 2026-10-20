@@ -10,7 +10,8 @@ test("operational detail no longer mounts the legacy paper preview", () => {
   assert.doesNotMatch(detailPage, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
   assert.doesNotMatch(detailPage, /renderedDetailSection === "preview"/);
   assert.match(detailPage, /id: "customer-documents"/);
-  assert.match(detailPage, /detailStatus === "mechanic_done" \? "Review invoice" : "View estimate"/);
+  assert.doesNotMatch(detailPage, /documentActionLabel|openOfficeTool/);
+  assert.match(detailPage, /<PreviewToggle open=\{officeToolsOpen\}/);
   assert.match(detailPage, /id: "archive"/);
 });
 
@@ -21,13 +22,13 @@ test("read-only Chat has no composer and visible Photos enable chat attachments"
 });
 
 test("office lifecycle controls require module write and Work done trusts the filtered server action", () => {
-  assert.match(detailPage, /completionPolicy\.canWrite && activeWorkorder\.allowedActions\?\.approve/);
-  assert.match(detailPage, /completionPolicy\.canWrite && mechanicFinish\.open/);
+  assert.match(detailPage, /<ApproveButton type="submit"/);
+  assert.match(detailPage, /completionPolicy\.canWrite && canMarkWorkDone && mechanicFinish\.open/);
   assert.match(detailPage, /canMarkWorkDone = \(isMechanicDetail \|\| isOfficeDetail\) && activeWorkorder\.allowedActions\?\.markDone === true/);
   assert.match(diagnosisRepairModule, /writable\(access\) && Boolean\(allowedActions\.saveNotes\)/);
 });
 
 test("Create no longer mounts the legacy printable or fullscreen Preview surfaces", () => {
-  assert.doesNotMatch(createPage, /BrowserPrintDocument|PreviewFullscreen|PreviewPane|CompactWorkorderPreview|WorkorderPreview|PrintModal/);
+  assert.doesNotMatch(createPage, /BrowserPrintDocument|PreviewFullscreen|<PreviewPane|CompactWorkorderPreview|WorkorderPreview|PrintModal/);
   assert.match(createPage, /<DocumentsPanel/);
 });

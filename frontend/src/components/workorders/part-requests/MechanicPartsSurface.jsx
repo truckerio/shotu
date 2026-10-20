@@ -22,6 +22,7 @@ export function MechanicPartsSurface({
   presentation = "panel",
   laborRepairOrder,
   laborRepairOrderDisabled,
+  laborLogContent,
   installedParts = [],
   onLaborHoursChange,
   onLaborRepairOrderChange,
@@ -55,6 +56,7 @@ export function MechanicPartsSurface({
         presentation={presentation}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        laborLogContent={laborLogContent}
         installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}

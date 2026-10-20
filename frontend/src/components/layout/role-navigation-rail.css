@@ -1,11 +1,13 @@
 .role-navigation-rail { align-self:start; background:transparent; border:0; box-sizing:border-box; display:flex; flex-direction:column; height:100dvh; min-height:0; min-width:0; padding:10px; position:sticky; top:0; width:100%; }
-.role-navigation-account { flex:0 0 auto; height:44px; min-height:44px; }
+.role-navigation-header { align-items:center; display:flex; flex:0 0 44px; min-width:0; }
+.role-navigation-account { flex:1 1 auto; height:44px; min-height:44px; min-width:0; }
 .role-navigation-account .profile-menu { min-width:0; width:100%; }
 .role-navigation-account .profile-menu-trigger { box-sizing:border-box; height:44px; min-height:44px; min-width:0; padding-right:10px; width:100%; }
 .role-navigation-account .profile-menu-identity strong { max-width:none; }
+.role-navigation-account .profile-menu-initials { flex:0 0 34px; }
 .role-navigation-account .profile-menu-trigger > svg { flex:0 0 auto; margin-left:auto; }
 .role-navigation-divider { background:#e4e7ec; flex:0 0 1px; height:1px; margin:10px 0; }
-.role-navigation-toggle { align-items:center; background:transparent; border:0; border-radius:6px; color:#475467; cursor:pointer; display:flex; flex:0 0 44px; font:inherit; font-size:var(--text-caption); gap:9px; min-height:44px; padding:0 10px; text-align:left; width:100%; }
+.role-navigation-toggle { align-items:center; background:transparent; border:0; border-radius:6px; color:#475467; cursor:pointer; display:flex; flex:0 0 44px; justify-content:center; min-height:44px; padding:0; width:44px; }
 .role-navigation-toggle svg { flex:0 0 20px; height:20px; width:20px; }
 .role-navigation-toggle:hover { background:#f2f4f7; }
 .role-navigation-list, .role-navigation-list section, .role-navigation-children { display:grid; gap:2px; }
@@ -23,11 +25,10 @@
 /* Account portals must appear above the temporary navigation panel. */
 .profile-menu-popover { z-index:100; }
 .role-navigation-tooltip { background:#101828; border-radius:6px; color:#fff; font-size:var(--text-secondary); max-width:220px; padding:8px 10px; z-index:1000; }
-.role-navigation-rail[data-compact="true"] { padding-inline:8px; width:68px; }
+.role-navigation-rail[data-compact="true"] { padding-inline:8px; width:104px; }
 .role-navigation-rail[data-compact="true"] .profile-menu-identity,
 .role-navigation-rail[data-compact="true"] .profile-menu-trigger > svg,
-.role-navigation-rail[data-compact="true"] .role-navigation-item-label,
-.role-navigation-rail[data-compact="true"] .role-navigation-toggle > span { display:none; }
+.role-navigation-rail[data-compact="true"] .role-navigation-item-label { display:none; }
 .role-navigation-rail[data-compact="true"] .profile-menu-trigger { justify-content:center; padding:0; }
 .role-navigation-rail[data-compact="true"] .role-navigation-list { gap:10px; padding:2px 0; }
 .role-navigation-rail[data-compact="true"] .role-navigation-list section + section { border-top:1px solid #e4e7ec; padding-top:10px; }
@@ -38,6 +39,6 @@
 /* The grid track remains compact while its rail temporarily covers content. */
 @media (min-width:701px) {
   :is(.admin-shell-layout, .office-shell, .mechanic-role-shell, .surveillance-role-shell):has(> .role-navigation-rail[data-compact="true"]),
-  :is(.admin-shell-layout, .office-shell, .mechanic-role-shell, .surveillance-role-shell):has(> .role-navigation-rail[data-tablet="true"]) { grid-template-columns:68px minmax(0, 1fr); }
+  :is(.admin-shell-layout, .office-shell, .mechanic-role-shell, .surveillance-role-shell):has(> .role-navigation-rail[data-tablet="true"]) { grid-template-columns:104px minmax(0, 1fr); }
 }
 @media (max-width:700px) { .role-navigation-rail { display:none; } }

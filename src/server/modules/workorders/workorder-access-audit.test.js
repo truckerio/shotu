@@ -21,7 +21,11 @@ test("workorder access audit is append-only and included in the shared timeline"
 });
 
 test("Work done transport allows server-side completion resolution", () => {
-  assert.equal(markDoneSchema.safeParse({}).success, true);
+  assert.deepEqual(markDoneSchema.parse({}), {
+    diagnosis: "",
+    workPerformed: "",
+    confirmPartsInstalled: false,
+  });
   assert.equal(markDoneSchema.safeParse({ diagnosis: "Checked brakes", workPerformed: "" }).success, true);
   assert.equal(markDoneSchema.safeParse({
     diagnosis: "Checked brakes",
@@ -31,5 +35,7 @@ test("Work done transport allows server-side completion resolution", () => {
     diagnosis: "",
     workPerformed: "Replaced brake pads",
     confirmationName: "Mechanic Demo 1",
+    confirmPartsInstalled: true,
   }).success, true);
+  assert.equal(markDoneSchema.safeParse({ confirmPartsInstalled: "yes" }).success, false);
 });

@@ -17,7 +17,8 @@ import "./admin.css";
 
 function requestedInventorySection(search = "") {
   const section = new URLSearchParams(search).get("inventorySection");
-  return ["stock", "inbound", "purchases", "tasks", "reports"].includes(section) ? section : "stock";
+  if (section === "inbound") return "purchases";
+  return ["stock", "purchases", "tasks", "reports"].includes(section) ? section : "stock";
 }
 
 export function AdminWorkspace({
@@ -130,6 +131,7 @@ export function AdminWorkspace({
   }
 
   function changeInventorySection(nextSection) {
+    nextSection = nextSection === "inbound" ? "purchases" : nextSection;
     setView("inventory");
     setSelectedId(null);
     setDetail(null);

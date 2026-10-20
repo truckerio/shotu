@@ -1,0 +1,16 @@
+.set-rates-overlay { align-items: center; background: rgb(16 24 40 / 54%); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 1000; }
+.set-rates-modal { max-height: min(640px, calc(100dvh - 40px)); max-width: 480px; outline: none; overflow-y: auto; width: 100%; }
+.set-rates-dialog { background: #fff; border: 1px solid #d0d5dd; border-radius: 10px; box-shadow: 0 20px 32px -8px rgb(16 24 40 / 18%); outline: none; padding: 22px; }
+.set-rates-dialog h2 { color: #182230; font-size: 20px; line-height: 1.25; margin: 0; }
+.set-rates-subject { color: #344054; margin: 8px 0 0; overflow-wrap: anywhere; }
+.set-rates-scope, .set-rates-source, .set-rates-help { color: #667085; font-size: 13px; margin: 4px 0 0; }
+.set-rates-dialog form { display: grid; gap: 14px; margin-top: 20px; }
+.set-rates-dialog label { color: #344054; display: grid; font-size: 13px; font-weight: 400; gap: 5px; min-width: 0; }
+.set-rates-dialog input { border: 1px solid #98a2b3; border-radius: 8px; box-sizing: border-box; color: #101828; font: inherit; min-height: 44px; padding: 9px 11px; width: 100%; }
+.set-rates-dialog .dropdown-select-trigger { min-height: 44px; }
+.set-rates-dialog input:focus-visible { outline: 3px solid #84caff; outline-offset: 1px; }
+.set-rates-error { color: #b42318; margin: 10px 0 0; }
+.set-rates-error p { margin: 0 0 8px; }
+.set-rates-dialog footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.set-rates-dialog footer .button { min-height: 44px; }
+@media (max-width: 520px) { .set-rates-overlay { align-items: flex-end; padding: 0; } .set-rates-modal { max-height: calc(100dvh - 16px); max-width: none; } .set-rates-dialog { border-radius: 12px 12px 0 0; padding: 20px 16px; } .set-rates-dialog footer .button { flex: 1; } }

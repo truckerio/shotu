@@ -100,11 +100,11 @@ export async function readCreatePricing(input, transactionClient = null) {
       const policy = (await client.query(`select * from inventory_part_selling_policy_versions
         where company_id=$1 and catalog_part_id=$3 and (location_id is null or location_id=$2)
         order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
+      const configured = (await client.query(`select * from inventory_part_price_versions
+        where company_id=$1 and catalog_part_id=$3 and price_kind='internal'
+          and (location_id is null or location_id=$2)
+        order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
       if (catalog?.tracking_mode === "no_stock") {
-        const configured = (await client.query(`select * from inventory_part_price_versions
-          where company_id=$1 and catalog_part_id=$3 and price_kind='internal'
-            and (location_id is null or location_id=$2)
-          order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
         const unitChanged = catalog.uom_code !== (part.uomCode || "ea");
         const noStockPrice = (selection, source, sourceId) => {
           try {
@@ -220,6 +220,19 @@ export async function readCreatePricing(input, transactionClient = null) {
             return [priceSelection, { status: "incomplete", price: null, reason: error.message }];
           }
         }));
+        try {
+          if (configured?.amount === null || configured?.amount === undefined || !configured.currency) {
+            throw new Error("Configure an internal cost for this item.");
+          }
+          const unitPrice = fixed(scaled(configured.amount, 4));
+          options.internal_cost = { status: "known", price: {
+            selection: "internal_cost", quantity: String(part.qty), uomCode: catalog.uom_code,
+            unitPrice, totalPrice: fixed(divide(scaled(unitPrice, 4) * scaled(part.qty, 3), 1000n)),
+            currency: configured.currency, configuredPriceVersionId: configured.id, allocations: [],
+          } };
+        } catch (error) {
+          options.internal_cost = { status: "incomplete", price: null, reason: error.message };
+        }
         const selectedOption = selected ? options[selection.selection] : null;
         if (!selected) parts.push({ partIndex, status: "unselected", price: null, options });
         else if (selectedOption?.status === "known") parts.push({

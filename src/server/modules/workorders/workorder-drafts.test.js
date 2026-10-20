@@ -307,7 +307,7 @@ test("mixed memberships partition draft visibility and exception authority by co
   await takeoverUserWorkorderDraft(mixed, draftId, { version: 2 }, {
     takeover: async (scope) => { takeoverScope = scope; return { id: draftId }; },
   });
-  assert.deepEqual(takeoverScope.companyIds, [companyId]);
+  assert.deepEqual(takeoverScope.companyIds, [companyId, companyB]);
   assert.deepEqual(takeoverScope.adminCompanyIds, [companyId]);
 });
 
@@ -340,10 +340,13 @@ test("takeover is atomic at the service boundary and mechanics remain forbidden"
   });
   assert.equal(draft.ownerId, nextOwnerId);
   assert.equal(received.version, 4);
-  await assert.rejects(
-    takeoverUserWorkorderDraft(context("office"), draftId, { version: 4 }, { takeover: async () => ({}) }),
-    (error) => error.statusCode === 403 && error.code === "PERMISSION_DENIED",
-  );
+  let officeScope;
+  await takeoverUserWorkorderDraft(context("office"), draftId, { version: 4 }, {
+    takeover: async (input) => { officeScope = input; return { id: draftId }; },
+  });
+  assert.deepEqual(officeScope.adminCompanyIds, []);
+  assert.deepEqual(officeScope.locationIds, [locationId]);
+  assert.equal(officeScope.role, "office");
   await assert.rejects(
     takeoverUserWorkorderDraft(context("mechanic"), draftId, { version: 4 }, { takeover: async () => ({}) }),
     (error) => error.statusCode === 403 && error.code === "PERMISSION_DENIED",

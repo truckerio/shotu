@@ -66,6 +66,11 @@
 .inventory-commercial-pricing-history { border-top: 1px solid var(--border-secondary, #d5d9de); }
 .inventory-commercial-pricing-history > .inventory-commercial-editors { padding: 8px 0 4px; }
 .inventory-commercial-pricing-history h4 { margin: 0; color: #344054; font-size: 13px; }
+.inventory-configured-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: center; gap: 12px; padding: 12px 0; min-width: 0; }
+.inventory-configured-rates > div { display: grid; gap: 2px; min-width: 0; }
+.inventory-configured-rates span, .inventory-configured-rates small { color: #667085; font-size: 12px; font-weight: 400; }
+.inventory-configured-rates strong { overflow-wrap: anywhere; color: #101828; font-size: 14px; font-weight: 400; }
+.inventory-configured-rates > .button { min-height: 44px; white-space: nowrap; }
 .inventory-batch-list { display: grid; gap: 0; min-width: 0; }
 .inventory-batch-list > header { display: flex; align-items: center; min-height: 44px; }
 .inventory-batch-list h3 { margin: 0; color: #101828; font-size: 15px; }
@@ -124,6 +129,8 @@
 .inventory-no-stock-cost-editor p { color: #b42318; }
 .inventory-no-stock-cost-editor .inventory-commercial-price-fields { grid-template-columns: minmax(120px, 1fr) minmax(120px, .7fr) minmax(180px, 1.5fr) auto; }
 @media (max-width: 640px) {
+  .inventory-configured-rates { grid-template-columns: 1fr 1fr; }
+  .inventory-configured-rates > .button { grid-column: 1 / -1; width: 100%; }
   .inventory-no-stock-price-summary, .inventory-no-stock-cost-editor .inventory-commercial-price-fields { grid-template-columns: 1fr; }
   .inventory-no-stock-cost-editor .inventory-commercial-price-fields > .button { grid-column: auto; grid-row: auto; width: 100%; }
   .inventory-commercial-price-fields { grid-template-columns: minmax(0, 1fr) minmax(120px, .7fr); }

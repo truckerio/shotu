@@ -347,6 +347,7 @@ export function useOfficeWorkorderActions({
     event?.preventDefault?.();
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId || !isOfficeDetail) return false;
+    if (activeWorkorder.allowedActions?.update && !await saveOfficeWorkorder({ automatic: true })) return false;
     setOfficeDetailState({ busy: true, message: "" });
     try {
       await runOfficeWorkorderAction({
@@ -365,6 +366,7 @@ export function useOfficeWorkorderActions({
       return false;
     }
   }, [
+    activeWorkorder?.allowedActions?.update,
     activeWorkorder?.workorder?.id,
     isOfficeDetail,
     officeCloseNote,
@@ -373,9 +375,10 @@ export function useOfficeWorkorderActions({
     setOfficeCloseNote,
     setOfficeCloseOpen,
     setOfficeDetailState,
+    saveOfficeWorkorder,
   ]);
 
-  const markOfficeWorkorderDone = useCallback(async () => {
+  const markOfficeWorkorderDone = useCallback(async ({ confirmPartsInstalled = false } = {}) => {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId || !isOfficeDetail) return false;
     setOfficeDetailState({ busy: true, message: "" });
@@ -385,6 +388,7 @@ export function useOfficeWorkorderActions({
         workorderId,
         action: "mark-done",
         body: {
+          ...(confirmPartsInstalled ? { confirmPartsInstalled: true } : {}),
           diagnosis: form.diagnosis || "",
           workPerformed: resolveWorkPerformed(form),
         },

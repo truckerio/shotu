@@ -81,14 +81,16 @@ function catalogPartSelection(part, catalogPart) {
   };
 }
 
-function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationId, locale, maxSelected, onCommit, onPartChange, onClose, part }) {
+function SerializedSelectionDropdown({ canViewPrices, loadPricingPreview, active, excludedUnitIds, index, locationId, locale, maxSelected, onCommit, onPartChange, onClose, part }) {
   if (part.trackingMode === "no_stock") return null;
   if (!createPartRequiresSerializedUnits(part)) return active && part.catalogPartId
-    ? <CreateStockDropdown locationId={locationId} part={part} onChange={(patch) => onPartChange(index, patch)} onClose={onClose} /> : null;
+    ? <CreateStockDropdown canViewPrices={canViewPrices} loadPricingPreview={loadPricingPreview} locationId={locationId} part={part} onChange={(patch) => onPartChange(index, patch)} onClose={onClose} /> : null;
   return (
     <>
       {serializedPartSummary(part, locale) ? <small className="create-part-serial-summary">{serializedPartSummary(part, locale)}</small> : null}
       <CreateSerializedUnitPicker
+        canViewPrices={canViewPrices}
+        loadPricingPreview={loadPricingPreview}
         excludedUnitIds={excludedUnitIds}
         locationId={locationId}
         locale={locale}
@@ -144,8 +146,9 @@ function LegacyCreatePartsEditor({
           [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("create.parts.repairOrder"),
           [WORKORDER_PARTS_COLUMNS.PRICE]: "Price",
         }}
+        laborAction={<IconButton className="create-part-remove-icon" icon={Trash01} tone="danger" label="Remove labor selection" onClick={() => onLaborProductChange?.(null)} disabled={!onLaborProductChange || !laborProduct} />}
         laborProduct={<div className="operational-part-labor-name">{onLaborProductChange
-            ? <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} />
+            ? <LaborProductSelector canViewPrices={canViewPrices} locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} />
             : <strong>{laborLabel}</strong>}</div>}
         laborQuantity={<QuantityUnitInput
             id="create-workorder-labor-hours"
@@ -168,6 +171,7 @@ function LegacyCreatePartsEditor({
             placeholder={t("create.parts.repairWork")}
           />}
         laborPrice={canViewPrices ? <CreateLaborPriceCell
+            productId={laborProduct?.productId} locationId={locationId} laborLabel={laborLabel} onRatesSaved={pricing?.refresh}
             uomCode={laborUomCode}
             selection={laborPriceSelection}
             customUnitPrice={laborCustomUnitPrice}
@@ -210,6 +214,8 @@ function LegacyCreatePartsEditor({
               inputPolicy="identifier"
               locale={locale}
             /><SerializedSelectionDropdown
+              canViewPrices={canViewPrices}
+              loadPricingPreview={(patch) => pricing?.previewPartSelection?.(part, patch)}
               active={serialPickerIndex === index}
               excludedUnitIds={serializedUnitIdsOutsidePart(parts, index)}
               index={index}
@@ -234,6 +240,7 @@ function LegacyCreatePartsEditor({
               <input {...textEntryProps("narrative")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
             </PartRepairOrderField>
             {canViewPrices ? <CreatePartPriceCell
+              catalogPartId={part.catalogPartId} partLabel={part.partNo} locationId={locationId} uomCode={part.uomCode} onRatesSaved={pricing?.refresh}
               customUnitPrice={part.customUnitPrice}
               eligible={partHasExactInventorySource(part)}
               trackingMode={part.trackingMode}
@@ -500,6 +507,8 @@ export function CreatePartsModule({
             inputPolicy="identifier"
             locale={locale}
           /><SerializedSelectionDropdown
+            canViewPrices={canViewPrices}
+            loadPricingPreview={(patch) => pricing?.previewPartSelection?.(part, patch)}
             active={serialPickerIndex === index}
             excludedUnitIds={serializedUnitIdsOutsidePart(parts, index)}
             index={index}
@@ -544,6 +553,7 @@ export function CreatePartsModule({
             </PartRepairOrderField>
           </div>
           {canViewPrices ? <CreatePartPriceCell
+              catalogPartId={part.catalogPartId} partLabel={part.partNo} locationId={locationId} uomCode={part.uomCode} onRatesSaved={pricing?.refresh}
             customUnitPrice={part.customUnitPrice}
             eligible={partHasExactInventorySource(part)}
             trackingMode={part.trackingMode}
@@ -603,10 +613,11 @@ export function CreatePartsModule({
               <div className="create-labor-editor">
                 <div className="create-labor-editor-header">
                   <strong>{laborLabel}</strong>
+                  <IconButton icon={Trash01} tone="danger" label="Remove labor selection" onClick={() => onLaborProductChange?.(null)} disabled={!onLaborProductChange || !laborProduct} />
                   <button type="button" onClick={() => setLaborOpen(false)}>{t("common.done")}</button>
                 </div>
                 <div className="create-labor-editor-fields">
-                  {onLaborProductChange ? <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} /> : null}
+                  {onLaborProductChange ? <LaborProductSelector canViewPrices={canViewPrices} locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} /> : null}
                   <QuantityUnitInput
                     id="create-workorder-labor-hours"
                     quantity={laborHours}
@@ -629,6 +640,7 @@ export function CreatePartsModule({
                     />
                   </label>
                   {canViewPrices ? <CreateLaborPriceCell
+            productId={laborProduct?.productId} locationId={locationId} laborLabel={laborLabel} onRatesSaved={pricing?.refresh}
                     uomCode={laborUomCode}
                     selection={laborPriceSelection}
                     customUnitPrice={laborCustomUnitPrice}

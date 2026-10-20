@@ -13,7 +13,7 @@ function fail(code, message, statusCode = 409) {
 }
 
 function financialActor(context) {
-  if (!["office", "admin"].includes(context.actor.role)) {
+  if (!["office", "admin"].includes(context.actor.role) || context.sessionMode === "kiosk") {
     fail("WORKORDER_LABOR_PRICE_FORBIDDEN", "Only Office or Admin may manage labor prices.", 403);
   }
 }
@@ -68,6 +68,7 @@ export async function selectWorkorderLaborPrice(workorderId, input, context, dep
   const command = {
     workorderId,
     selection: input.selection,
+    ...(input.customUnitPrice !== undefined ? { customUnitPrice: input.customUnitPrice } : {}),
     expectedRateVersionId: input.expectedRateVersionId || null,
     reason: input.reason,
   };

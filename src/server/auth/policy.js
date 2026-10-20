@@ -19,7 +19,7 @@ export function permissionForRequest(method, pathname) {
     return method === "GET" ? PERMISSION.CUSTOMER_DOCUMENT_READ : PERMISSION.CUSTOMER_DOCUMENT_WRITE;
   }
   if (pathname === "/api/customers" || pathname.startsWith("/api/customers/")) {
-    return PERMISSION.WORKORDER_OFFICE;
+    return method === "GET" ? PERMISSION.AUTHENTICATED : PERMISSION.WORKORDER_OFFICE;
   }
   if (pathname.startsWith("/api/mechanic/chat-media/") && method === "GET") return PERMISSION.WORKORDER_CHAT_READ;
   if (pathname.startsWith("/api/mechanic/")) return PERMISSION.WORKORDER_MECHANIC;

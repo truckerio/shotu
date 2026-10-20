@@ -97,3 +97,34 @@ test("create pricing preview is create-only, debounced, cancellable, and latest-
   assert.match(commands, /createPricing\?\.refresh\?\.\(\)/);
   assert.match(commands, /pricing: createPricing\.submitPricing/);
 });
+
+test("picker preview expands exact serialized units without sending custom prices or unrelated reservations", async () => {
+  const { createPartSelectionPreviewRequest } = await import("./create-workorder-pricing.js");
+  const request = createPartSelectionPreviewRequest({ companyId: "company", locationId: "shop", inventoryUnitSelections: [{ partIndex: 0, unitIds: ["unrelated"] }], formData: { laborHours: "5", parts: [] }, pricing: { labor: { selection: "selling_price" } } },
+    { catalogPartId: "pump", partNo: "PUMP", trackingMode: "serialized", uomCode: "ea", customUnitPrice: "999" },
+    { serializedUnitIds: ["unit-a", "unit-b"], serializedSerialNumbers: ["A", "B"], qty: "2" });
+  assert.deepEqual(request.inventoryUnitSelections, [
+    { partIndex: 0, catalogPartId: "pump", unitIds: ["unit-a"] },
+    { partIndex: 1, catalogPartId: "pump", unitIds: ["unit-b"] },
+  ]);
+  assert.deepEqual(request.formData.parts.map((part) => part.qty), ["1", "1"]);
+  assert.equal(request.formData.laborHours, "");
+  assert.deepEqual(request.pricing, { parts: [] });
+  assert.equal(JSON.stringify(request).includes("999"), false);
+});
+
+test("picker totals use exact server totals and reject unknown or mixed-currency units", async () => {
+  const { combinePartSelectionPreview } = await import("./create-workorder-pricing.js");
+  const row = (amount, currency = "USD") => ({ options: { batch_cost: { status: "known", price: { unitPrice: amount, totalPrice: amount, currency } } } });
+  const combined = combinePartSelectionPreview({ fingerprint: "fresh", parts: [row("0.1000"), row("0.2000")] });
+  assert.equal(combined.options.batch_cost.price.totalPrice, "0.3000");
+  assert.equal(combined.options.batch_cost.price.unitPrice, "0.1500");
+  assert.equal(combined.fingerprint, "fresh");
+  assert.equal(combinePartSelectionPreview({ parts: [row("1"), row("2", "CAD")] }).options.batch_cost.status, "incomplete");
+  assert.equal(combinePartSelectionPreview({ parts: [row("1"), { options: {} }] }).options.batch_cost.status, "incomplete");
+});
+
+test("physical rows retain configured internal pricing separately from batch selection", () => {
+  const payload = { formData: { parts: [{ catalogPartId: "physical", trackingMode: "quantity" }] }, pricing: { parts: [{ partIndex: 0, selection: "internal_cost" }] } };
+  assert.deepEqual(createPricingPreferences(payload).parts, [{ partIndex: 0, selection: "internal_cost" }]);
+});

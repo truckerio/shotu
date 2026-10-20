@@ -59,15 +59,16 @@ function requestedInventoryPageTitle(search = "") {
   if (params.get("view") === "invoices" || params.has("invoiceRun") || params.get("inventoryAction") === "upload-invoice") return "Invoice intake";
   if (params.has("countImport") || params.get("inventoryAction") === "count") return "Starting inventory";
   const section = params.get("inventorySection") || "stock";
-  return { stock: "Stock", inbound: "Inbound", purchases: "Purchasing", tasks: "Tasks", reports: "Reports" }[section] || "Stock";
+  return { stock: "Stock", inbound: "Purchasing", purchases: "Purchasing", tasks: "Tasks", reports: "Reports" }[section] || "Stock";
 }
 
 function requestedInventorySection(search = "") {
   const requested = new URLSearchParams(search).get("inventorySection");
-  return ["stock", "inbound", "purchases", "tasks", "reports"].includes(requested) ? requested : "stock";
+  if (requested === "inbound") return "purchases";
+  return ["stock", "purchases", "tasks", "reports"].includes(requested) ? requested : "stock";
 }
 
-const INVENTORY_ROUTE_PARAMS = ["inventorySection", "invoiceRun", "inventoryAction", "countImport", "purchaseOrderId", "purchaseOrderNumber", "taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"];
+const INVENTORY_ROUTE_PARAMS = ["inventorySection", "invoiceRun", "inventoryAction", "countImport", "purchaseOrderId", "purchaseOrderNumber", "taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "approvalId", "stockMode", "stockAction", "queueTaskType", "queueTaskId", "queueTaskLocation"];
 
 function buildOfficeRows(dashboard) {
   if (!dashboard) return [];
@@ -375,7 +376,7 @@ export function OfficeWorkspace({
     <RoleNavigationRail actor={actor} ariaLabel="Office workspace" activeId={activeTab === "customers" ? "customers" : activeTab === "inventory" ? `inventory-${inventorySection}` : activeTab === "units" ? "units" : product}
       groups={[
         { id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "customers", label: "Customers", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] },
-        { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-inbound", label: "Inbound", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: Package }, { id: "inventory-tasks", label: "Tasks", icon: Package }, { id: "inventory-reports", label: "Reports", icon: Package }] },
+        { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: Package }, { id: "inventory-tasks", label: "Tasks", icon: Package }, { id: "inventory-reports", label: "Reports", icon: Package }] },
       ]}
       items={[{ id: "units", label: "Units", variant: "parent" }]}
       onNavigate={(id) => id === "workorders" || id === "inspections" ? selectOperationsProduct(id) : id === "customers" ? selectWorkspace("customers") : id === "units" ? selectWorkspace("units") : selectInventorySection(id.replace("inventory-", ""))}

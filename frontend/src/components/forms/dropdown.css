@@ -174,3 +174,22 @@
     min-height: 44px;
   }
 }
+
+.dropdown-select-option-label { min-width: 0; overflow-wrap: anywhere; }
+.dropdown-select-option-description {
+  color: inherit;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+}
+.dropdown-select-popover.is-priced .dropdown-select-option[data-selected] {
+  background: #eff8ff;
+  color: #175cd3;
+  font-weight: 500;
+}
+.dropdown-select-popover.is-priced .dropdown-select-option[data-focus-visible] {
+  outline: 2px solid #1570ef;
+  outline-offset: -2px;
+}

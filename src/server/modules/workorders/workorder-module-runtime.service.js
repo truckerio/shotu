@@ -1,3 +1,6 @@
+import { canViewWorkorderPrices } from "../../../../shared/workorder-pricing-access.js";
+import { listCustomers } from "../customers/customer-directory.service.js";
+import { createWorkorderDraft } from "../../db/repositories/workorder-drafts.repo.js";
 import { AuthError, invalidRequest, permissionDenied } from "../../auth/errors.js";
 import { readCreatePricing } from "../../db/repositories/workorder-create-pricing.repo.js";
 import { isDeepStrictEqual } from "node:util";
@@ -65,7 +68,7 @@ import {
   reserveMeasuredUsageForWorkorder,
 } from "../inventory/inventory-aggregate-workorder.service.js";
 import { listAggregateWorkorderUsages } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
-import { selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
+import { previewWorkorderPartPricing, selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
 import { listWorkorderNoStockPartPrices } from "../../db/repositories/workorder-part-pricing.repo.js";
 import {
   reviseWorkorderLaborRate,
@@ -159,7 +162,7 @@ export async function projectLoadedProtectedWorkorderDetail(
   dependencies = {},
 ) {
   const enriched = await withInstalledSerializedParts(detail, decisions, dependencies);
-  if (["office", "admin"].includes(options.viewerRole)
+  if (canViewWorkorderPrices(options.viewerRole)
     && decisions?.diagnosisRepair
     && decisions.diagnosisRepair.access !== "hidden") {
     const readLaborPricing = dependencies.readLaborPricing || readWorkorderLaborPricing;
@@ -485,6 +488,11 @@ export async function runWorkorderModuleAction(
         workorderId, input, context, { ...dependencies, authorizedWorkorder: authorization.workorder },
       );
     }
+    if (action === "record" && input.operation === "partPricingPreview") {
+      return (dependencies.previewPartPricing || previewWorkorderPartPricing)(
+        workorderId, input, context, { ...dependencies, authorizedWorkorder: authorization.workorder },
+      );
+    }
     if (["approve", "decline"].includes(action)) {
       const decision = action === "approve" ? "approved" : (input.decision === "needs_info" ? "needs_info" : "rejected");
       return (dependencies.reviewPart || reviewOfficePartRequest)(workorderId, input.requestId, {
@@ -539,6 +547,38 @@ export async function readWorkorderModuleRuntime(context, workorderId, moduleKey
 
 export async function readWorkorderUnitHistory(context, workorderId, input = {}, dependencies = {}) {
   return (dependencies.readHistory || readUnitServiceHistory)(context, workorderId, input, dependencies);
+}
+
+export async function createMechanicCustomerIntake(context, input, rawInput = input, dependencies = {}) {
+  context = effectiveCompanyContext(context, input.companyId);
+  if (context.actor.role !== "mechanic" || input.pricing) throw permissionDenied();
+  requireCompanyAccess(context, input.companyId);
+  if (!input.locationId) throw invalidRequest("Choose a repair location.");
+  requireLocationAccess(context, input.locationId, input.companyId);
+  if (!String(input.formData?.customerCompanyName || "").trim() && !input.formData?.customerAccountId) {
+    throw invalidRequest("Select or enter a customer before sending work to Office.");
+  }
+  await (dependencies.authorizeCreate || authorizeWorkorderCreate)(context, {
+    companyId: input.companyId, locationId: input.locationId,
+    moduleKeys: workorderInputModules(rawInput, { create: true }),
+  });
+  if (input.formData?.customerAccountId) {
+    const customers = await (dependencies.listCustomers || listCustomers)(context, { companyId: input.companyId });
+    const customer = customers.find((entry) => entry.id === input.formData.customerAccountId);
+    if (!customer || (input.formData.customerContactId && !customer.contacts?.some((entry) => entry.id === input.formData.customerContactId))) {
+      throw invalidRequest("The selected customer or contact is unavailable. Select a current customer.");
+    }
+  } else if (input.formData?.customerContactId) throw invalidRequest("Select a customer before selecting a contact.");
+  const { customerDocumentAdjustments, customerDocumentAdjustmentBaseRevisionId, ...formData } = input.formData || {};
+  // Intake records work only. Office resolves pricing, customer identity and approval.
+  const draft = await (dependencies.createDraft || createWorkorderDraft)({
+    companyId: input.companyId, locationId: input.locationId, userId: context.actor.id,
+    authorizationClassification: "required_external_customer",
+    payload: { ...input, formData, mechanicUserIds: [context.actor.id],
+      authorizationClassification: "required_external_customer", authorizationExceptionReason: null,
+      intakeSource: "mechanic_customer" },
+  });
+  return draft;
 }
 
 export async function createWorkorderRuntime(context, input, rawInput = input, dependencies = {}) {

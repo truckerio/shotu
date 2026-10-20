@@ -1,7 +1,7 @@
 import { Button } from "../../ui/Button.jsx";
 import { Checkbox } from "../../ui/Checkbox.jsx";
 import { normalizeLocale } from "../../../i18n/index.js";
-import { isEligibleSerializedUnit } from "./workorder-serialized-part-selection.js";
+import { formatPriceAmount, isEligibleSerializedUnit, knownPriceOption } from "./workorder-serialized-part-selection.js";
 import "./serialized-unit-child-picker.css";
 
 const TEXT = {
@@ -28,7 +28,10 @@ export function SerializedUnitChildPicker({
   maxSelected = 18,
   onSelectionChange,
   partNumber = "",
+  pricePreviewsByUnitId = {},
+  priceSelection = "",
   selectedUnitIds = [],
+  showPrices = false,
   units = [],
 }) {
   const text = TEXT[normalizeLocale(locale)] || TEXT.en;
@@ -64,6 +67,7 @@ export function SerializedUnitChildPicker({
         {units.map((unit) => {
           const checked = selected.has(unit.id);
           const eligible = isEligibleSerializedUnit(unit);
+          const priceOption = knownPriceOption(pricePreviewsByUnitId?.[unit.id]?.options || unit?.pricing?.options, priceSelection || "batch_cost");
           return (
             <label key={unit.id} className={checked ? "is-selected" : ""}>
               <Checkbox
@@ -83,7 +87,11 @@ export function SerializedUnitChildPicker({
                 </span>
                 <small>{[unit.status === "in_stock" ? text.stock : unit.status, holderLabel(unit)].filter(Boolean).join(" · ")}</small>
               </span>
-              {partNumber ? <small className="serialized-unit-child-part">{partNumber}</small> : null}
+              {showPrices ? (
+                <small className={`serialized-unit-child-price${priceOption ? "" : " is-missing"}`}>
+                  {priceOption ? formatPriceAmount(priceOption.price, locale) : "Missing price"}
+                </small>
+              ) : partNumber ? <small className="serialized-unit-child-part">{partNumber}</small> : null}
             </label>
           );
         })}

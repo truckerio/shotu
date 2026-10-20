@@ -38,6 +38,7 @@ function mapSelectedDelivery(value) {
   const short = Number(value.delivery_short_quantity || 0);
   return {
     id: value.delivery_id,
+    invoiceRunId: value.invoice_run_id || null,
     status: value.delivery_status,
     reference: value.delivery_reference || '',
     notes: value.delivery_notes || '',

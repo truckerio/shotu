@@ -11,6 +11,7 @@ export function UsedPartsSection({
   locationId,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  laborLogContent = null,
   installedParts,
   onLaborHoursChange,
   onLaborProductChange,
@@ -43,6 +44,7 @@ export function UsedPartsSection({
         locationId={locationId}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        laborLogContent={laborLogContent}
         installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborProductChange={onLaborProductChange}

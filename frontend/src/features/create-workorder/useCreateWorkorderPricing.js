@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api.js";
 import {
   createPricingPreviewRequest,
+  createPartSelectionPreviewRequest,
+  combinePartSelectionPreview,
   createPricingRequestKey,
   createPricingRequirements,
   createPricingSubmitPayload,
@@ -61,8 +63,16 @@ export function useCreateWorkorderPricing({ active = true, actorRole, payload })
   const complete = !requirements.hasPriceableRows
     || (enabled && status === "ready" && selectedPricingIsComplete(payload, state.preview));
   const refresh = useCallback(() => setRefreshVersion((version) => version + 1), []);
+  const previewPartSelection = useCallback(async (part, patch) => {
+    if (!enabled) throw new Error("Pricing is managed by Office.");
+    const result = await api("/api/workorders/create-pricing-preview", {
+      method: "POST", body: JSON.stringify(createPartSelectionPreviewRequest(payload, part, patch)),
+    });
+    return combinePartSelectionPreview(result);
+  }, [enabled, payload]);
   return {
     ...state,
+    previewPartSelection,
     status,
     enabled,
     hasSelections,

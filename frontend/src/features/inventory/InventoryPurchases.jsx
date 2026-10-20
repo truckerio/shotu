@@ -4,10 +4,11 @@ import './inventory-tables.css';
 import { Heading } from 'react-aria-components';
 import { validatePurchaseOrder } from './purchase-order-validation.js';
 import { PurchaseOrderFeedbackDialog } from './PurchaseOrderFeedbackDialog.jsx';
-import { RefreshCw01, FilterLines, XClose } from '@untitledui/icons';
+import { RefreshCw01, FilterLines, XClose, ChevronRight } from '@untitledui/icons';
 import { InventoryNeedsOrdering } from './InventoryNeedsOrdering.jsx';
 import { sendInventoryCommand,inventoryCommandCanBeEdited } from './inventory-command.js';
 import { PurchaseOrderBills } from './PurchaseOrderBills.jsx';
+import { PurchaseOrderDocument } from './PurchaseOrderDocument.jsx';
 import { useCallback,useEffect,useState,useRef,useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { useCheckpointPages } from '../../components/operations/useCheckpointPages.js';
@@ -19,56 +20,57 @@ import { OperationalDataCell,OperationalDataRow,OperationalDataTable } from '../
 import { Dropdown } from '../../components/forms/Dropdown.jsx';
 import { PartCatalogCombobox } from '../../components/workorders/part-requests/PartCatalogCombobox.jsx';
 import { UnitOfMeasurePicker } from '../../components/forms/UnitOfMeasurePicker.jsx';
-import { SecondaryDetailPanel,SecondaryDetailSection } from '../../components/ui/SecondaryDetailPanel.jsx';
+import { SecondaryDetailSection } from '../../components/ui/SecondaryDetailPanel.jsx';
 import { ReceiptLinesEditor } from '../office/ReceiptLinesEditor.jsx';
 import { receiptLinePayload } from '../office/receipt-lines-model.js';
 import { findPurchaseReceiptHandoffOrder } from './purchase-receipt-handoff.js';
-import { OperationalCollectionTabs } from '../../components/operations/OperationalCollectionPage.jsx';
+import { InventoryInboundWorkspace } from './InventoryInboundWorkspace.jsx';
+import { PurchasingSplitView } from './PurchasingSplitView.jsx';
 import './inventory-workflows.css';
 import '../office/physical-receipt-confirmation.css';
 
-const quantityLabel=value=>Number(value).toLocaleString(undefined,{maximumFractionDigits:3});
-const priceLabel=(value,currency)=>value===null?'Not specified':`${Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:4})} ${currency}`;
 const orderStatusLabel=status=>({ordered:'Ordered',partially_received:'Partially received',awaiting_approval:'Awaiting Approval',draft:'Draft',received:'Received',closed_with_discrepancy:'Closed with discrepancy',cancelled:'Cancelled'}[status]||status);
 const purchaseOrderColumns=[
- {id:'po',label:'PO',isRowHeader:true},
- {id:'supplier',label:'Supplier'},
- {id:'total',label:'Total'},
+ {id:'order',label:'Order',isRowHeader:true},
  {id:'expected',label:'Expected'},
  {id:'status',label:'Status'},
- {id:'inventory',label:'Inventory'},
- {id:'bill',label:'Bill'},
 ];
 
 export function InventoryPurchases(props) {
  const demandHandoffKey=`inventory-purchase-demand-handoff:${props.actorId}`;
  const [demandDraft,setDemandDraft]=useState(null);
- const [section,setSection]=useState(props.initialReceiptHandoff?.poId || props.initialPurchaseOrderId ? "purchase_orders" : "needs_ordering");
- useEffect(()=>{if(demandDraft||!props.locations.length)return;try{const saved=JSON.parse(localStorage.getItem(demandHandoffKey));if(saved&&props.locations.some(location=>location.id===saved.locationId)&&Array.isArray(saved.lines)&&saved.lines.length){setDemandDraft(saved);setSection('purchase_orders');}else if(saved)localStorage.removeItem(demandHandoffKey);}catch{localStorage.removeItem(demandHandoffKey);}},[demandDraft,demandHandoffKey,props.locations]);
- function startDemandOrder(lines,locationId){const handoff={lines,locationId,key:crypto.randomUUID()};localStorage.setItem(demandHandoffKey,JSON.stringify(handoff));setDemandDraft(handoff);setSection('purchase_orders');}
+ const [demandRecoveryReady,setDemandRecoveryReady]=useState(false);
+ const [receiptHandoff,setReceiptHandoff]=useState(props.initialReceiptHandoff||null);
+ useEffect(()=>{if(props.initialReceiptHandoff?.key)setReceiptHandoff(props.initialReceiptHandoff);},[props.initialReceiptHandoff]);
+ useEffect(()=>{if(!props.locations.length||demandRecoveryReady)return;try{const saved=JSON.parse(localStorage.getItem(demandHandoffKey));if(saved&&props.locations.some(location=>location.id===saved.locationId)&&Array.isArray(saved.lines)&&saved.lines.length)setDemandDraft(saved);else if(saved)localStorage.removeItem(demandHandoffKey);}catch{localStorage.removeItem(demandHandoffKey);}finally{setDemandRecoveryReady(true);}},[demandHandoffKey,demandRecoveryReady,props.locations]);
+ function startDemandOrder(lines,locationId){const handoff={lines,locationId,key:crypto.randomUUID()};localStorage.setItem(demandHandoffKey,JSON.stringify(handoff));setDemandDraft(handoff);}
  function finishDemandOrder(){localStorage.removeItem(demandHandoffKey);setDemandDraft(null);}
+ function receivePurchaseOrder(poId,locationId,poNumber){const url=new URL(window.location.href);url.searchParams.set('inventorySection','purchases');url.searchParams.set('purchaseOrderId',poId);url.searchParams.set('purchaseOrderNumber',poNumber||'');url.searchParams.set('taskLocation',locationId);url.searchParams.delete('receiptId');url.searchParams.delete('deliveryId');window.history.replaceState({},'',url);setReceiptHandoff({poId,locationId,poNumber,key:crypto.randomUUID()});}
+ function consumeReceiptHandoff(key){setReceiptHandoff(current=>current?.key===key?null:current);props.onReceiptHandoffConsumed?.(key);}
  return <section className="inventory-workflows inventory-purchases-shell">
-   <OperationalCollectionTabs ariaLabel="Purchases views" activeId={section} onChange={setSection} items={[
-     {id:'needs_ordering',label:'Needs ordering'},
-     {id:'purchase_orders',label:'Purchase orders'},
-   ]}/>
-   {section==='needs_ordering'?<InventoryNeedsOrdering {...props} onCreateOrder={startDemandOrder}/>:null}
-   {section==='purchase_orders'?<PurchaseOrders {...props} key={demandDraft?.key||'purchase-orders'} initialDraftLines={demandDraft?.lines||[]} initialLocationId={props.initialReceiptHandoff?.locationId||demandDraft?.locationId||(props.initialPurchaseOrderId&&props.initialPurchaseLocationId)||''} demandDraftId={demandDraft?.key||''} onDemandOrderFinished={finishDemandOrder}/>:null}
+   {demandRecoveryReady?<PurchaseOrders {...props} initialReceiptHandoff={receiptHandoff} onReceiptHandoffConsumed={consumeReceiptHandoff} onReceivePurchaseOrder={receivePurchaseOrder} initialDraftLines={demandDraft?.lines||[]} initialLocationId={receiptHandoff?.locationId||demandDraft?.locationId||props.initialLocationId||(props.initialPurchaseOrderId&&props.initialPurchaseLocationId)||props.initialInboundLocationId||''} demandDraftId={demandDraft?.key||''} onDemandOrderFinished={finishDemandOrder} onCreateDemandOrder={startDemandOrder}/>:<p role="status">Loading purchasing…</p>}
  </section>;
 }
 
-function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,initialReceiptHandoff=null,onReceiptHandoffConsumed,initialPurchaseOrderId='',initialPurchaseOrderNumber='',initialDraftLines=[],initialLocationId='',demandDraftId='',onDemandOrderFinished}) {
+function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,onLocationChange,onReceivePurchaseOrder,initialReceiptHandoff=null,onReceiptHandoffConsumed,initialPurchaseOrderId='',initialPurchaseOrderNumber='',initialDraftLines=[],initialLocationId='',initialInboundSource=null,initialInboundOpen=false,demandDraftId='',onDemandOrderFinished,onCreateDemandOrder}) {
  const [receiptOrder,setReceiptOrder]=useState(null),[receiptLines,setReceiptLines]=useState([]),[receiptReady,setReceiptReady]=useState(false),[receiptReference,setReceiptReference]=useState('');
  const [receiptPositions,setReceiptPositions]=useState([]),[receiptPositionsLoading,setReceiptPositionsLoading]=useState(false),[receiptPositionsError,setReceiptPositionsError]=useState(''),[receiptPositionsReload,setReceiptPositionsReload]=useState(0);
  const receiptKeyRef=useRef('');
  const consumedReceiptHandoffKeyRef=useRef('');
+ const preparedReceiptHandoffKeyRef=useRef('');
  const [billUploadRequested,setBillUploadRequested]=useState(false);
  const [filtersOpen,setFiltersOpen]=useState(false);
  const [orderStatus,setOrderStatus]=useState('all'),[supplierFilter,setSupplierFilter]=useState(''),[searchFilter,setSearchFilter]=useState(initialReceiptHandoff?.poNumber||initialPurchaseOrderNumber);
- const showOrders=true;
  const [locationId,setLocationId]=useState(()=>locations.some(location=>location.id===initialLocationId)?initialLocationId:locations[0]?.id||'');
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
  const [selected,setSelected]=useState(null),[creating,setCreating]=useState(initialDraftLines.length>0);
+ const [linkedInbound,setLinkedInbound]=useState({poId:'',key:0});
+ const [inboundClearKey,setInboundClearKey]=useState(0);
+ const [pairedOrderState,setPairedOrderState]=useState(null);
+ const pairedOrderRequestRef=useRef(0);
+ const consumedInitialOrderRef=useRef('');
+ const selectedOrderRef=useRef(selected);
+ selectedOrderRef.current=selected;
  const [supplierOpen,setSupplierOpen]=useState(false),[supplierName,setSupplierName]=useState(''),[contact,setContact]=useState('');
  const [draft,setDraft]=useState({supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''}),[query,setQuery]=useState(''),[part,setPart]=useState(null),[amount,setAmount]=useState('1'),[price,setPrice]=useState(''),[reason,setReason]=useState('');
  const demandBacked=initialDraftLines.length>0&&!draft.orderId;
@@ -86,6 +88,12 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(draftStorageKey));setDraft(saved||{supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''});}catch{setDraft({supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''});}if(initialDraftLines.length)setCreating(true);setDraftReady(draftStorageKey);},[draftStorageKey]);
  useEffect(()=>{if(draftReady===draftStorageKey)try{localStorage.setItem(draftStorageKey,JSON.stringify(draft));}catch{setError('Draft storage is unavailable.');}},[draft,draftReady,draftStorageKey]);
  useEffect(()=>{if(!locationId&&locations.length)setLocationId(locations.some(location=>location.id===initialLocationId)?initialLocationId:locations[0].id);},[locations,locationId,initialLocationId]);
+ useEffect(()=>{
+   if(!initialReceiptHandoff?.key||preparedReceiptHandoffKeyRef.current===initialReceiptHandoff.key)return;
+   preparedReceiptHandoffKeyRef.current=initialReceiptHandoff.key;
+   if(locations.some(location=>location.id===initialReceiptHandoff.locationId)){setLocationId(initialReceiptHandoff.locationId);onLocationChange?.(initialReceiptHandoff.locationId,{preserveSource:true,preservePurchaseOrder:true});}
+   setOrderStatus('all');setSupplierFilter('');setSearchFilter(initialReceiptHandoff.poNumber||'');
+ },[initialReceiptHandoff,locations,onLocationChange]);
  useEffect(()=>{setSelected(null);try{setPending(JSON.parse(localStorage.getItem(storageKey)));}catch{setPending(null);}},[storageKey]);
  const purchasingQueryKey=useMemo(()=>JSON.stringify({locationId,view,orderStatus,supplierFilter,searchFilter}),[locationId,view,orderStatus,supplierFilter,searchFilter]);
  const fetchPurchasingPage=useCallback(async(page,{signal})=>{
@@ -113,7 +121,7 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
    const timer=window.setInterval(refreshPurchases,3000);
    return()=>{window.removeEventListener('focus',refreshPurchases);window.clearInterval(timer);};
  },[]);
- async function command(body){
+ async function command(body,{inlineError=false}={}){
    if(busy)return;setBusy(true);setError('');
    const request=pending||{...body,locationId,idempotencyKey:crypto.randomUUID()};
    try{
@@ -121,8 +129,9 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
      const result=await sendInventoryCommand({request,recover:!!pending,url:'/api/office/inventory/purchasing'});
      localStorage.removeItem(storageKey);setPending(null);setRefresh(x=>x+1);
      if(result.supplier){setDraft(d=>({...d,supplierId:result.supplier.id}));setSupplierOpen(false);setSupplierName('');setContact('');}
-     if(result.order){setOrderStatus('all');setSupplierFilter('');setSearchFilter('');void purchaseQueue.jumpTo(1);setSelected(request.action==='receive'?null:result.order);setCreating(false);if(['create','revise'].includes(request.action)){localStorage.removeItem(draftStorageKey);setDraft({supplierId:'',currency:'USD',lines:[],notes:'',expectedDeliveryDate:''});if(demandBacked)onDemandOrderFinished?.();}}
-   }catch(e){setFeedback({title:'Could not save purchase order',issues:[{field:'',message:e.message}]});if(inventoryCommandCanBeEdited(e)){localStorage.removeItem(storageKey);setPending(null);}}finally{setBusy(false);}
+     if(result.order){setOrderStatus('all');setSupplierFilter('');setSearchFilter('');void purchaseQueue.jumpTo(1);if(request.action==='receive')clearComparison();else openOrder(result.order);setCreating(false);if(['create','revise'].includes(request.action)){localStorage.removeItem(draftStorageKey);setDraft({supplierId:'',currency:'USD',lines:[],notes:'',expectedDeliveryDate:''});if(demandBacked)onDemandOrderFinished?.();}}
+     return result;
+   }catch(e){if(inventoryCommandCanBeEdited(e)){localStorage.removeItem(storageKey);setPending(null);}if(inlineError)throw e;setFeedback({title:'Could not save purchase order',issues:[{field:'',message:e.message}]});}finally{setBusy(false);}
  }
  async function postPurchaseReceipt(){
    if(!receiptOrder||busy||!receiptReady)return;
@@ -148,10 +157,14 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
    }
  },[data,initialReceiptHandoff,locationId,onReceiptHandoffConsumed,purchaseQueue.loading,purchaseQueue.error]);
  useEffect(()=>{
-   if(!initialPurchaseOrderId||!data?.items?.length)return;
+   if(!initialPurchaseOrderId||consumedInitialOrderRef.current===initialPurchaseOrderId||!data||purchaseQueue.loading)return;
+   consumedInitialOrderRef.current=initialPurchaseOrderId;
    const order=data.items.find((entry)=>entry.id===initialPurchaseOrderId);
-   if(order){setSelected(order);setReason('');}
- },[data,initialPurchaseOrderId]);
+   if(order){openOrder(order,{fromInitial:true});return;}
+   const requestId=pairedOrderRequestRef.current+1;pairedOrderRequestRef.current=requestId;
+   setPairedOrderState({kind:'loading',message:'Loading linked purchase order…'});
+   api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId,orderId:initialPurchaseOrderId})}`).then(result=>{if(pairedOrderRequestRef.current!==requestId)return;const exact=(result.items||[]).find(candidate=>candidate.id===initialPurchaseOrderId);if(exact)openOrder(exact,{fromInitial:true});else setPairedOrderState({kind:'empty',message:'The linked purchase order is unavailable in this shop.'});}).catch(next=>{if(pairedOrderRequestRef.current===requestId)setPairedOrderState({kind:'error',message:next.message||'The linked purchase order could not be loaded.'});});
+ },[data,initialPurchaseOrderId,locationId,purchaseQueue.loading]);
  function receiptFacts(order){return order.lines.map((line,index)=>({invoiceLineIndex:index,purchaseLineId:line.id,partNumber:line.part_number,description:line.description||'',uomCode:line.uom_code,invoiceQuantity:Number(line.quantity)-Number(line.received_quantity)-Number(line.cancelled_quantity),remainingQuantity:Number(line.quantity)-Number(line.received_quantity)-Number(line.cancelled_quantity),trackingMode:line.tracking_mode}));}
  const activeReceiptFacts=useMemo(()=>receiptOrder?receiptFacts(receiptOrder):[],[receiptOrder]);
  function enteredLine(){
@@ -182,11 +195,71 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
      command({action:draft.orderId?'revise':'create',...draft,expectedDeliveryDate:draft.expectedDeliveryDate||null,placeOrder,lines:lines.map(({catalogPartId,partNumber,description,uomCode,trackingMode,quantity,unitPrice,demandSources=[]})=>catalogPartId?{catalogPartId,quantity,unitPrice,demandSources}:{partNumber,description,uomCode,trackingMode,quantity,unitPrice,demandSources})});
    }catch(e){setFeedback({title:'Check the order details',issues:[{field:'part',message:e.message}],validation:true});}
  }
+ function orderHasRemaining(order){return order.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity));}
+ function openOrder(order,{invoices=false,fromInitial=false}={}){
+   pairedOrderRequestRef.current+=1;
+   if(!fromInitial){consumedInitialOrderRef.current=initialPurchaseOrderId;const url=new URL(window.location.href);url.searchParams.delete('purchaseOrderId');url.searchParams.delete('purchaseOrderNumber');url.searchParams.delete('receiptId');url.searchParams.delete('deliveryId');window.history.replaceState({},'',url);}
+   setBillUploadRequested(false);setSelected(order);setPairedOrderState(null);setReason('');
+   setLinkedInbound(current=>({poId:order.id,key:current.key+1}));
+   if(invoices)window.requestAnimationFrame(()=>document.querySelector('.purchase-order-detail')?.scrollIntoView({block:'start'}));
+ }
+ function clearComparison(){
+   pairedOrderRequestRef.current+=1;
+   const url=new URL(window.location.href);url.searchParams.delete('receiptId');url.searchParams.delete('deliveryId');window.history.replaceState({},'',url);
+   setSelected(null);setPairedOrderState(null);setLinkedInbound(current=>({poId:'',key:current.key+1}));setInboundClearKey(key=>key+1);
+ }
+ async function selectOrderForInbound(item){
+   const requestId=pairedOrderRequestRef.current+1;
+   pairedOrderRequestRef.current=requestId;
+   const sourceLocationId=locations.some(candidate=>candidate.id===item?.locationId)?item.locationId:locationId;
+   setLinkedInbound(current=>({poId:'',key:current.key+1}));
+   consumedInitialOrderRef.current=initialPurchaseOrderId;
+   setSelected(null);
+   if(!item?.poId){setPairedOrderState({kind:'empty',message:'This invoice or receipt is not linked to a purchase order.'});return;}
+   const loaded=data?.items?.find(order=>order.id===item.poId);
+   if(loaded){setPairedOrderState(null);setSelected(loaded);return;}
+   setPairedOrderState({kind:'loading',message:'Loading linked purchase order…'});
+   try{
+     const result=await api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId:sourceLocationId,orderId:item.poId})}`);
+     if(pairedOrderRequestRef.current!==requestId)return;
+     const order=(result.items||[]).find(candidate=>candidate.id===item.poId);
+     if(order){setPairedOrderState(null);setSelected(order);}
+     else setPairedOrderState({kind:'empty',message:'The linked purchase order is unavailable in this shop.'});
+   }catch(next){
+     if(pairedOrderRequestRef.current===requestId)setPairedOrderState({kind:'error',message:next.message||'The linked purchase order could not be loaded.'});
+   }
+ }
+ function changePurchasingLocation(nextLocationId,{preserveSource=false}={}){
+   if(!locations.some(location=>location.id===nextLocationId))return;
+   setLocationId(nextLocationId);
+   pairedOrderRequestRef.current+=1;
+   if(!preserveSource){setSelected(null);setReceiptOrder(null);setSearchFilter('');setPairedOrderState(null);setLinkedInbound(current=>({poId:'',key:current.key+1}));setInboundClearKey(key=>key+1);}
+   onLocationChange?.(nextLocationId,{preserveSource});
+ }
  const title=view==='receiving'?'Expected deliveries':'All Purchase Orders';
+ const demandCount=data?.demand?.length;
+ useEffect(()=>{
+   const current=selectedOrderRef.current;if(!current||!data)return undefined;
+   const listed=data.items?.find(order=>order.id===current.id);
+   if(listed){if(listed!==current)setSelected(listed);return undefined;}
+   const requestId=pairedOrderRequestRef.current+1;pairedOrderRequestRef.current=requestId;
+   const controller=new AbortController();
+   api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId,orderId:current.id})}`,{signal:controller.signal}).then(result=>{if(pairedOrderRequestRef.current!==requestId)return;const exact=(result.items||[]).find(order=>order.id===current.id);if(exact)setSelected(exact);else{setSelected(null);setPairedOrderState({kind:'empty',message:'The linked purchase order is unavailable in this shop.'});}}).catch(next=>{if(pairedOrderRequestRef.current===requestId&&next?.name!=='AbortError')setPairedOrderState({kind:'error',message:next.message||'The linked purchase order could not be refreshed.'});});
+   return()=>controller.abort();
+ },[data,locationId,refresh]);
+ const orderList=<div className="purchasing-pane-list"><div className="purchase-table-heading"><h3>{title}</h3><Button icon={FilterLines} aria-expanded={filtersOpen} aria-controls="purchase-order-filters" onClick={()=>setFiltersOpen(open=>!open)}>Filters{orderStatus!=='all'||supplierFilter||searchFilter?' (active)':''}</Button></div>
+   {filtersOpen?<div id="purchase-order-filters" className="purchase-filter-bar"><label>Search<input type="search" placeholder="PO or supplier" value={searchFilter} onChange={e=>setSearchFilter(e.target.value)}/></label><label>Status<Dropdown value={orderStatus} onChange={e=>setOrderStatus(e.target.value)}><option value="all">All statuses</option>{['draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled'].map(status=><option key={status} value={status}>{orderStatusLabel(status)}</option>)}</Dropdown></label><label>Supplier<Dropdown value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}><option value="">All suppliers</option>{data?.suppliers?.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Dropdown></label><Button onClick={()=>{setOrderStatus('all');setSupplierFilter('');setSearchFilter('');}}>Clear</Button></div>:null}
+   <CheckpointCollection queue={purchaseQueue} label="purchase orders" pageSize={25} storageKey={`inventory-purchases:${purchasingQueryKey}`} ariaLabel="Purchase orders" statusPlacement="footer" renderItems={(entries)=>entries.length?<OperationalDataTable ariaLabel="Purchase orders" columns={purchaseOrderColumns} className="purchase-orders-table inventory-data-table">{entries.map(({item:order,key,rowProps})=><OperationalDataRow {...rowProps} id={order.id} key={key}><OperationalDataCell label="Order"><button type="button" className="purchase-order-link purchase-order-identity" aria-label={order.number} onClick={()=>openOrder(order)}><strong>{order.number}</strong><small>{order.supplier_name||'Supplier not set'}</small></button></OperationalDataCell><OperationalDataCell label="Expected">{order.expected_delivery_date||'Not set'}</OperationalDataCell><OperationalDataCell label="Status"><span className={`purchase-status is-${order.status}`}>{orderStatusLabel(order.status)}</span></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>:null}><p>No purchase orders at this location.</p></CheckpointCollection></div>;
+ const orderDetail=selected?<div className="purchasing-inline-detail"><nav className="purchase-order-document-navigation" aria-label="Purchase order navigation"><Button onClick={clearComparison}>All orders</Button></nav><div className="inventory-workflows purchase-order-detail">
+   <PurchaseOrderDocument key={selected.id} order={selected} busy={busy} pending={!!pending} onSaveLines={async(lines,expectedVersion)=>Boolean((await command({action:'amend_lines',orderId:selected.id,expectedVersion,lines},{inlineError:true}))?.order)} shopName={locations.find(location=>location.id===(selected.location_id||locationId))?.name} statusLabel={orderStatusLabel(selected.status)}/>
+   {selected.delivery_condition?<SecondaryDetailSection title="Delivery condition"><p>{selected.delivery_condition==='damaged'?'Damaged items reported':'Received undamaged'}</p>{selected.delivery_damage_details?<p className="purchase-delivery-notes">{selected.delivery_damage_details}</p>:null}{selected.delivery_condition==='damaged'?<p>When adding damaged quantities to inventory, choose “Damaged / held for inspection”. Add undamaged quantities separately.</p>:null}</SecondaryDetailSection>:null}
+   <SecondaryDetailSection title="Actions"><div className="purchase-order-actions"><label>Reason / supplier communication reference<textarea placeholder="Reference or reason for the action" rows={2} value={reason} onChange={e=>setReason(e.target.value)} /></label><div className="inventory-workflow-toolbar">{['ordered','partially_received'].includes(selected.status)&&orderHasRemaining(selected)?<Button variant="primary" disabled={busy||!!pending} onClick={()=>openReceipt(selected)}>Receive items</Button>:null}{selected.status==='draft'?<Button disabled={busy||!!pending} onClick={()=>{setDraft({orderId:selected.id,expectedVersion:selected.version,supplierId:selected.supplier_id,currency:selected.currency,notes:selected.notes,expectedDeliveryDate:selected.expected_delivery_date||'',lines:selected.lines.map(l=>({catalogPartId:l.catalog_part_id,partNumber:l.part_number,uomCode:l.uom_code,description:l.description,trackingMode:l.tracking_mode,quantity:Number(l.quantity),unitPrice:l.unit_price}))});setCreating(true);clearComparison();}}>Edit draft</Button>:null}{selected.status==='draft'?<Button disabled={busy||!!pending} onClick={()=>command({action:'place',orderId:selected.id,expectedVersion:selected.version})} variant="primary">Place Order</Button>:null}{selected.status==='awaiting_approval'&&data?.canApprove?<Button disabled={busy||!!pending} onClick={()=>command({action:'approve',orderId:selected.id,expectedVersion:selected.version})} variant="primary">Approve</Button>:null}{!['received','closed_with_discrepancy','cancelled'].includes(selected.status)?<Button disabled={busy||!!pending||!reason.trim()} onClick={()=>command({action:'cancel',orderId:selected.id,expectedVersion:selected.version,reason})}>Cancel outstanding quantities</Button>:null}{selected.status==='ordered'?<Button disabled={busy||!!pending||!reason.trim()} onClick={()=>command({action:'record_sent',orderId:selected.id,expectedVersion:selected.version,reason})}>Record supplier communication</Button>:null}</div>{selected.communication_reference?<p className="purchase-communication">Supplier reference: {selected.communication_reference}</p>:null}</div></SecondaryDetailSection></div></div>:null;
+ const leftPane=orderDetail||(pairedOrderState?<section className={`purchasing-pair-state is-${pairedOrderState.kind}`}><h3>Purchase order</h3><p role={pairedOrderState.kind==='error'?'alert':'status'}>{pairedOrderState.message}</p><Button onClick={clearComparison}>All orders</Button></section>:orderList);
  return <section className="inventory-workflows purchase-orders-page">
-   <div className="inventory-workflow-toolbar purchase-orders-toolbar"><label>Location<Dropdown value={locationId} onChange={e=>setLocationId(e.target.value)} disabled={busy||!!pending}>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</Dropdown></label><IconButton className="purchase-refresh" icon={RefreshCw01} label="Refresh purchases" onClick={()=>setRefresh(x=>x+1)}/>{view==='purchases'?<><Button variant="primary" onClick={()=>{setCreating(true);setSelected(null);}}>New purchase order</Button><Button disabled={!locationId} onClick={()=>onInvoice?.(locationId)}>Add supplier invoice</Button></>:<Button onClick={onStock}>Receive without a purchase order</Button>}</div>
+   <div className="inventory-workflow-toolbar purchase-orders-toolbar"><label>Shop<Dropdown value={locationId} onChange={e=>changePurchasingLocation(e.target.value)} disabled={busy||!!pending}>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</Dropdown></label><IconButton className="purchase-refresh" icon={RefreshCw01} label="Refresh purchasing" onClick={()=>setRefresh(x=>x+1)}/><Button variant="primary" onClick={()=>{clearComparison();setCreating(true);}}>New purchase order</Button><Button disabled={!locationId} onClick={()=>onInvoice?.(locationId)}>Upload invoice</Button><Button disabled={!locationId} onClick={()=>onStock?.(locationId)}>Record arrival without PO</Button></div>
    {error?<p role="alert" className="ops-error">{error}</p>:null}
    {pending?<div role="status"><p>A saved purchase command is awaiting confirmation.</p><Button disabled={busy} onClick={()=>command(pending)}>Recover saved command</Button></div>:null}
+   <details className="purchasing-expandable-section purchase-needs-section"><summary><ChevronRight aria-hidden="true"/><span>Needs ordering</span><strong>{demandCount===undefined?(purchaseQueue.error?'Unavailable':'Loading'):demandCount}</strong></summary><div><InventoryNeedsOrdering locations={locations} embedded controlledLocationId={locationId} controlledData={data} controlledError={error||purchaseQueue.error?.message||''} onCreateOrder={onCreateDemandOrder}/></div></details>
    <ModalFrame overlayClassName="purchase-editor-overlay" modalClassName="purchase-editor-modal" dialogClassName="purchase-editor-dialog" ariaLabel={draft.orderId?'Edit purchase order':'New purchase order'} isOpen={creating} isDismissable={!busy&&!pending} onOpenChange={open=>{if(!open&&!busy&&!pending)setCreating(false);}}>
      <header className="purchase-editor-header"><Heading slot="title">{draft.orderId?'Edit purchase order':'New purchase order'}</Heading><IconButton icon={XClose} label="Close purchase order" disabled={busy||!!pending} onClick={()=>setCreating(false)} /></header>
      <form ref={formRef} noValidate onSubmit={saveDraft} className="inventory-workflow-form purchase-order-form">
@@ -203,33 +276,7 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
      {draft.lines.length?<ul className="purchase-form-items" data-po-field="lines">{draft.lines.map((line,index)=><li key={line.catalogPartId||line.partNumber}>{line.partNumber} · {line.quantity} {line.uomCode} · {line.unitPrice===null?'Price unknown':`${line.unitPrice} ${draft.currency}`} <Button type="button" onClick={()=>setDraft(d=>({...d,lines:d.lines.filter((_,i)=>i!==index)}))}>Remove</Button></li>)}</ul>:null}
      <label>Notes (optional)<textarea rows={1} value={draft.notes} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} /></label></>:null}<div className="purchase-draft-actions"><Button type="button" onClick={()=>setCreating(false)}>Close draft</Button>{!demandBacked?<Button type="submit" disabled={busy||!!pending}>Save draft</Button>:null}<Button type="submit" name="action" value="place" variant="primary" disabled={busy||!!pending}>{demandBacked?'Place order':'Save / Place Order'}</Button></div>
    </form></ModalFrame>
-   {showOrders?<><div className="purchase-table-heading"><h3>{title}</h3><Button icon={FilterLines} aria-expanded={filtersOpen} aria-controls="purchase-order-filters" onClick={()=>setFiltersOpen(open=>!open)}>Filters{orderStatus!=='all'||supplierFilter||searchFilter?' (active)':''}</Button></div>
-   {filtersOpen?<div id="purchase-order-filters" className="purchase-filter-bar">
-     <label>Search<input type="search" placeholder="PO or supplier" value={searchFilter} onChange={e=>setSearchFilter(e.target.value)}/></label>
-     <label>Status<Dropdown value={orderStatus} onChange={e=>setOrderStatus(e.target.value)}><option value="all">All statuses</option>{['draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled'].map(status=><option key={status} value={status}>{orderStatusLabel(status)}</option>)}</Dropdown></label>
-     <label>Supplier<Dropdown value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}><option value="">All suppliers</option>{data?.suppliers?.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Dropdown></label>
-     <Button onClick={()=>{setOrderStatus('all');setSupplierFilter('');setSearchFilter('');}}>Clear</Button>
-   </div>:null}<CheckpointCollection queue={purchaseQueue} label={view==='receiving'?'expected deliveries':'purchase orders'} pageSize={25} storageKey={`inventory-purchases:${purchasingQueryKey}`} ariaLabel={view==='receiving'?'Expected deliveries':'Purchase orders'} renderItems={(entries)=>entries.length?<OperationalDataTable ariaLabel={view==='receiving'?'Expected deliveries':'Purchase orders'} columns={purchaseOrderColumns} className="purchase-orders-table inventory-data-table">{entries.map(({item:order,key,rowProps})=><OperationalDataRow {...rowProps} id={order.id} key={key}><OperationalDataCell label="PO"><button type="button" className="purchase-order-link" onClick={()=>{setSelected(order);setReason('');}}>{order.number}</button></OperationalDataCell><OperationalDataCell label="Supplier">{order.supplier_name}</OperationalDataCell><OperationalDataCell label="Total">{priceLabel(order.total,order.currency)}</OperationalDataCell><OperationalDataCell label="Expected">{order.expected_delivery_date||'Not set'}</OperationalDataCell><OperationalDataCell label="Status"><span className={`purchase-status is-${order.status}`}>{orderStatusLabel(order.status)}</span></OperationalDataCell><OperationalDataCell label="Inventory">{order.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity))?<button type="button" className="purchase-order-link" onClick={()=>openReceipt(order)}>Receive items</button>:<span className="purchase-inventory-added">All quantities received</span>}</OperationalDataCell><OperationalDataCell label="Bill">{order.status==='received'?<button type="button" className="purchase-order-link" onClick={()=>{setBillUploadRequested(true);setSelected(order);setReason('');}}>Upload bill</button>:'-'}</OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>:null}><p>No {view==='receiving'?'expected deliveries':'purchase orders'} at this location.</p></CheckpointCollection>
-   </>:null}
-   {view==='receiving'?<><h3>Recent receipts</h3>{data?.receipts.length?<ul>{data.receipts.map((r,index)=><li key={`${r.id}:${index}`}>{r.part_number} · {r.quantity} {r.uom_code} · {new Date(r.posted_at).toLocaleString()} · {r.source_reference||r.source_type}</li>)}</ul>:<p>No receipts recorded.</p>}</>:null}
-
-   <SecondaryDetailPanel open={!!selected} onOpenChange={open=>{if(!open)setSelected(null);}} eyebrow="Purchase order" title={selected?.number||'Purchase'} description={selected?.supplier_name||''}>
-    {selected?<div className="inventory-workflows purchase-order-detail"><span className={`purchase-status is-${selected.status}`}>{orderStatusLabel(selected.status)}</span><SecondaryDetailSection title="Order items">
-      {selected.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity))?<p>Receive only the quantities that physically arrived. Remaining quantities stay open on this purchase order.</p>:<p>All ordered quantities are received or cancelled.</p>}
-      <div className="purchase-order-meta"><span>Total <strong>{priceLabel(selected.total,selected.currency)}</strong></span><span>Expected Delivery Date <strong>{selected.expected_delivery_date||'Not set'}</strong></span>{selected.notes?<span>Notes <strong>{selected.notes}</strong></span>:null}</div>
-      {selected.lines.map(line=>{const remaining=Number(line.quantity)-Number(line.received_quantity)-Number(line.cancelled_quantity);return <div key={line.id} className="inventory-workflow-suggestion"><div><strong>{line.part_number}</strong><dl className="purchase-line-quantities"><div><dt>Ordered</dt><dd>{quantityLabel(line.quantity)} {line.uom_code}</dd></div><div><dt>Received</dt><dd>{quantityLabel(line.received_quantity)} {line.uom_code}</dd></div>{Number(line.cancelled_quantity)>0?<div><dt>Cancelled</dt><dd>{quantityLabel(line.cancelled_quantity)} {line.uom_code}</dd></div>:null}<div><dt>Remaining</dt><dd>{quantityLabel(remaining)} {line.uom_code}</dd></div><div><dt>Unit price</dt><dd>{priceLabel(line.unit_price,selected.currency)}</dd></div></dl></div></div>;})}
-    </SecondaryDetailSection>
-    {selected.delivery_condition?<SecondaryDetailSection title="Delivery condition"><p>{selected.delivery_condition==='damaged'?'Damaged items reported':'Received undamaged'}</p>{selected.delivery_damage_details?<p className="purchase-delivery-notes">{selected.delivery_damage_details}</p>:null}{selected.delivery_condition==='damaged'?<p>When adding damaged quantities to inventory, choose ?Damaged / held for inspection?. Add undamaged quantities separately.</p>:null}</SecondaryDetailSection>:null}
-    <PurchaseOrderBills key={selected.id} order={selected} autoOpen={billUploadRequested} onOpened={()=>setBillUploadRequested(false)}/>
-    <SecondaryDetailSection title="Actions"><div className="purchase-order-actions"><label>Reason / supplier communication reference<textarea placeholder="Reference or reason for the action" rows={2} value={reason} onChange={e=>setReason(e.target.value)} /></label><div className="inventory-workflow-toolbar">
-      {selected.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity))?<Button variant="primary" disabled={busy||!!pending} onClick={()=>openReceipt(selected)}>Receive items</Button>:null}
-      {selected.status==='draft'?<Button disabled={busy||!!pending} onClick={()=>{setDraft({orderId:selected.id,expectedVersion:selected.version,supplierId:selected.supplier_id,currency:selected.currency,notes:selected.notes,expectedDeliveryDate:selected.expected_delivery_date||'',lines:selected.lines.map(l=>({catalogPartId:l.catalog_part_id,partNumber:l.part_number,uomCode:l.uom_code,description:l.description,trackingMode:l.tracking_mode,quantity:Number(l.quantity),unitPrice:l.unit_price}))});setCreating(true);setSelected(null);}}>Edit draft</Button>:null}
-      {selected.status==='draft'?<Button disabled={busy||!!pending} onClick={()=>command({action:'place',orderId:selected.id,expectedVersion:selected.version})} variant="primary">Place Order</Button>:null}
-      {selected.status==='awaiting_approval'&&data?.canApprove?<Button disabled={busy||!!pending} onClick={()=>command({action:'approve',orderId:selected.id,expectedVersion:selected.version})} variant="primary">Approve</Button>:null}
-      {!['received','closed_with_discrepancy','cancelled'].includes(selected.status)?<Button disabled={busy||!!pending||!reason.trim()} onClick={()=>command({action:'cancel',orderId:selected.id,expectedVersion:selected.version,reason})}>Cancel outstanding quantities</Button>:null}
-      {(selected.status==='ordered')?<Button disabled={busy||!!pending||!reason.trim()} onClick={()=>command({action:'record_sent',orderId:selected.id,expectedVersion:selected.version,reason})}>Record supplier communication</Button>:null}
-    </div>{selected.communication_reference?<p className="purchase-communication">Supplier reference: {selected.communication_reference}</p>:null}{error?<p role="alert">{error}</p>:null}{pending?<Button disabled={busy} onClick={()=>command(pending)}>Check saved action</Button>:null}</div></SecondaryDetailSection></div>:null}
-   </SecondaryDetailPanel>
+   <PurchasingSplitView key={actorId||'shared'} actorId={actorId} left={leftPane} right={<InventoryInboundWorkspace locations={locations} embedded comparison controlledLocationId={locationId} billUploadControl={selected?.status==='received'?<PurchaseOrderBills key={selected.id} order={selected} onUploaded={()=>setRefresh(value=>value+1)} autoOpen={billUploadRequested} onOpened={()=>setBillUploadRequested(false)}/>:null} refreshKey={refresh} linkedPurchaseOrderId={linkedInbound.poId} linkedPurchaseOrderStatus={selected?.status||''} linkedRequestKey={linkedInbound.key} clearSelectionKey={inboundClearKey} initialReceiptId={initialInboundSource?.receiptId||''} initialDeliveryId={initialInboundSource?.deliveryId||''} onResolvedLocation={(resolvedLocationId)=>changePurchasingLocation(resolvedLocationId,{preserveSource:true})} onComparisonSelect={selectOrderForInbound} onComparisonClear={clearComparison} onOpenInvoice={(invoiceRunId,requestedLocationId)=>onInvoice?.(requestedLocationId||locationId,invoiceRunId)} onReceivePurchaseOrder={onReceivePurchaseOrder} onAddInventory={(requestedLocationId)=>onStock?.(requestedLocationId||locationId)} onUploadInvoice={(requestedLocationId)=>onInvoice?.(requestedLocationId||locationId)}/>}/>
 
    <ModalFrame overlayClassName="purchase-feedback-overlay" modalClassName="purchase-feedback-modal" dialogClassName="purchase-feedback-dialog" ariaLabel="Receive purchase order" isOpen={Boolean(receiptOrder)} isDismissable={!busy} onOpenChange={open=>{if(!open&&!busy)setReceiptOrder(null);}}><Heading slot="title">Receive {receiptOrder?.number}</Heading>{receiptOrder?<><div className="physical-receipt-destination-status">{receiptPositionsLoading?<p role="status">Loading eligible storage destinations…</p>:null}{receiptPositionsError?<p role="alert"><span>{receiptPositionsError}</span><Button type="button" onClick={()=>setReceiptPositionsReload(value=>value+1)} disabled={busy||receiptPositionsLoading}>Try again</Button></p>:null}</div>{error?<p role="alert" className="ops-error">{error}</p>:null}<ReceiptLinesEditor facts={activeReceiptFacts} runId={receiptOrder.id} runVersion={receiptOrder.version} positions={receiptPositions} positionLoading={receiptPositionsLoading} positionError={receiptPositionsError} sourceLabel="PO remaining" disabled={busy} onChange={(lines,ready)=>{setReceiptLines(lines);setReceiptReady(ready);}}/><label>Delivery reference (optional)<input maxLength={240} value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} disabled={busy}/></label><footer><Button onClick={()=>setReceiptOrder(null)} disabled={busy}>Cancel</Button><Button variant="primary" disabled={busy||!receiptReady} onClick={postPurchaseReceipt}>{busy?'Posting received items…':'Post received items'}</Button></footer></>:null}</ModalFrame>
    <PurchaseOrderFeedbackDialog feedback={feedback} onClose={closeFeedback}/>

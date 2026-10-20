@@ -1,7 +1,3 @@
-.workspace-operations.mechanic-home {
-  padding-inline: max(24px, calc((100vw - var(--workspace-max-width)) / 2));
-}
-
 .workspace-operations .mechanic-queue-shell,
 .workspace-operations .office-mechanic-panel {
   background: #fff;

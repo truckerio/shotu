@@ -33,3 +33,14 @@ test("contact update requires a positive expected version and reports stale edit
     updateContact: async () => null,
   }), { statusCode: 409, code: "CUSTOMER_DIRECTORY_VERSION_CONFLICT" });
 });
+
+test("mechanic directory reads remain company-scoped and revoked memberships fail", async () => {
+  const { listCustomers, listCustomerContacts } = await import("./customer-directory.service.js");
+  let received;
+  await listCustomers(context("mechanic"), { companyId }, { listCustomers: async (value) => { received = value; return []; } });
+  assert.equal(received.companyId, companyId);
+  await listCustomerContacts(context("mechanic"), customerId, { companyId }, { listContacts: async (value) => { received = value; return []; } });
+  assert.equal(received.customerId, customerId);
+  await assert.rejects(listCustomers(context("mechanic"), { companyId: otherCompanyId }, { listCustomers: () => assert.fail("Cross-tenant read") }));
+  await assert.rejects(listCustomers({ ...context("mechanic"), sessionMode: "standard", companyRoles: new Map() }, { companyId }, { listCustomers: () => assert.fail("Revoked read") }));
+});

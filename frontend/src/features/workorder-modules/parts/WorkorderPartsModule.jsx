@@ -16,6 +16,7 @@ export function WorkorderPartsModule({
   form,
   isMechanicDetail,
   isOfficeDetail,
+  laborLogContent = null,
   locale,
   locationId,
   pendingPartCount,
@@ -41,7 +42,7 @@ export function WorkorderPartsModule({
         actorId={actorId}
         financialFooter={financialFooter}
         presentation={presentation}
-        role={isOfficeDetail ? "office" : isMechanicDetail ? "mechanic" : actorRole === "admin" ? "admin" : "read"}
+        role={isMechanicDetail || actorRole === "mechanic" ? "mechanic" : isOfficeDetail ? "office" : actorRole || "read"}
         detail={activeWorkorder}
         parts={form.parts}
         laborHours={form.laborHours || ""}
@@ -49,6 +50,7 @@ export function WorkorderPartsModule({
         locationId={locationId || activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
         laborRepairOrder={form.workPerformed || ""}
         laborRepairOrderDisabled={!activeWorkorder.allowedActions?.saveNotes}
+        laborLogContent={laborLogContent}
         onLaborHoursChange={onLaborHoursChange}
         onLaborProductChange={onLaborProductChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}

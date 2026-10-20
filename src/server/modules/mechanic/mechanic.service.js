@@ -16,7 +16,7 @@ import {
   WORKORDER_STATUS,
 } from "../workorders/workorder.constants.js";
 import { MECHANIC_HISTORY_LIFECYCLES } from "../workorders/workorder-lifecycle-policy.js";
-import { statusLabel } from "../workorders/workorder.presenter.js";
+import { activityStatusLabel, statusLabel } from "../workorders/workorder.presenter.js";
 import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { processMechanicChatMessage } from "../chat/mechanic-chat.service.js";
@@ -54,6 +54,8 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
     status: compatibilityStatus,
     lifecycle: item.lifecycle,
     statusLabel: statusLabel(compatibilityStatus),
+    activityStatus: item.activityStatus || "ready",
+    activityStatusLabel: activityStatusLabel(item.activityStatus || "ready"),
     attentionReasons: item.attentionReasons,
     attentionDetails: item.attentionDetails || {},
     locationId: item.locationId,

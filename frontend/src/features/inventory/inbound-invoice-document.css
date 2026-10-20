@@ -1,0 +1,25 @@
+.inbound-invoice-document { display: grid; gap: 12px; min-width: 0; }
+.inbound-invoice-choice { display: grid; gap: 6px; font-size: 12px; min-width: 0; }
+.inbound-invoice-source { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; padding-top: 12px; color: #667085; font-size: 12px; }
+.inbound-invoice-source > span { min-width: 0; overflow-wrap: anywhere; }
+.inbound-invoice-source a { color: #175cd3; }
+.inbound-invoice-state { background: #f2f4f7; border-radius: 16px; color: #475467; font-size: 12px; padding: 4px 8px; white-space: nowrap; }
+.inbound-invoice-state.is-processing { background: #eff8ff; color: #175cd3; }
+.inbound-invoice-state.is-failed { background: #fef3f2; color: #b42318; }
+.inbound-invoice-message { color: #475467; font-size: 13px; line-height: 1.5; padding: 20px 0; }
+.inbound-invoice-message p { margin: 0 0 12px; }
+.inbound-invoice-error { color: #b42318; font-size: 13px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.inbound-invoice-totals { display: grid; gap: 10px; font-size: 13px; margin: 20px 0 0 auto; max-width: 320px; }
+.inbound-invoice-totals > div { display: flex; justify-content: space-between; gap: 16px; }
+.inbound-invoice-totals dt { color: #667085; }
+.inbound-invoice-totals dd { font-variant-numeric: tabular-nums; margin: 0; overflow-wrap: anywhere; text-align: right; }
+.inbound-invoice-grand-total { border-top: 1px solid #d0d5dd; font-size: 18px; font-weight: 600; margin-top: 4px; padding-top: 14px; }
+.inbound-invoice-grand-total dt { color: #101828; }
+.inbound-invoice-grand-total small { color: #667085; display: block; font-size: 12px; font-weight: 400; margin-top: 5px; }
+.inbound-invoice-notes { color: #475467; font-size: 12px; line-height: 1.5; margin-top: 16px; }
+.inbound-invoice-notes summary { cursor: pointer; }
+.inbound-invoice-notes ul { padding-left: 18px; overflow-wrap: anywhere; }
+.inbound-invoice-actions { display: flex; justify-content: flex-end; padding-top: 16px; }
+.inbound-delivery-evidence { border-top: 1px solid #eaecf0; font-size: 13px; padding-top: 12px; }
+.inbound-delivery-evidence > summary { cursor: pointer; color: #475467; line-height: 1.5; }
+.inbound-delivery-evidence[open] > summary { margin-bottom: 12px; }

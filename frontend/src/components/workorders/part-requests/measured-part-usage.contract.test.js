@@ -19,11 +19,21 @@ test("measured selection bypasses manual rows and retains the aggregate-owned re
   assert.match(source, /setCompleted\(true\)/);
   assert.match(source, /await onReserved\?\.\(result\.usage, result\)/);
   assert.match(source, /aggregateReservedRefresh/);
-  assert.match(source, /disabled=\{busy \|\| completed \|\| !amount\.valid \|\| !sourcePositionId\}/);
+  assert.match(source, /disabled=\{busy \|\| pricingLoading \|\| completed \|\| !amount\.valid \|\| !sourcePositionId \|\| \(canViewPrices && !selectedPrice\)\}/);
   assert.match(editor, /if \(\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)\) setMeasuredDialogPart\(catalogPart\)/);
   assert.match(editor, /function closeMeasuredDialog\(\)/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
+});
+
+test("financial roles preview exact allocation pricing before aggregate reserve", () => {
+  assert.match(source, /operation: "partPricingPreview"/);
+  assert.match(source, /usageKind: "aggregate"/);
+  assert.match(source, /sourcePositionId,[\s\S]*quantity: Number\(quantity\),[\s\S]*uomCode/);
+  assert.match(source, /showSelectionIndicator=\{false\}/);
+  assert.match(source, /selection: priceSelection,[\s\S]*expectedFingerprint: pricingPreview\.fingerprint/);
+  assert.match(source, /error\?\.code === "WORKORDER_PRICING_CHANGED"/);
+  assert.match(source, /canViewPrices && \(!selectedPrice \|\| !pricingPreview\?\.fingerprint\)/);
 });
 
 test("a newly selected measured part starts its repair order from the catalog description", () => {

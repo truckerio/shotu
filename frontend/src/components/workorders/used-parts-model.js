@@ -165,6 +165,7 @@ export function serializedUsageTableState(usages, actionsFor) {
     active.push({
       usage,
       usageId: usage.id,
+      ...(usage.price ? { price: usage.price } : {}),
       catalogPartId: usage.catalogPartId,
       partNo: usage.partNumber,
       qty: "1",
@@ -176,6 +177,23 @@ export function serializedUsageTableState(usages, actionsFor) {
     });
   }
   return { active, completed };
+}
+
+/** One display row per catalog part; lifecycle and price remain exact-unit owned. */
+export function groupSerializedUsageRows(parts) {
+  const groups = new Map();
+  for (const part of Array.isArray(parts) ? parts : []) {
+    // Legacy rows without a catalog identity must not merge by description.
+    const key = part.catalogPartId ? `${part.catalogPartId}:${part.uomCode}` : part;
+    if (!groups.has(key)) groups.set(key, []);
+    const members = groups.get(key);
+    if (!part.usageId || !members.some((member) => member.usageId === part.usageId)) members.push(part);
+  }
+  return Array.from(groups.values(), (members) => ({
+    ...members[0],
+    qty: String(members.reduce((sum, part) => sum + Number(part.qty || 1), 0)),
+    memberParts: members,
+  }));
 }
 
 export function reusableReturnedUsageIds(usages) {

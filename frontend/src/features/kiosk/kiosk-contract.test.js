@@ -8,7 +8,7 @@ test("AuthGate preserves standard login and adds registered kiosk bootstrap", as
   const source = await readFile(new URL("../auth/AuthGate.jsx", featureRoot), "utf8");
 
   assert.match(source, /api\("\/api\/kiosk\/context"\)/);
-  assert.match(source, /<LoginPage \/>/);
+  assert.match(source, /<LoginPage\s+onSignInStart=/);
   assert.match(source, /<KioskGate/);
   assert.match(source, /body\.sessionMode === "kiosk"/);
   assert.match(source, /<KioskSessionProvider/);

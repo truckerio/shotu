@@ -13,7 +13,7 @@ function database(t, { status = "open", assigned = false, classification = "requ
       const sql = text.replace(/\s+/g, " ").trim();
       statements.push(sql);
       if (["begin", "commit", "rollback"].includes(sql)) return { rows: [] };
-      if (sql.startsWith("select id, status from operational_workorders")) return { rows: [{ id: "workorder", status }] };
+      if (sql.startsWith("select id, status from operational_workorders") || sql.startsWith("select id, company_id, status, activity_status, activity_version")) return { rows: [{ id: "workorder", company_id: "company", status, activity_status: "ready", activity_version: 1 }] };
       if (sql.startsWith("select company_id from operational_workorders")) return { rows: [{ company_id: "company" }] };
       if (sql.startsWith("select mechanic_user_id, assignment_role")) {
         return { rows: assigned ? [{ mechanic_user_id: "original", assignment_role: "primary" }] : [] };

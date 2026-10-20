@@ -1,3 +1,4 @@
+import { purchaseBillSourcePurposeSql } from "./invoice-extractions.repo.js";
 import { randomUUID } from "node:crypto";
 import { readApprovalPolicy, canApprovePurchase } from "./purchase-approval-settings.repo.js";
 import { getPool, query } from "../pool.js";
@@ -211,7 +212,8 @@ export async function postLocalInventoryReceipt({
       [direct.locationId, companyIds, locationIds, isAdmin],
     ) : await client.query(
       `select run.id, run.company_id, run.location_id, run.status, run.version,
-              run.reviewed_draft, location.name as location_name
+              run.reviewed_draft, location.name as location_name,
+              ${purchaseBillSourcePurposeSql("run")} as is_purchase_order_bill
        from invoice_extraction_runs run
        join locations location on location.company_id = run.company_id and location.id = run.location_id
        where run.id = $1 and run.company_id = any($2::uuid[])
@@ -251,6 +253,10 @@ export async function postLocalInventoryReceipt({
         : null;
       await client.query("commit");
       return sameRequest ? { kind: "replay", receipt } : { kind: "conflict" };
+    }
+    if (!direct && source.is_purchase_order_bill) {
+      await client.query("rollback");
+      return { kind: "purchase_bill_receipt_recorded" };
     }
     let approvalRequest = null;
     if (approval) {

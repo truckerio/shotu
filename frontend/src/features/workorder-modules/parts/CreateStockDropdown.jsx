@@ -3,6 +3,8 @@ import { api } from "../../../lib/api.js";
 import { StockIntakeControl } from "../../../components/inventory/StockIntakeControl.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { serializedPickerPlacement } from "../../../components/workorders/part-requests/serialized-picker-placement.js";
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
+import { formatPriceAmount, knownPriceOption, missingPriceLabel, PART_PRICE_SOURCES } from "../../../components/workorders/part-requests/workorder-serialized-part-selection.js";
 
 function money(value, currency) {
   if (value == null || !currency) return "Cost unavailable";
@@ -16,29 +18,63 @@ function batchLabel(batch) {
   return date && !Number.isNaN(date.getTime()) ? `Received ${date.toLocaleDateString()}` : "Inventory batch";
 }
 
-export function CreateStockDropdown({ locationId, part, onChange, onClose }) {
+export function CreateStockDropdown({ canViewPrices = false, loadPricingPreview, locationId, part, onChange, onClose }) {
   const rootRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const loadPricingPreviewRef = useRef(loadPricingPreview);
+  loadPricingPreviewRef.current = loadPricingPreview;
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [placement, setPlacement] = useState({ side: "below", maxHeight: 280 });
+  const [pricingPreview, setPricingPreview] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const pricingRequestRef = useRef(0);
   useEffect(() => {
     let active = true;
     setData(null); setError("");
-    Promise.all([
+    const requests = [
       api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/locations/${encodeURIComponent(locationId)}/units`),
       api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/locations/${encodeURIComponent(locationId)}/positions`),
-      api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/selling-policy?locationId=${encodeURIComponent(locationId)}`),
-    ])
+    ];
+    if (canViewPrices) requests.push(api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/selling-policy?locationId=${encodeURIComponent(locationId)}`));
+    Promise.all(requests)
       .then(([stock, positionStock, commercial]) => { if (active) setData({ ...stock, positionStock, commercial }); })
       .catch((next) => { if (active) setError(next.message); });
     return () => { active = false; };
-  }, [part.catalogPartId, locationId, revision]);
+  }, [canViewPrices, part.catalogPartId, locationId, revision]);
+  useEffect(() => {
+    if (!canViewPrices || !loadPricingPreviewRef.current || !part.sourcePositionId || !(Number(part.qty) > 0)) {
+      setPricingPreview(null);
+      setPricingLoading(false);
+      return undefined;
+    }
+    const requestId = ++pricingRequestRef.current;
+    let active = true;
+    setPricingLoading(true);
+    setError("");
+    Promise.resolve(loadPricingPreviewRef.current({
+      sourcePositionId: part.sourcePositionId,
+      sourcePositionPath: part.sourcePositionPath,
+      quantity: Number(part.qty),
+      qty: part.qty,
+      uomCode: part.uomCode,
+    })).then((preview) => {
+      if (active && requestId === pricingRequestRef.current) setPricingPreview(preview?.result || preview || null);
+    }).catch((next) => {
+      if (active && requestId === pricingRequestRef.current) {
+        setPricingPreview(null);
+        setError(next?.message || "Pricing could not be loaded.");
+      }
+    }).finally(() => {
+      if (active && requestId === pricingRequestRef.current) setPricingLoading(false);
+    });
+    return () => { active = false; };
+  }, [canViewPrices, part.qty, part.sourcePositionId, part.sourcePositionPath, part.uomCode]);
   useEffect(() => {
     function outside(event) {
-      if (!rootRef.current?.contains(event.target) && !event.target.closest?.(".stock-intake-overlay")) onCloseRef.current?.();
+      if (!rootRef.current?.contains(event.target) && !event.target.closest?.(".stock-intake-overlay, .dropdown-select-popover")) onCloseRef.current?.();
     }
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
@@ -71,6 +107,16 @@ export function CreateStockDropdown({ locationId, part, onChange, onClose }) {
   const hasTrackedBatchPlacements = (data?.commercial?.availableBatches || []).some((batch) => batch.placements?.length);
   const batchCoverageMissing = Boolean(selectedPosition) && hasTrackedBatchPlacements && allocationRemaining > 0;
   const requiresSourcePosition = ["quantity", "measured_bulk"].includes(data?.part?.trackingMode || part.trackingMode);
+  const priceSelection = part.priceSelection || "";
+  const selectedPrice = canViewPrices ? knownPriceOption(pricingPreview?.options, priceSelection) : null;
+  const priceOptions = PART_PRICE_SOURCES.map((source) => {
+    const option = knownPriceOption(pricingPreview?.options, source.value);
+    return {
+      ...source,
+      disabled: !option,
+      amount: option ? formatPriceAmount(option.price) : missingPriceLabel(source.value),
+    };
+  });
   return <div ref={rootRef} className="create-stock-dropdown" role="dialog" aria-label={`Stock for ${part.partNo}`} style={{ top: placement.side === "above" ? "auto" : "calc(100% + 6px)", bottom: placement.side === "above" ? "calc(100% + 6px)" : "auto", maxHeight: placement.maxHeight }} onKeyDown={(event) => {
     if (event.key === "Escape" && !event.target.closest?.(".stock-intake-overlay")) { event.preventDefault(); event.stopPropagation(); onClose?.(); }
   }}>
@@ -99,17 +145,21 @@ export function CreateStockDropdown({ locationId, part, onChange, onClose }) {
         })}
         {!positions.length ? <p>No pickable stock location.</p> : null}
       </fieldset>
-      {selectedPosition && automaticAllocations.length ? <section className="create-stock-batches" aria-label="Automatic batch allocation">
+      {canViewPrices && selectedPosition && automaticAllocations.length ? <section className="create-stock-batches" aria-label="Automatic batch allocation">
         <header><strong>Batch allocation</strong><small>Automatic · oldest first</small></header>
         {automaticAllocations.map((batch) => <div className="create-stock-batch-allocation" key={batch.costLayerId}>
           <span><strong>{batchLabel(batch)}</strong><small>{money(batch.unitCost, batch.currency)}</small></span>
           <strong>{batch.allocationQuantity} {uom}</strong>
         </div>)}
       </section> : null}
-      {batchCoverageMissing ? <p className="create-stock-batch-warning" role="alert">Batch placement does not cover this quantity. Review this position in Inventory.</p> : null}
+      {canViewPrices && batchCoverageMissing ? <p className="create-stock-batch-warning" role="alert">Batch placement does not cover this quantity. Review this position in Inventory.</p> : null}
+      {canViewPrices ? <label className="create-stock-price-source">Price source<Dropdown aria-label="Price source" disabled={pricingLoading || !selectedPosition || batchCoverageMissing} value={priceSelection} onChange={(event) => onChange?.({ priceSelection: event.target.value, customUnitPrice: "" })} popoverClassName="create-stock-price-popover" showSelectionIndicator={false}>
+        <option value="" disabled data-description={pricingLoading ? "Loading…" : "Required"}>Choose price source</option>
+        {priceOptions.map((option) => <option key={option.value} value={option.value} disabled={option.disabled} data-description={option.amount}>{option.label}</option>)}
+      </Dropdown></label> : null}
       <StockIntakeControl catalogPartId={part.catalogPartId} locationId={locationId} initialData={data} onReceived={() => setRevision((value) => value + 1)} />
       {!data.part.trackingMode ? <p>Review tracking in Inventory before adding stock.</p> : null}
     </>}
-    <Button type="button" disabled={requiresSourcePosition && (!selectedPosition || batchCoverageMissing)} onClick={onClose}>Done</Button>
+    <Button type="button" disabled={(requiresSourcePosition && (!selectedPosition || (canViewPrices && batchCoverageMissing))) || pricingLoading || (canViewPrices && !selectedPrice)} onClick={onClose}>Done</Button>
   </div>;
 }

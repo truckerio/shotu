@@ -1,10 +1,27 @@
 import { getPool, query } from "../pool.js";
 import { InvoiceExtractionError, invoiceConflict } from "../../modules/invoice-extraction/invoice-extraction.errors.js";
 
+// Only ingestion-created PO bill runs establish this purpose; an ordinary invoice
+// merely attached to a PO never becomes review-only. Exact-source re-extractions inherit it.
+export function purchaseBillSourcePurposeSql(runAlias) {
+  if(!['r','run'].includes(runAlias))throw new Error('Unsupported invoice alias');
+  return `exists (
+    select 1 from inventory_purchase_bill_documents bill
+    join inventory_purchase_orders bill_order on bill_order.company_id=bill.company_id and bill_order.id=bill.order_id
+    join invoice_extraction_runs origin on origin.company_id=bill.company_id and origin.id=bill.id
+      and origin.idempotency_key='po-bill:' || bill.id::text
+      and origin.location_id=bill_order.location_id
+      and origin.document_hash=bill.content_sha256 and origin.mime_type=bill.mime_type
+    where bill.company_id=${runAlias}.company_id and bill_order.location_id=${runAlias}.location_id
+      and bill.content_sha256=${runAlias}.document_hash and bill.mime_type=${runAlias}.mime_type
+  )`;
+}
+
 export function publicInvoiceExtractionRun(row) {
   if (!row) return null;
   return {
     id: row.id,
+    ...(row.is_purchase_order_bill ? {sourcePurpose: "purchase_order_bill"} : {}),
     locationId: row.location_id,
     fileName: row.file_name,
     mimeType: row.mime_type,
@@ -52,6 +69,7 @@ export function publicInvoiceExtractionRun(row) {
 async function selectRunWithSource(client, whereSql, parameters) {
   const result = await client.query(
     `select r.*,
+            ${purchaseBillSourcePurposeSql("r")} as is_purchase_order_bill,
             s.id as source_document_id,
             s.training_status as source_training_status,
             s.retention_until as source_retention_until,
@@ -161,59 +179,64 @@ export async function loadInvoiceLayoutTemplates({ companyId, vendorKey = "", st
   return result.rows;
 }
 
+// The caller owns the transaction, allowing a PO attachment and its queue entry to commit together.
+export async function createInvoiceExtractionRunInTransaction(client, input) {
+  const result = await client.query(
+    `insert into invoice_extraction_runs (
+       id, company_id, location_id, created_by, document_hash, file_name, mime_type,
+       byte_size, idempotency_key, status, provider, model, prompt_version, memory_snapshot
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'processing', $10, $11, $12, $13)
+     on conflict (company_id, created_by, idempotency_key) do nothing
+     returning id`,
+    [
+      input.runId, input.companyId, input.locationId, input.actorId, input.documentHash, input.fileName,
+      input.mimeType, input.byteSize, input.idempotencyKey, input.provider, input.model,
+      input.promptVersion, JSON.stringify(input.memorySnapshot || {}),
+    ],
+  );
+  if (result.rows[0]) {
+    await client.query(
+      `insert into invoice_source_documents (
+         company_id, run_id, ciphertext, iv, auth_tag, key_version, content_sha256,
+         mime_type, byte_size, retention_until
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [input.companyId, input.runId, input.source.ciphertext, input.source.iv, input.source.authTag,
+        input.source.keyVersion, input.documentHash, input.mimeType, input.byteSize, input.retentionUntil],
+    );
+    if (input.enqueueJob) {
+      await client.query(
+        `insert into integration_jobs (
+           company_id, provider, job_type, payload, idempotency_key, max_attempts
+         ) values ($1, 'invoice_extraction', 'extract', $2::jsonb, $3, $4)
+         on conflict (company_id, provider, idempotency_key)
+           where idempotency_key is not null
+         do nothing`,
+        [
+          input.companyId,
+          JSON.stringify({ runId: input.runId, vendorHint: String(input.vendorHint || "").slice(0, 180) }),
+          `invoice-extraction:${input.runId}`,
+          Math.min(5, Math.max(1, Number(input.maxAttempts) || 2)),
+        ],
+      );
+    }
+    const created = await selectRunWithSource(client, "r.id = $1 and r.company_id = $2", [input.runId, input.companyId]);
+    return { ...created, inserted: true };
+  }
+  const existing = await selectRunWithSource(
+    client,
+    "r.company_id = $1 and r.created_by = $2 and r.idempotency_key = $3",
+    [input.companyId, input.actorId, input.idempotencyKey],
+  );
+  return existing ? { ...existing, inserted: false } : null;
+}
+
 export async function createInvoiceExtractionRun(input) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
-    const result = await client.query(
-      `insert into invoice_extraction_runs (
-         id, company_id, location_id, created_by, document_hash, file_name, mime_type,
-         byte_size, idempotency_key, status, provider, model, prompt_version, memory_snapshot
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'processing', $10, $11, $12, $13)
-       on conflict (company_id, created_by, idempotency_key) do nothing
-       returning id`,
-      [
-        input.runId, input.companyId, input.locationId, input.actorId, input.documentHash, input.fileName,
-        input.mimeType, input.byteSize, input.idempotencyKey, input.provider, input.model,
-        input.promptVersion, JSON.stringify(input.memorySnapshot || {}),
-      ],
-    );
-    if (result.rows[0]) {
-      await client.query(
-        `insert into invoice_source_documents (
-           company_id, run_id, ciphertext, iv, auth_tag, key_version, content_sha256,
-           mime_type, byte_size, retention_until
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [input.companyId, input.runId, input.source.ciphertext, input.source.iv, input.source.authTag,
-          input.source.keyVersion, input.documentHash, input.mimeType, input.byteSize, input.retentionUntil],
-      );
-      if (input.enqueueJob) {
-        await client.query(
-          `insert into integration_jobs (
-             company_id, provider, job_type, payload, idempotency_key, max_attempts
-           ) values ($1, 'invoice_extraction', 'extract', $2::jsonb, $3, $4)
-           on conflict (company_id, provider, idempotency_key)
-             where idempotency_key is not null
-           do nothing`,
-          [
-            input.companyId,
-            JSON.stringify({ runId: input.runId, vendorHint: String(input.vendorHint || "").slice(0, 180) }),
-            `invoice-extraction:${input.runId}`,
-            Math.min(5, Math.max(1, Number(input.maxAttempts) || 2)),
-          ],
-        );
-      }
-      const created = await selectRunWithSource(client, "r.id = $1 and r.company_id = $2", [input.runId, input.companyId]);
-      await client.query("commit");
-      return { ...created, inserted: true };
-    }
-    const existing = await selectRunWithSource(
-      client,
-      "r.company_id = $1 and r.created_by = $2 and r.idempotency_key = $3",
-      [input.companyId, input.actorId, input.idempotencyKey],
-    );
+    const result = await createInvoiceExtractionRunInTransaction(client, input);
     await client.query("commit");
-    return existing ? { ...existing, inserted: false } : null;
+    return result;
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

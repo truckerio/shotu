@@ -4,7 +4,7 @@ import { readInventoryPartCommercial, updateInventoryPartPrice } from "./invento
 import { listInventoryBrowseLocations } from "./inventory-effective-scope.js";
 import { readSellingPolicy, writeSellingPolicy } from "./inventory-selling-policy.service.js";
 import { correctInventoryBatchCost } from "./inventory-batch-cost.service.js";
-import { listPurchaseBills, uploadPurchaseBill, downloadPurchaseBill } from './purchase-order-bills.service.js';
+import { listPurchaseBills, uploadPurchaseBill, downloadPurchaseBill, extractPurchaseBill } from './purchase-order-bills.service.js';
 import { getBills,postBill } from './inventory-bills.service.js';
 import { getInventoryReports } from './inventory-reports.service.js';
 import { getInbound,getInboundDetail } from './inventory-inbound.service.js';
@@ -166,6 +166,10 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
       if(req.method==='GET'){helpers.sendJson(res,200,await getPurchaseRequests(url.searchParams,helpers.requestContext));return true;}
       if(req.method==='POST'){helpers.sendJson(res,200,await postPurchaseRequest(await helpers.readBody(req),helpers.requestContext));return true;}
     }
+    const purchaseBillExtractPath=/^\/api\/office\/inventory\/purchasing\/([^/]+)\/bills\/([^/]+)\/extract$/.exec(url.pathname);
+    if(req.method==='POST'&&purchaseBillExtractPath){
+      helpers.sendJson(res,200,await (dependencies.extractPurchaseBill || extractPurchaseBill)(decodeURIComponent(purchaseBillExtractPath[1]),decodeURIComponent(purchaseBillExtractPath[2]),helpers.requestContext,dependencies));return true;
+    }
     const purchaseBillPath=/^\/api\/office\/inventory\/purchasing\/([^/]+)\/bills(?:\/([^/]+))?$/.exec(url.pathname);
     if(purchaseBillPath){
       const orderId=purchaseBillPath[1],documentId=purchaseBillPath[2];
@@ -174,7 +178,7 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
         res.writeHead(200,{'content-type':file.mimeType,'content-length':file.bytes.length,'content-disposition':inventoryDownloadDisposition(file.fileName),'cache-control':'private, no-store','x-content-type-options':'nosniff'});res.end(file.bytes);return true;
       }
       if(req.method==='GET'){helpers.sendJson(res,200,await listPurchaseBills(orderId,helpers.requestContext));return true;}
-      if(req.method==='POST'&&!documentId){const body=await helpers.readBody(req);helpers.sendJson(res,200,await uploadPurchaseBill({...body,orderId},helpers.requestContext));return true;}
+      if(req.method==='POST'&&!documentId){const body=await helpers.readBody(req);helpers.sendJson(res,200,await (dependencies.uploadPurchaseBill || uploadPurchaseBill)({...body,orderId},helpers.requestContext,dependencies));return true;}
     }
     const purchaseReceiptPath=/^\/api\/office\/inventory\/purchasing\/([^/]+)\/receipts$/.exec(url.pathname);
     if(req.method==='POST'&&purchaseReceiptPath){
@@ -217,7 +221,7 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
       helpers.sendJson(res,200,await getPurchaseCommand(url.searchParams,helpers.requestContext));return true;
     }
     if (url.pathname === '/api/office/inventory/purchasing') {
-      if(req.method==='GET'){helpers.sendJson(res,200,await getPurchasing(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='GET'){helpers.sendJson(res,200,await getPurchasing(url.searchParams,helpers.requestContext,dependencies));return true;}
       if(req.method==='POST'){helpers.sendJson(res,200,await savePurchase(await helpers.readBody(req),helpers.requestContext));return true;}
     }
     const movementPartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)\/movements$/);

@@ -34,7 +34,7 @@ test("usage model replaces stable refresh rows without duplication", () => {
   const first = { id: "usage-1", status: "issued" };
   assert.deepEqual(replaceUsage([first], { ...first, status: "installed" }), [{ id: "usage-1", status: "installed" }]);
   assert.deepEqual(replaceUsage([], first), [first]);
-  assert.equal(inventoryUsageStatusLabel("reserved"), "Reserved — awaiting Office approval");
+  assert.equal(inventoryUsageStatusLabel("reserved"), "Reserved — ready to install");
   assert.equal(inventoryUsageStatusLabel("installed_pending_approval"), "Installed — awaiting Office approval");
   assert.equal(inventoryUsageStatusLabel("returned"), "Returned unused");
 });
