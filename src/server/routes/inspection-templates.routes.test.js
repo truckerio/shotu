@@ -1,18 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handleInspectionTemplatesApi } from "./inspection-templates.routes.js";
-import { weeklyInspectionPreset } from "../../../shared/inspection-template.js";
+import { weeklyInspectionPreset, inspectionPreset } from "../../../shared/inspection-template.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const versionId = "22222222-2222-4222-8222-222222222222";
 function harness(body={}) { const sent=[]; return {sent,helpers:{requestContext:{actor:{id:"u"}},readBody:async()=>body,sendJson:(_res,status,payload)=>sent.push({status,payload})}}; }
 
-test("weekly template creation rejects annual and accepts the canonical preset", async () => {
+test("template creation rejects unknown presets and accepts canonical weekly and annual presets", async () => {
   const invalid=harness({companyId,name:"Annual",applicabilityKey:"Truck",presetKey:"annual",definition:weeklyInspectionPreset("Truck")});
   await assert.rejects(handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates"),invalid.helpers,{create:async()=>assert.fail()}),/Invalid option|preset/i);
   const valid=harness({companyId,name:"Weekly Truck",applicabilityKey:"Truck",presetKey:"weekly-truck",definition:weeklyInspectionPreset("Truck")}); let received;
   await handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates"),valid.helpers,{create:async(_context,input)=>(received=input,{version:{id:versionId}})});
   assert.equal(received.definition.assetType,"Truck"); assert.equal(valid.sent[0].status,201);
+  const annualDefinition=inspectionPreset("Truck","annual");
+  const annual=harness({companyId,name:annualDefinition.label,applicabilityKey:"Truck",presetKey:annualDefinition.presetKey,definition:annualDefinition});
+  await handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates"),annual.helpers,{create:async(_context,input)=>(received=input,{version:{id:versionId}})});
+  assert.equal(received.definition.inspectionType,"annual"); assert.equal(annual.sent[0].status,201);
 });
 
 test("template creation rejects a preset or definition for the wrong unit type", async () => {
@@ -44,7 +48,7 @@ test("publish rejects template assignment mismatches in both unit-type direction
 test("assignment recovery is strict, tenant-scoped through the admin service, and versioned", async () => {
   const input={companyId,locationId:null,familyKey:"inspection",applicabilityKey:"Truck",templateVersionId:versionId,expectedVersion:0}; const request=harness(input); let received;
   await handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates/assignments"),request.helpers,{assign:async(_context,value)=>(received=value,{id:"assignment-1"})});
-  assert.deepEqual(received,input); assert.equal(request.sent[0].payload.assignment.id,"assignment-1");
+  assert.deepEqual(received,{...input,inspectionType:"weekly"}); assert.equal(request.sent[0].payload.assignment.id,"assignment-1");
   const invalid=harness({...input,familyKey:"other"});
   await assert.rejects(handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates/assignments"),invalid.helpers,{assign:async()=>assert.fail()}),/Invalid literal|inspection/i);
 });

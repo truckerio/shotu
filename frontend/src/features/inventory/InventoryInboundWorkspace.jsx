@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DotsHorizontal, UploadCloud02, XClose } from "@untitledui/icons";
+import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { Button } from "../../components/ui/Button.jsx";
+import { IconButton } from "../../components/ui/IconButton.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
 import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
@@ -182,11 +185,25 @@ export function InventoryInboundWorkspace({ billUploadControl, locations, onOpen
     {action && action.id !== "invoice" ? <Button variant="primary" onClick={() => runAction(selected)}>{action.label}</Button> : null}
   </div> : null;
   return <section className="inventory-inbound-workspace">
-    {comparison ? selected || sourceError || linkedLoading ? <nav className="purchase-order-document-navigation" aria-label="Delivery navigation"><Button onClick={clearInboundSelection}>All deliveries</Button></nav> : <header className="purchasing-pane-header"><h3>Deliveries &amp; invoices</h3></header> : null}
+    {comparison ? <header className="purchasing-pane-header">
+      {selected || sourceError || linkedLoading ? <nav className="purchase-order-document-navigation" aria-label="Delivery navigation"><Button onClick={clearInboundSelection}>All deliveries</Button></nav> : <h3>Deliveries &amp; invoices</h3>}
+      <div className="purchasing-section-actions">
+        {query || view !== "my_work" ? <IconButton icon={XClose} label="Clear delivery and invoice filters" onClick={() => { setQuery(""); setView("my_work"); }} /> : null}
+        <IconButton icon={UploadCloud02} label="Upload invoice" disabled={!activeLocationId} onClick={() => onUploadInvoice?.(activeLocationId)} />
+        <MenuTrigger>
+          <AriaButton className="shared-icon-button is-neutral" aria-label="More delivery and invoice actions" title="More delivery and invoice actions" isDisabled={!activeLocationId}><DotsHorizontal aria-hidden="true" /></AriaButton>
+          <Popover className="purchasing-actions-popover" placement="bottom end">
+            <Menu className="purchasing-actions-menu" aria-label="Delivery and invoice actions">
+              <MenuItem className="purchasing-actions-item" onAction={() => onAddInventory?.(activeLocationId)}>Record delivery without PO</MenuItem>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
+      </div>
+    </header> : null}
     {!embedded?<OperationalCollectionTabs ariaLabel="Inbound views" activeId={view} onChange={setView} items={INBOUND_VIEWS.map((item) => ({ ...item, count: inboundCount(counts, item.id), countLabel: `${inboundCount(counts, item.id)} inbound items` }))} />:null}
     {!comparison || !selected ? <OperationalCollectionToolbar className="inventory-inbound-toolbar">
-      {!embedded?<label><span>Shop</span><Dropdown aria-label="Inbound shop" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">All shops</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>:<label><span>View</span><Dropdown aria-label="Delivery and invoice view" value={view} onChange={(event) => setView(event.target.value)}>{INBOUND_VIEWS.map((item) => <option key={item.id} value={item.id}>{item.label} ({inboundCount(counts, item.id)})</option>)}</Dropdown></label>}
       <label><span>Search</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="PO, supplier, invoice" aria-label="Search inbound work" /></label>
+      {!embedded?<label><span>Shop</span><Dropdown aria-label="Inbound shop" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">All shops</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>:<label><span>View</span><Dropdown aria-label="Delivery and invoice view" value={view} onChange={(event) => setView(event.target.value)}>{INBOUND_VIEWS.map((item) => <option key={item.id} value={item.id}>{item.label} ({inboundCount(counts, item.id)})</option>)}</Dropdown></label>}
     </OperationalCollectionToolbar> : null}
     {linkedLoading ? <p role="status" className="purchasing-pair-message">Loading linked deliveries and invoices…</p> : sourceError ? <p role={comparison?"status":"alert"} className={comparison?"purchasing-pair-message":"ops-error"}>{sourceError}</p> : null}
     {!linkedLoading&&(!comparison||(!selected&&!sourceError))?<CheckpointCollection queue={inboundQueue} label="inbound items" pageSize={100} storageKey={`inventory-inbound:${inboundQueryKey}`} ariaLabel="Inbound work" statusPlacement={comparison?"footer":"overlay"} renderItems={(entries) => entries.length ? <OperationalDataTable ariaLabel="Inbound work" columns={comparison?comparisonColumns:columns} className="inventory-data-table inventory-inbound-table">{entries.map(({ item, key, rowProps }) => <OperationalDataRow {...rowProps} id={item.id} key={key}>

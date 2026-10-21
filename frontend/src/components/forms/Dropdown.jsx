@@ -59,6 +59,7 @@ export function Dropdown({
   "aria-label": ariaLabel,
   "aria-labelledby": ariaLabelledBy,
   "aria-required": ariaRequired,
+  appearance = "field",
   autoFocus = false,
   children,
   className = "",
@@ -89,6 +90,7 @@ export function Dropdown({
 
   return (
     <Select
+      data-appearance={appearance}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       className={joinClassNames("dropdown-select", TriggerIcon && "dropdown-select-icon-only", className)}

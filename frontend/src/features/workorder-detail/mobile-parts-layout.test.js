@@ -109,7 +109,7 @@ test("phone parts editor uses the same shared responsive row and action geometry
   assert.match(css, /\.used-parts-section-heading \.mechanic-scan-trigger\.is-table-action\s*\{[^}]*justify-content:\s*center;[^}]*margin-left:\s*auto;[^}]*min-height:\s*44px;/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.used-parts-actions\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
   assert.match(css, /\.used-parts-section > h3,[\s\S]*?font-size:\s*18px;/s);
-  assert.match(css, /\.workorder-part-price-layers summary\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*var\(--weight-semibold\);/s);
+  assert.match(css, /\.workorder-part-price-layers summary\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*400;/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.workorder-part-price-layers summary\s*\{[^}]*min-height:\s*44px;/s);
 });
 

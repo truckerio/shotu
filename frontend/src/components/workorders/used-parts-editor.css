@@ -828,7 +828,7 @@
 .workorder-part-price strong,.workorder-part-price small { overflow-wrap: anywhere; }
 .workorder-part-price small[role="alert"] { color: #b42318; }
 .used-part-price-unavailable { color: #667085; font-size: 12px; align-self: center; }
-.workorder-part-price-layers summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; color: #475467; font-size: 14px; font-weight: var(--weight-semibold); }
+.workorder-part-price-layers summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; color: #475467; font-size: 14px; font-weight: 400; }
 .workorder-part-price-layers ul { display: grid; gap: 6px; margin: 0; padding: 6px 0 0; list-style: none; }
 .workorder-part-price-layers li { display: grid; gap: 2px; }
 .workorder-part-price-layers li > span { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }

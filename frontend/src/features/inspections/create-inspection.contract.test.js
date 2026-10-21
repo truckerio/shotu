@@ -1,20 +1,40 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { canCreateInspectionLocalUnit, hasExactInspectionUnit, localInspectionUnitPayload, resolvedLocationId } from "./useCreateInspectionController.js";
+import { canCreateInspectionLocalUnit, hasExactInspectionUnit, localInspectionUnitPayload, resolvedLocationId, selectedInspectionTemplate, inspectionCreateAttempt } from "./useCreateInspectionController.js";
 
 const page = readFileSync(new URL("./CreateInspectionPage.jsx", import.meta.url), "utf8");
 const controller = readFileSync(new URL("./useCreateInspectionController.js", import.meta.url), "utf8");
 
-test("create inspection derives template from canonical selected unit without an inspection-type selector", () => {
-  assert.match(controller, /weeklyInspectionTemplate\(selectedUnit\.unitType\)/);
+test("create inspection selects a published type-scoped template for the chosen unit", () => {
+  assert.match(controller, /selectedInspectionTemplate/);
   assert.match(controller, /assetId: selectedUnit\.id/);
   assert.match(page, /Search truck or trailer/);
-  assert.match(page, /form\.template\.label/);
-  assert.doesNotMatch(page, /Annual|FMCSA|Inspection type/);
+  assert.match(page, /aria-label="Inspection type"/);
+  assert.match(page, /form\.inspectionTypes\.map/);
   assert.match(page, /inspectionUnitTypeLabel\(unit\.unitType\)/);
   assert.match(page, /inspectionUnitTypeLabel\(form\.selectedUnit\.unitType\)/);
-  assert.doesNotMatch(page, /unitType === "trailer"/);
+});
+
+test("template selection cannot fall back across types, tenants, locations, or units", () => {
+  const annual = { inspectionType: "annual", unitType: "Truck", companyId: "company", locationId: "yard", versionId: "annual-v1", label: "Annual truck" };
+  const weekly = { ...annual, inspectionType: "weekly", versionId: "weekly-v1" };
+  const params = { templates: [weekly, annual], selectedUnit: { companyId: "company", unitType: "Truck" }, inspectionType: "annual", locationId: "yard" };
+  assert.equal(selectedInspectionTemplate(params), annual);
+  assert.equal(selectedInspectionTemplate({ ...params, inspectionType: "post_trip" }), null);
+  assert.equal(selectedInspectionTemplate({ ...params, locationId: "other" }), null);
+  assert.equal(selectedInspectionTemplate({ ...params, selectedUnit: { companyId: "other", unitType: "Truck" } }), null);
+  assert.equal(selectedInspectionTemplate({ ...params, selectedUnit: { companyId: "company", unitType: "Trailer" } }), null);
+  assert.equal(selectedInspectionTemplate({ ...params, selectedUnit: null }), null);
+});
+
+test("changing inspection type gets a new create command while retries retain the key", () => {
+  const weekly = { assetId: "unit", inspectionType: "weekly" };
+  const first = inspectionCreateAttempt(null, weekly, () => "weekly-key");
+  assert.equal(inspectionCreateAttempt(first, weekly, () => "unused"), first);
+  const annual = inspectionCreateAttempt(first, { ...weekly, inspectionType: "annual" }, () => "annual-key");
+  assert.equal(annual.idempotencyKey, "annual-key");
+  assert.notEqual(annual.fingerprint, first.fingerprint);
 });
 
 test("create form derives location where possible and limits mechanics assignment to Office/Admin", () => {
@@ -64,4 +84,19 @@ test("local inspection unit payload preserves selected company/location and requ
   assert.match(page, /Add local unit/);
   assert.match(page, /Confirm and add local unit/);
   assert.match(controller, /\/api\/vehicles\/manual/);
+});
+
+
+test("inspection customer capture reuses Workorder's company control without commercial fields", () => {
+  assert.match(page, /<CustomerCompanyField value=\{form.customerCompanyName\}/);
+  assert.match(page, /<BusinessAddressField key=\{form.customerAddressScope\}/);
+  assert.match(controller, /customerAddress: customerIdentity.customerAddress,/);
+  assert.match(page, /Saved customer company/);
+  assert.match(page, /label="Inspector"/);
+  assert.match(controller, /\/api\/customers\?companyId=/);
+  assert.match(controller, /customerDirectory.scope === customerScope/);
+  assert.match(controller, /if \(!controller.signal.aborted\)/);
+  assert.match(controller, /if \(!customersReady\)/);
+  assert.match(controller, /customerAccountId: customerIdentity.customerAccountId/);
+  assert.doesNotMatch(page, /ApprovalRequest|Contact email|customerContact/);
 });

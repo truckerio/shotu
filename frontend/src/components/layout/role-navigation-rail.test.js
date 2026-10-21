@@ -31,10 +31,10 @@ test("RoleNavigationRail keeps a flush workspace rail and phone-safe targets", (
   assert.match(styles, /@media \(max-width:700px\) \{ \.role-navigation-rail \{ display:none; \} \}/);
 });
 
-test("Admin profile divider aligns with the page card without dividing the full rail", () => {
+test("Admin profile divider stays straight and aligns with the page card", () => {
   assert.match(adminStyles, /\.admin-shell \.role-navigation-rail\s*\{[^}]*position:\s*sticky;/s);
-  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*68px;/s);
-  assert.doesNotMatch(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*inset:/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-top:\s*1px solid #e4e7ec;[^}]*height:\s*1px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*68px;/s);
+  assert.doesNotMatch(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*(?:border-right:|border-top-right-radius:|inset:)/s);
   assert.match(adminStyles, /\.admin-shell \.role-navigation-divider\s*\{[^}]*background:\s*transparent;/s);
 });
 

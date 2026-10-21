@@ -33,7 +33,10 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.doesNotMatch(workspace, /Inventory views/);
   assert.doesNotMatch(workspace, /inventory-workspace-header|inventory-workspace-heading|inventory-workspace-actions|inventory-stock-controls|inventory-stock-filters|inventory-stock-list|inventory-stock-head|inventory-stock-results/);
   assert.match(workspace, /stockStateLabel/);
-  assert.match(await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"), />Upload invoice<\/Button>/);
+  const inbound = await readFile(new URL("./InventoryInboundWorkspace.jsx", import.meta.url), "utf8");
+  const purchasing = await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8");
+  assert.match(inbound, /<IconButton icon=\{UploadCloud02\} label="Upload invoice" disabled=\{!activeLocationId\} onClick=\{\(\) => onUploadInvoice\?\.\(activeLocationId\)\}/);
+  assert.match(purchasing, /onUploadInvoice=\{\(requestedLocationId\)=>onInvoice\?\.\(requestedLocationId\|\|locationId\)\}/);
   assert.doesNotMatch(workspace, /id="inventory-invoice-action"/);
   assert.doesNotMatch(workspace, /<span>Local inventory<\/span>/);
   assert.match(workspace, /<IconButton className="inventory-invoice-upload-button" icon=\{UploadCloud02\} label="Upload invoices" aria-haspopup="dialog"/);
@@ -116,7 +119,7 @@ test("Purchasing combines demand, orders and canonical delivery work with preser
   assert.match(purchases, /purchase-needs-section/);
   assert.match(purchases, /<PurchasingSplitView/);
   assert.match(purchases, /<InventoryInboundWorkspace[^>]*comparison/);
-  assert.match(purchases, /<details className="purchasing-expandable-section purchase-needs-section">/);
+  assert.match(purchases, /<details className="purchase-needs-section"><summary>/);
   assert.match(purchases, /onDemandOrderFinished=\{finishDemandOrder\}/);
   assert.match(purchases, /storageKey\}:demand:\$\{demandDraftId\}/);
   assert.match(purchases, /localStorage\.removeItem\(draftStorageKey\)/);
@@ -384,7 +387,8 @@ test("stock starts unified add stock and keeps location count handoffs", async (
   assert.match(workspace, />Add stock<\/Button>/);
   assert.doesNotMatch(workspace, /id="inventory-physical-count-action"/);
   assert.doesNotMatch(workspace, /const stockActions = <[^;]*>Starting inventory<\/Button>/s);
-  assert.match(await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"), />Record arrival without PO<\/Button>/);
+  assert.match(await readFile(new URL("./InventoryInboundWorkspace.jsx", import.meta.url), "utf8"), /<MenuItem[^>]*onAction=\{\(\) => onAddInventory\?\.\(activeLocationId\)\}>Record delivery without PO<\/MenuItem>/);
+  assert.match(await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8"), /onAddInventory=\{\(requestedLocationId\)=>onStock\?\.\(requestedLocationId\|\|locationId\)\}/);
   assert.match(workspace, /function openStockByLocation\(shopId = ""\)[\s\S]*setStockMode\("location"\)[\s\S]*stockMode: "location"/);
   assert.doesNotMatch(workspace, /openPhysicalCountByLocation|physicalCountMode|countIntent/);
   assert.match(workspace, /onOpenLocations=\{openStockByLocation\}/);

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { INSPECTION_PRESETS, cloneInspectionTemplate, createInspectionTemplate, inspectionTemplateFromApi, inspectionTemplateDefinition, inspectionTemplateSummary, moveInspectionItem, validateInspectionTemplate } from "./inspection-template-model.js";
+import { INSPECTION_PRESETS as CANONICAL_PRESETS } from "../../../../../shared/inspection-template.js";
+import { INSPECTION_PRESETS, changeInspectionType, matchingInspectionAssignments, eligibleInspectionTemplates, cloneInspectionTemplate, createInspectionTemplate, inspectionTemplateFromApi, inspectionTemplateDefinition, inspectionTemplateSummary, moveInspectionItem, validateInspectionTemplate } from "./inspection-template-model.js";
 
-test("weekly-only presets provide truck and trailer templates with Pass, Issue, and N/A", () => {
-  assert.deepEqual(INSPECTION_PRESETS.map(({ id }) => id), ["weekly-truck", "weekly-trailer"]);
+test("canonical presets provide all inspection types for truck and trailer", () => {
+  assert.deepEqual(INSPECTION_PRESETS.filter((entry) => entry.inspectionType === "weekly").map(({ id }) => id), ["weekly-truck", "weekly-trailer"]);
+  assert.equal(new Set(INSPECTION_PRESETS.map((entry) => entry.id)).size, 10);
   const template = createInspectionTemplate("weekly-truck", "truck-1");
   assert.equal(template.status, "draft");
   assert.match(inspectionTemplateSummary(template), /3 sections · 12 checks/);
@@ -50,4 +52,50 @@ test("new preset checks keep established required/N/A defaults", () => {
     assert.equal(item.allowNa, true);
     assert.equal(item.requireNaReason, false);
   }
+});
+
+
+test("each canonical starter round trips its type, asset, checks, and policies", () => {
+  for (const preset of INSPECTION_PRESETS) {
+    const template = createInspectionTemplate(preset.id, "draft");
+    const definition = inspectionTemplateDefinition(template);
+    const canonical = CANONICAL_PRESETS.find((entry) => entry.assetType === template.unitType && entry.inspectionType === template.inspectionType);
+    assert.deepEqual(definition, canonical);
+    const restored = inspectionTemplateFromApi({ id: "def", name: template.name, applicabilityKey: template.unitType, presetKey: template.sourcePreset,
+      version: { id: "draft", state: "draft", optimisticVersion: 1, definition } });
+    assert.equal(restored.inspectionType, preset.inspectionType);
+    assert.equal(restored.unitType, preset.unitType);
+    assert.deepEqual(restored.sections, template.sections);
+    assert.deepEqual(validateInspectionTemplate(restored), []);
+    if (preset.inspectionType === "custom") assert.equal(restored.sourcePreset, "custom");
+  }
+});
+
+test("legacy templates default weekly and changed preset types become custom", () => {
+  const legacy = inspectionTemplateFromApi({ id: "def", name: "Legacy", applicabilityKey: "Truck", presetKey: "weekly-truck", version: { id: "draft", state: "draft", definition: { sections: [] } } });
+  assert.equal(legacy.inspectionType, "weekly");
+  const changed = changeInspectionType(legacy, "annual");
+  assert.equal(changed.sourcePreset, "custom");
+  assert.equal(inspectionTemplateDefinition(changed).inspectionType, "annual");
+  assert.equal(changeInspectionType(legacy, "weekly").sourcePreset, "weekly-truck");
+});
+
+test("assignments and archive candidates are isolated by type, asset, and scope", () => {
+  const assignments = [
+    { id: "weekly", applicabilityKey: "Truck" },
+    { id: "annual", applicabilityKey: "Truck", inspectionType: "annual" },
+    { id: "location", applicabilityKey: "Truck", inspectionType: "annual", locationId: "shop" },
+    { id: "trailer", applicabilityKey: "Trailer", inspectionType: "annual" },
+  ];
+  assert.deepEqual(matchingInspectionAssignments(assignments, { unitType: "Truck", inspectionType: "annual" }).map((entry) => entry.id), ["annual"]);
+  assert.deepEqual(matchingInspectionAssignments(assignments, { unitType: "Truck" }).map((entry) => entry.id), ["weekly"]);
+  assert.deepEqual(matchingInspectionAssignments(assignments, { unitType: "Truck", inspectionType: "annual", locationId: "shop" }).map((entry) => entry.id), ["location"]);
+  const templates = [
+    { versionId: "weekly", unitType: "Truck", status: "published" },
+    { versionId: "annual", unitType: "Truck", inspectionType: "annual", status: "published" },
+    { versionId: "draft", unitType: "Truck", inspectionType: "annual", status: "draft" },
+    { versionId: "trailer", unitType: "Trailer", inspectionType: "annual", status: "published" },
+  ];
+  assert.deepEqual(eligibleInspectionTemplates(templates, { unitType: "Truck", inspectionType: "annual" }).map((entry) => entry.versionId), ["annual"]);
+  assert.deepEqual(eligibleInspectionTemplates(templates, { unitType: "Truck", inspectionType: "annual", excludeVersionId: "annual" }), []);
 });

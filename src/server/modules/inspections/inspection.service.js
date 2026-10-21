@@ -4,6 +4,7 @@ import { requireActor } from "../../auth/authorize.js";
 import { authorizeProductModule, productModuleBootstrap } from "../access/product-module-access.service.js";
 import { listProductAccessLocations } from "../../db/repositories/product-module-access.repo.js";
 import { modeAllows } from "../../../../shared/product-modules.js";
+import { listEffectiveInspectionTemplates } from "../../db/repositories/template-definitions.repo.js";
 import { createInspection, createInspectionCorrection, createInspectionReinspection, createInspectionWorkorder, getInspectionById, linkInspectionWorkorder, listEligibleInspectionWorkorders, listInspections, listWorkorderInspectionSources, replaceInspectionAssignments, resolveInspectionFollowUp, saveInspectionResponses, transitionInspection } from "../../db/repositories/inspections.repo.js";
 import { createInspectionPrintArchive, findInspectionPrintArchive, findLatestInspectionPrintArchive, recordInspectionPrintLegacyAcceptance } from "../../db/repositories/inspection-print-archives.repo.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
@@ -18,7 +19,7 @@ import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { canonicalInspectionPrintJson, inspectionPrintSnapshotDigest, normalizeInspectionPrintSnapshot, verifyInspectionPrintSnapshot } from "./inspection-print-integrity.js";
 import { materializeInspectionPdf, readInspectionArchivedPdf } from "../../print/inspection-print-archive.service.js";
 
-function summary(record) { return { id:record.id,companyId:record.companyId,locationId:record.locationId,assetId:record.assetId,inspectionNumber:record.inspectionNumber,inspectionKind:record.inspectionKind,unitType:record.unitType,status:record.status,result:record.result,version:record.version,asset:record.asset,location:record.location||null,requestedAt:record.requestedAt,startedAt:record.startedAt,completedAt:record.completedAt,dueAt:record.dueAt,defectCount:record.defectCount,mechanic:record.mechanic||null,lineage:record.lineage||null,...(record.status==="completed"?{reinspectionEligible:record.reinspectionEligible===true,reinspectionBlockerCode:record.reinspectionBlockerCode||null}:{}) }; }
+function summary(record) { return { id:record.id,companyId:record.companyId,locationId:record.locationId,assetId:record.assetId,inspectionNumber:record.inspectionNumber,inspectionKind:record.inspectionKind,inspectionType:record.inspectionType || record.inspectionKind?.replace(/_(truck|trailer)$/, "") || "weekly",templateLabel:record.templateLabel || record.templateSnapshot?.label || "Weekly Inspection",unitType:record.unitType,status:record.status,result:record.result,version:record.version,asset:record.asset,location:record.location||null,requestedAt:record.requestedAt,startedAt:record.startedAt,completedAt:record.completedAt,dueAt:record.dueAt,defectCount:record.defectCount,mechanic:record.mechanic||null,lineage:record.lineage||null,...(record.status==="completed"?{reinspectionEligible:record.reinspectionEligible===true,reinspectionBlockerCode:record.reinspectionBlockerCode||null}:{}) }; }
 function followUpProjection(record,includeWorkorders=false){return(record.followUps||[]).map(({id,findingId,status,version,workorderId,reason,deferral,deferCount})=>({id,findingId,status,version,...(deferral?{deferral,deferCount:Number(deferCount||0)}:{}),...(includeWorkorders&&workorderId?{workorderId}:{}),...(status==="resolved_no_workorder"?{reason}:{} )}));}
 function completedSlip(record, includeWorkorderLinks = false) { return { ...summary(record),templateSnapshot:record.templateSnapshot,responses:record.responses,findings:(record.findings||[]).map(({ id,responseId,severity,note,disposition,noWorkorderReason,deferral })=>({id,responseId,severity,note,disposition,noWorkorderReason,...(deferral?{deferral}:{})})),finalNotes:record.finalNotes,followUps:followUpProjection(record,includeWorkorderLinks),...(includeWorkorderLinks ? { workorderLinks:record.workorderLinks || [] } : {}),workordersLinked:(record.workorderLinks || []).length > 0 }; }
 function assigned(record, actorId) { return (record.assignments||[]).some((assignment)=>assignment.mechanicUserId===actorId); }
@@ -89,7 +90,7 @@ export async function inspectionCreateContext(context, input = {}, dependencies 
   const allowed = (await Promise.all([...(context.companyIds || [])].map((companyId) => listLocations({
     companyIds: [companyId],
     locationIds: context.companyRoles?.get(companyId) === "admin" ? null : [...(context.locationIds || [])],
-  })))).flat().filter((location) => writable.has(`${location.companyId}:${location.locationId}`));
+  })))).flat().filter((location) => ["office", "admin", "mechanic"].includes(context.companyRoles?.get(location.companyId)) && writable.has(`${location.companyId}:${location.locationId}`));
   const locationRows = (await Promise.all(allowed.map(async (entry) => {
     if (entry.name) return { id: entry.locationId, companyId: entry.companyId, name: entry.name };
     const row = await readLocation(entry.locationId, [entry.companyId]);
@@ -105,6 +106,7 @@ export async function inspectionCreateContext(context, input = {}, dependencies 
   const assets = input.search?.trim()?.length >= 2 ? await searchAssets(input.search, 20, companyIds) : [];
   return {
     locations: locationRows,
+    templates: selected ? await (dependencies.listTemplates || listEffectiveInspectionTemplates)({companyId:selected.companyId,locationId:selected.id}) : [],
     mechanics,
     units: assets.filter((asset) => asset.unit_type === "Truck" || asset.unit_type === "Trailer").map((asset) => ({
       id: asset.id,
@@ -112,6 +114,7 @@ export async function inspectionCreateContext(context, input = {}, dependencies 
       unitNo: asset.unit_no,
       name: asset.name,
       unitType: asset.unit_type,
+      ownerName: asset.owner_name || "",
       vin: asset.vin,
       plate: asset.license_plate,
     })),
@@ -152,6 +155,8 @@ function printSnapshot(record) {
     result: record.result,
     completedAt: record.completedAt,
     unit: record.asset,
+    ...(record.inspector ? {inspector:record.inspector} : {}),
+    ...((record.inspectionLocation?.name || record.location?.name) ? {inspectionLocation:record.inspectionLocation || {name:record.location.name}} : {}),
     templateLabel: record.templateSnapshot?.label || "Weekly Inspection",
     templateSnapshot: record.templateSnapshot,
     responses: record.responses || [],

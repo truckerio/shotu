@@ -3,6 +3,10 @@ import { DATABASE_UUID_PATTERN } from "../../db/company.js";
 import { canonicalizeInspectionDeferral } from "../../../../shared/inspection-maintenance.js";
 
 export const createInspectionSchema = z.object({
+  customerAccountId: z.string().uuid().optional(),
+  customerCompanyName: z.string().trim().max(300).optional(),
+  customerAddress: z.string().trim().max(1000).optional(),
+  inspectionType: z.enum(["weekly", "annual", "pre_trip", "post_trip", "custom"]).default("weekly"),
   companyId: z.string().regex(DATABASE_UUID_PATTERN), locationId: z.string().uuid(), assetId: z.string().uuid(),
   idempotencyKey: z.string().trim().min(8).max(120),
   mechanicUserIds: z.array(z.string().uuid()).max(10).transform((ids) => [...new Set(ids)]).default([]),

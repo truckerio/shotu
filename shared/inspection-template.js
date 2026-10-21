@@ -1,6 +1,13 @@
+import { renderAnnualInspectionReport } from "./inspection-annual-report.js";
+
 export const INSPECTION_FAMILY_KEY = "inspection";
 export const INSPECTION_SCHEMA_VERSION = 1;
 export const INSPECTION_RENDERER_VERSION = "inspection-slip-v1";
+export const INSPECTION_ANNUAL_RENDERER_VERSION = "inspection-annual-v1";
+export const INSPECTION_PRINT_LAYOUTS = Object.freeze([
+  Object.freeze({ key: "standard", label: "Standard slip" }),
+  Object.freeze({ key: "annual_report", label: "Annual report" }),
+]);
 
 export const INSPECTION_BLOCK_TYPES = Object.freeze([
   "section", "instruction", "check", "notes", "unitIdentity", "inspectionMetadata",
@@ -19,14 +26,16 @@ const trailerSections = [
   ["safety", "Safety", ["Frame and crossmembers", "Mudflaps and rear-impact guard", "Cargo securement equipment"]],
 ];
 
-function preset(key, label, assetType, sections) {
+function preset(key, label, assetType, sections, inspectionType = "weekly") {
   return Object.freeze({
     familyKey: INSPECTION_FAMILY_KEY,
     presetKey: key,
+    inspectionType,
     label,
     assetType,
     schemaVersion: INSPECTION_SCHEMA_VERSION,
-    rendererVersion: INSPECTION_RENDERER_VERSION,
+    rendererVersion: inspectionType === "annual" ? INSPECTION_ANNUAL_RENDERER_VERSION : INSPECTION_RENDERER_VERSION,
+    ...(inspectionType === "annual" ? { printLayout: "annual_report" } : {}),
     sections: Object.freeze(sections.map(([sectionKey, title, labels]) => Object.freeze({
       key: sectionKey,
       title,
@@ -45,6 +54,53 @@ export const WEEKLY_INSPECTION_PRESETS = Object.freeze({
   Truck: preset("weekly-truck", "Weekly Truck Inspection", "Truck", truckSections),
   Trailer: preset("weekly-trailer", "Weekly Trailer Inspection", "Trailer", trailerSections),
 });
+
+export const INSPECTION_TYPES = Object.freeze([
+  { key: "weekly", label: "Weekly" },
+  { key: "annual", label: "Annual" },
+  { key: "pre_trip", label: "Pre-trip" },
+  { key: "post_trip", label: "Post-trip" },
+  { key: "custom", label: "Custom" },
+].map(Object.freeze));
+
+// The shop's paper report has 15 sections. Keep every check for both asset
+// types; inspectors use N/A for equipment that is not fitted to the unit.
+const annualSections = () => [
+  ["brakes", "Brake system", ["Service brakes", "Parking brake system", "Brake drums or rotors", "Brake hose", "Brake tubing", "Low pressure warning device", "Tractor protection valve", "Air compressor", "Electric brakes", "Hydraulic brakes", "Vacuum systems", "Antilock brake system", "Automatic brake adjusters"]],
+  ["coupling", "Coupling devices", ["Fifth wheels", "Pintle hooks", "Drawbar/towbar eye", "Drawbar/towbar tongue", "Safety devices", "Saddle-mounts"]],
+  ["exhaust", "Exhaust system", ["No exhaust leaks forward of or directly below the driver/sleeper compartment", "Exhaust does not leak or discharge in violation of the applicable standard", "Exhaust cannot burn, char, or damage wiring, fuel supply, or other combustible vehicle parts"]],
+  ["fuel", "Fuel system", ["No visible fuel leaks", "Fuel tank filler cap present", "Fuel tank securely attached"]],
+  ["lighting", "Lighting devices", ["All lighting devices and reflectors required by Part 393 are operable"]],
+  ["loading", "Safe loading", ["Vehicle, load, dunnage, spare tire, and other parts secured against falling onto the roadway", "Cargo protected against shifting", "Container securement devices on intermodal equipment"]],
+  ["steering", "Steering mechanism", ["Steering wheel free play", "Steering column", "Front axle beam and all steering components other than the steering column", "Steering gear box", "Pitman arm", "Power steering", "Ball and socket joints", "Tie rods and drag links", "Nuts", "Steering system"]],
+  ["suspension", "Suspension", ["U-bolts, spring hangers, and axle-positioning parts not cracked, broken, loose, or missing; axle remains in its normal position", "Spring assembly", "Torque, radius, or tracking components"]],
+  ["frame", "Frame", ["Frame members", "Tire and wheel clearance", "Adjustable axle assemblies (sliding subframes)"]],
+  ["tires", "Tires", ["Tires on any steering axle of a power unit", "All other tires", "Speed-restricted tires installed only as specifically designated by the motor carrier"]],
+  ["wheels", "Wheels and rims", ["Lock or side ring", "Wheels and rims", "Fasteners", "Welds"]],
+  ["glazing", "Windshield glazing", ["Windshield glazing meets crack, discoloration, and vision-obstruction requirements and exceptions (49 CFR 393.60)"]],
+  ["wipers", "Windshield wipers", ["Windshield wipers operate effectively without missing or damaged parts"]],
+  ["seats", "Motorcoach seats", ["Passenger seats securely fastened to the vehicle structure"]],
+  ["other", "Other", ["No other condition prevents safe operation of the vehicle"]],
+];
+
+const tripSections = (assetType, postTrip) => [
+  ["safety", postTrip ? "End-of-day condition" : "Before driving", ["Service brakes and trailer brake connections", "Parking brake", "Lights and reflectors", "Tires, wheels, and rims", "Coupling devices and connections", ...(assetType === "Truck" ? ["Steering mechanism", "Horn", "Windshield wipers and mirrors", "Emergency equipment"] : ["Frame, body, and rear-impact guard", "Landing gear and cargo securement"]) ]],
+  ["review", "Defects and follow-up", [postTrip ? "Damage, leaks, or defects discovered during operation" : "Previous defect report and repair certification reviewed"]],
+];
+
+export const INSPECTION_PRESETS = Object.freeze([
+  ...Object.values(WEEKLY_INSPECTION_PRESETS),
+  ...["Truck", "Trailer"].flatMap((assetType) => [
+    preset(`annual-${assetType.toLowerCase()}`, `Annual ${assetType} Inspection`, assetType, annualSections(assetType), "annual"),
+    preset(`pre-trip-${assetType.toLowerCase()}`, `Pre-trip ${assetType} Inspection`, assetType, tripSections(assetType, false), "pre_trip"),
+    preset(`post-trip-${assetType.toLowerCase()}`, `Post-trip ${assetType} Inspection`, assetType, tripSections(assetType, true), "post_trip"),
+    preset("custom", `Custom ${assetType} Inspection`, assetType, [["checks", "Checks", ["General condition"]]], "custom"),
+  ]),
+]);
+
+export function inspectionPreset(unitType, inspectionType = "weekly") {
+  return INSPECTION_PRESETS.find((entry) => entry.assetType === unitType && entry.inspectionType === inspectionType) || null;
+}
 
 export const INSPECTION_TEMPLATE_FAMILY = Object.freeze({
   familyKey: INSPECTION_FAMILY_KEY,
@@ -70,6 +126,9 @@ export function escapeInspectionHtml(value) {
 }
 
 export function renderInspectionSlip(model) {
+  if (model.templateSnapshot?.printLayout === "annual_report" && model.templateSnapshot?.rendererVersion === INSPECTION_ANNUAL_RENDERER_VERSION) {
+    return renderAnnualInspectionReport(model);
+  }
   const answers = new Map((model.responses || []).map((response) => [response.itemKey, response]));
   const findings = new Map((model.findings || []).map((finding) => [finding.responseId, finding]));
   const sections = (model.templateSnapshot?.sections || []).map((section) => `

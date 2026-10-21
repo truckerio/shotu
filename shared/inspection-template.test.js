@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   INSPECTION_TEMPLATE_FAMILY,
+  INSPECTION_TYPES, INSPECTION_PRESETS, inspectionPreset,
   WEEKLY_INSPECTION_PRESETS,
   inspectionItemCount,
   renderInspectionSlip,
@@ -84,4 +85,23 @@ test("new deferred finding slips retain target and rationale and escape policy t
   assert.match(html, /Next shop visit; By 2026-11-01; At 250000 mi; whichever comes first/);
   assert.match(html, /Early notice: 200 mi/);
   assert.match(html, /Result:<\/strong> Issues found/);
+});
+
+
+test("each inspection type has a distinct truck and trailer starter with stable checklist identity", () => {
+  assert.deepEqual(INSPECTION_TYPES.map(type => type.key), ["weekly", "annual", "pre_trip", "post_trip", "custom"]);
+  assert.equal(INSPECTION_PRESETS.length, 10);
+  for (const { key } of INSPECTION_TYPES) {
+    for (const unitType of ["Truck", "Trailer"]) {
+      const definition = inspectionPreset(unitType, key);
+      assert.equal(definition.inspectionType, key);
+      assert.equal(definition.assetType, unitType);
+      assert.ok(inspectionItemCount(definition) > 0);
+      const keys = definition.sections.flatMap(section => [section.key, ...section.items.map(item => item.key)]);
+      assert.equal(new Set(keys).size, keys.length);
+      if (key !== "weekly") assert.notEqual(definition.presetKey, weeklyInspectionPreset(unitType).presetKey);
+    }
+  }
+  assert.equal(inspectionPreset("Truck"), weeklyInspectionPreset("Truck"));
+  assert.equal(inspectionPreset("Truck", "invalid"), null);
 });

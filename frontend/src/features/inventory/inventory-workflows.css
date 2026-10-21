@@ -61,7 +61,9 @@
 .purchasing-expandable-section .inventory-inbound-toolbar {grid-template-columns:minmax(160px,220px) minmax(220px,1fr);}
 .purchase-orders-table small {display:block;margin-top:3px;color:#667085;}
 /* Purchase order layout */
-.purchase-orders-toolbar > label {flex:0 1 320px;}
+.purchase-orders-toolbar > .purchase-location-selector {display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;flex:0 1 280px;max-width:60%;min-width:0;font-size:14px;color:#344054;}
+.purchase-location-selector > span {font-weight:500;}
+@media(max-width:600px){.purchase-orders-toolbar > .purchase-location-selector {grid-template-columns:minmax(0,1fr);gap:0;max-width:60%;}}
 .purchase-orders-toolbar .purchase-refresh {width:44px;min-width:44px;height:44px;padding:10px;justify-content:center;}
 .purchase-refresh svg {width:20px;height:20px;}
 .purchase-refresh > span:empty {display:none;}
@@ -92,7 +94,6 @@
 .purchase-order-actions .inventory-workflow-toolbar {gap:8px;}
 .purchase-order-actions .button {min-height:40px;font-size:13px;padding:9px 13px;}
 @media(max-width:600px){
- .purchase-orders-toolbar > label {flex-basis:100%;}
  .purchase-orders-list > button {flex-direction:row;align-items:center;gap:10px;}
  .purchase-order-identity {min-width:0;overflow-wrap:anywhere;}
  .purchase-order-summary {flex-shrink:0;max-width:50%;}
@@ -247,8 +248,11 @@
 .purchasing-pair-state .button {width:max-content;}
 .purchasing-split-pane .inventory-data-frame .operational-data-table,.purchasing-split-pane .inventory-data-table {min-width:0;width:100%;table-layout:fixed;}
 .purchasing-split-pane .inventory-data-table th,.purchasing-split-pane .inventory-data-table td {white-space:normal;overflow-wrap:anywhere;}
-.purchasing-split-pane .purchase-filter-bar {grid-template-columns:1fr 1fr;}
-.purchasing-split-pane .purchase-filter-bar > label:first-child {grid-column:1/-1;}
+.purchasing-split-pane .purchase-filter-bar {grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(0,1fr)); padding:16px 0; background:transparent; border:0; border-radius:0;}
+.purchasing-split-pane .purchase-filter-bar label { color:#344054; font-size:12px; font-weight:700; }
+.purchasing-split-pane .purchase-filter-bar :is(input,.dropdown-select-trigger,.button) { min-height:44px; }
+.purchasing-split-pane .purchase-table-heading h3 { font-size:15px; }
+.purchasing-split-pane .purchase-filter-bar > label:first-child {grid-column:auto;}
 .purchasing-split-pane .inventory-inbound-toolbar {grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
 .purchasing-split-pane .purchase-order-detail {gap:14px;}
 .purchasing-split-pane .purchase-order-meta span {flex-wrap:wrap;}
@@ -278,3 +282,33 @@
 }
 .inbound-invoice-upload-control { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
 .inbound-invoice-upload-control p { margin:0; font-size:12px; color:#475467; }
+
+.purchasing-section-actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:wrap; }
+.purchasing-pane-header:has(.purchasing-section-actions) { align-items:center; flex-wrap:wrap; }
+.purchasing-section-actions .shared-icon-button { width:34px; min-width:34px; height:34px; }
+.purchasing-actions-popover { z-index:140; max-width:calc(100vw - 24px); padding:4px; border:1px solid #e4e7ec; border-radius:8px; background:#fff; box-shadow:0 12px 24px rgb(16 24 40 / 16%); }
+.purchasing-actions-menu { outline:none; }
+.purchasing-actions-item { display:flex; min-height:44px; align-items:center; padding:0 10px; border-radius:5px; color:#344054; font-size:13px; outline:none; cursor:pointer; }
+.purchasing-actions-item[data-focused] { background:#f2f4f7; }
+
+.purchase-orders-toolbar:has(.purchase-needs-section) { align-items:flex-start; flex-wrap:nowrap; }
+.purchase-needs-section { flex:1; min-width:0; margin-left:auto; }
+.purchase-needs-section > summary { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-height:44px; cursor:pointer; list-style:none; color:#475467; font-size:14px; font-weight:400; }
+.purchase-needs-section > summary::-webkit-details-marker { display:none; }
+.purchase-needs-section > summary > svg { width:16px; height:16px; transition:transform .15s; }
+.purchase-needs-section[open] > summary > svg { transform:rotate(90deg); }
+.purchase-needs-section > div { min-width:0; max-height:40vh; overflow:auto; padding:10px 0; border-top:1px solid #eaecf0; }
+.purchase-needs-count { color:#667085; font-size:12px; }
+@media (min-width: 961px) {
+ .inventory-section-surface:has(.inventory-purchases-shell) { display:flex; flex:1; min-height:0; padding:5px; overflow:hidden; }
+ .inventory-purchases-shell, .purchase-orders-page { display:flex; flex-direction:column; flex:1; min-height:0; }
+ .purchase-orders-page > :not(.purchasing-split-view) { flex-shrink:0; }
+ .purchase-orders-page > .purchasing-split-view { flex:1; min-height:0; height:auto; }
+ .purchase-orders-page .purchasing-split-pane { min-height:0; max-height:none; }
+}
+
+/* Keep list contents and their count inside one continuous card. */
+.purchasing-split-pane .checkpoint-collection.is-footer-status { border:1px solid #e4e7ec; border-radius:10px; overflow:hidden; row-gap:0; }
+.purchasing-split-pane .is-footer-status > .checkpoint-collection-viewport { border:0; border-radius:0; }
+.purchasing-split-pane .is-footer-status > .checkpoint-collection-footer { margin:0; padding:4px 12px; line-height:16px; }
+.purchasing-split-pane .is-footer-status .inventory-inbound-empty { border:0; border-radius:0; }

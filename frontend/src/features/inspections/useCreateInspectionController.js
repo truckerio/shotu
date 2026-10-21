@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { weeklyInspectionTemplate } from "./inspection-model.js";
+import { inspectionCustomerIdentity, inspectionCustomerMatches, inspectionCustomerSuggestions, inspectionCustomerValidation } from "./inspection-customer-model.js";
+import { INSPECTION_TYPES } from "../../../../shared/inspection-template.js";
 
 function unitMatches(unit, search) {
   const term = search.trim().toLowerCase();
@@ -53,46 +54,98 @@ export function inspectionCreateAttempt(currentAttempt, payload, createKey = ins
   return { fingerprint, idempotencyKey: createKey() };
 }
 
+export function selectedInspectionTemplate({ templates = [], selectedUnit, inspectionType = "weekly", locationId }) {
+  if (!selectedUnit || !locationId) return null;
+  const companyId = selectedUnit.companyId || selectedUnit.company_id;
+  return templates.find((entry) => entry.companyId === companyId && entry.locationId === locationId
+    && entry.unitType === selectedUnit.unitType && entry.inspectionType === inspectionType) || null;
+}
+
 export function useCreateInspectionController({ actor = {}, locations = [], mechanics = [], units = [], request, onCreated }) {
   const [unitSearch, setUnitSearch] = useState("");
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [locationId, setLocationId] = useState("");
+  const [inspectionType, setInspectionType] = useState("weekly");
   const [mechanicIds, setMechanicIds] = useState([]);
   const [dueDate, setDueDate] = useState("");
   const [instructions, setInstructions] = useState("");
   const [localUnitOpen, setLocalUnitOpen] = useState(false);
   const [localUnit, setLocalUnit] = useState({ unitNo: "", unitType: "", vin: "", plate: "", confirmDuplicate: false });
   const [state, setState] = useState({ busy: false, error: "" });
-  const [context, setContext] = useState({ locations, mechanics, units });
+  const [context, setContext] = useState({ locations, mechanics, units, templates: [], locationId: "", loading: true });
   const createAttempt = useRef(null);
+  const [customerCompanyName, setCustomerCompanyName] = useState("");
+  const [customerAccountId, setCustomerAccountId] = useState("");
+  const [customerAddress, setCustomerAddress] = useState(undefined);
+  const [customerReload, setCustomerReload] = useState(0);
+  const [customerDirectory, setCustomerDirectory] = useState({ scope: "", customers: [], loading: false, error: "" });
+  const selectedCompanyId = selectedUnit?.companyId || selectedUnit?.company_id || "";
+  const customerScope = selectedUnit ? `${selectedCompanyId}:${selectedUnit.id}` : "";
+  const customersReady = Boolean(customerScope) && customerDirectory.scope === customerScope && !customerDirectory.loading && !customerDirectory.error;
+  const customers = customersReady ? customerDirectory.customers : [];
+  const customerIdentity = inspectionCustomerIdentity({ customers, customerAccountId, customerCompanyName, customerAddress });
+  const customerMatches = inspectionCustomerMatches(customers, customerCompanyName);
+  const customerSuggestions = inspectionCustomerSuggestions(customers, selectedUnit?.ownerName);
+  const inspectorName = actor.role === "mechanic" ? actor.name || "Me" : context.mechanics.find((entry) => entry.id === mechanicIds[0])?.name || "";
+
+  useEffect(() => {
+    if (!customerScope || typeof request !== "function") return undefined;
+    const controller = new AbortController();
+    setCustomerDirectory({ scope: customerScope, customers: [], loading: true, error: "" });
+    request(`/api/customers?companyId=${encodeURIComponent(selectedCompanyId)}`, { signal: controller.signal })
+      .then((result) => { if (!controller.signal.aborted) setCustomerDirectory({ scope: customerScope, customers: Array.isArray(result.customers) ? result.customers : [], loading: false, error: "" }); })
+      .catch((error) => { if (!controller.signal.aborted) setCustomerDirectory({ scope: customerScope, customers: [], loading: false, error: error?.message || "Customer companies could not be loaded." }); });
+    return () => controller.abort();
+  }, [customerScope, selectedCompanyId, request, customerReload]);
+
+  function changeCustomerCompanyName(value) {
+    setCustomerCompanyName(value);
+    if (value.trim().toLocaleLowerCase() !== customerCompanyName.trim().toLocaleLowerCase()) { setCustomerAccountId(""); setCustomerAddress(undefined); }
+  }
+
+  function selectCustomerAccount(id) {
+    const customer = customers.find((entry) => String(entry.id) === String(id));
+    setCustomerAccountId(customer?.id || ""); setCustomerAddress(undefined);
+    if (customer) setCustomerCompanyName(customer.name);
+  }
   const isMechanic = actor.role === "mechanic";
   const canAssign = actor.role === "office" || actor.role === "admin";
   const canCreateLocalUnit = canCreateInspectionLocalUnit(actor);
   const choices = useMemo(() => context.units.filter((unit) => unitMatches(unit, unitSearch)), [context.units, unitSearch]);
   const hasExactUnit = hasExactInspectionUnit(context.units, unitSearch);
-  const template = selectedUnit ? weeklyInspectionTemplate(selectedUnit.unitType) : null;
   const effectiveLocationId = resolvedLocationId({ locations: context.locations, selectedUnit, locationId });
+  const templatesReady = context.locationId === effectiveLocationId && !context.loading;
+  const template = templatesReady ? selectedInspectionTemplate({ templates: context.templates, selectedUnit, inspectionType, locationId: effectiveLocationId }) : null;
 
   useEffect(() => {
     if (typeof request !== "function") return undefined;
     const controller = new AbortController();
+    setContext((current) => ({ ...current, loading: true }));
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams();
       if (unitSearch.trim().length >= 2) params.set("search", unitSearch.trim());
       if (effectiveLocationId) params.set("locationId", effectiveLocationId);
       request(`/api/inspections/create-context?${params}`, { signal: controller.signal })
-        .then((result) => setContext({ locations: result.locations || [], mechanics: result.mechanics || [], units: result.units || [] }))
-        .catch((error) => { if (error?.name !== "AbortError") setState((current) => ({ ...current, error: error?.message || "Inspection choices could not be loaded." })); });
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          setContext({ locations: result.locations || [], mechanics: result.mechanics || [], units: result.units || [], templates: result.templates || [], locationId: effectiveLocationId, loading: false });
+        })
+        .catch((error) => { if (!controller.signal.aborted && error?.name !== "AbortError") {
+          setContext((current) => ({ ...current, templates: [], loading: false, locationId: effectiveLocationId }));
+          setState((current) => ({ ...current, error: error?.message || "Inspection choices could not be loaded." }));
+        } });
     }, unitSearch.trim().length >= 2 ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [effectiveLocationId, request, unitSearch]);
 
   function selectUnit(unit) {
+    setCustomerCompanyName(unit.ownerName || ""); setCustomerAccountId(""); setCustomerAddress(undefined);
     setSelectedUnit(unit); setUnitSearch(unit.unitNo || unit.name || ""); setState({ busy: false, error: "" });
     if (unit.locationId) setLocationId(unit.locationId);
   }
 
   function clearSelectedUnit() {
+    setCustomerCompanyName(""); setCustomerAccountId(""); setCustomerAddress(undefined);
     setSelectedUnit(null);
     setUnitSearch("");
     setState({ busy: false, error: "" });
@@ -134,7 +187,11 @@ export function useCreateInspectionController({ actor = {}, locations = [], mech
     event?.preventDefault?.();
     if (!selectedUnit?.id) { setState({ busy: false, error: "Select a unit before continuing." }); return null; }
     if (!effectiveLocationId) { setState({ busy: false, error: "Select an inspection location." }); return null; }
+    if (!customersReady) { setState({ busy: false, error: customerDirectory.error || "Wait for customer companies to finish loading." }); return null; }
+    const customerError = inspectionCustomerValidation(customerIdentity);
+    if (customerError) { setState({ busy: false, error: customerError }); return null; }
     const assigneeIds = isMechanic ? [actor.id].filter(Boolean) : mechanicIds;
+    if (!template) { setState({ busy: false, error: "No published template is assigned for this inspection type, unit, and location. Ask Admin to publish and assign one." }); return null; }
     if (canAssign && !assigneeIds.length) { setState({ busy: false, error: "Assign at least one mechanic." }); return null; }
     if (typeof request !== "function") { setState({ busy: false, error: "Inspection creation is unavailable. Try again." }); return null; }
     setState({ busy: true, error: "" });
@@ -143,6 +200,10 @@ export function useCreateInspectionController({ actor = {}, locations = [], mech
       const payload = {
         companyId: selectedUnit.companyId || selectedUnit.company_id,
         assetId: selectedUnit.id,
+        inspectionType,
+        ...(customerIdentity.customerAccountId ? { customerAccountId: customerIdentity.customerAccountId } : {}),
+        ...(customerIdentity.customerCompanyName.trim() ? { customerCompanyName: customerIdentity.customerCompanyName.trim() } : {}),
+        customerAddress: customerIdentity.customerAddress,
         locationId: effectiveLocationId,
         mechanicUserIds: assigneeIds,
         dueAt: dueDate ? `${dueDate}T23:59:59.999Z` : undefined,
@@ -162,5 +223,5 @@ export function useCreateInspectionController({ actor = {}, locations = [], mech
     }
   }
 
-  return { canAssign, canCreateLocalUnit, choices, clearSelectedUnit, createLocalUnit, dueDate, effectiveLocationId, hasExactUnit, instructions, isMechanic, localUnit, localUnitOpen, locationId, locations: context.locations, mechanicIds, mechanics: context.mechanics, openLocalUnit, selectedUnit, setDueDate, setInstructions, setLocalUnitField, setLocationId, setMechanicIds, setLocalUnitOpen, setUnitSearch, state, submit, template, unitSearch, selectUnit };
+  return { customerAddressScope: `${customerScope}:${customerIdentity.customerAccountId}:${customerCompanyName}`, retryCustomerCompanies: () => setCustomerReload((value) => value + 1), setCustomerAddress, customerCompanyName, customerIdentity, customerMatches, customerSuggestions, customersReady, customerDirectory, changeCustomerCompanyName, selectCustomerAccount, inspectorName, inspectionType, inspectionTypes: INSPECTION_TYPES, setInspectionType, templatesReady, canAssign, canCreateLocalUnit, choices, clearSelectedUnit, createLocalUnit, dueDate, effectiveLocationId, hasExactUnit, instructions, isMechanic, localUnit, localUnitOpen, locationId, locations: context.locations, mechanicIds, mechanics: context.mechanics, openLocalUnit, selectedUnit, setDueDate, setInstructions, setLocalUnitField, setLocationId, setMechanicIds, setLocalUnitOpen, setUnitSearch, state, submit, template, unitSearch, selectUnit };
 }

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { advanceDetailFinancialScope, detailDiscountIntent, detailDiscountIntentForSummary, detailDiscountRevisionRequired, detailFinancialSourceDirty, passiveFinancialErrorMessage } from "./detail-financial-state.js";
 
-test("passive totals omit the empty Estimate helper but retain other errors", () => {
+test("passive totals omit document setup helpers but retain pricing and connection errors", () => {
   assert.equal(passiveFinancialErrorMessage({ code: "CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", message: "Add priced labor or parts before previewing an Estimate." }), "");
+  assert.equal(passiveFinancialErrorMessage({ code: "CUSTOMER_DOCUMENT_PROFILE_UNAVAILABLE", message: "Publish a commercial profile before issuing a priced Estimate." }), "");
+  assert.equal(passiveFinancialErrorMessage({ code: "CUSTOMER_DOCUMENT_PROFILE_STALE", message: "Refresh the commercial profile before continuing." }), "");
   assert.equal(passiveFinancialErrorMessage({ code: "CUSTOMER_DOCUMENT_PRICE_MISSING", message: "A recorded part needs a price." }), "A recorded part needs a price.");
   assert.equal(passiveFinancialErrorMessage(new Error("Connection failed.")), "Connection failed.");
   assert.equal(passiveFinancialErrorMessage(null), "Current charges could not be calculated.");

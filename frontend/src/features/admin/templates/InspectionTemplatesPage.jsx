@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { InspectionTemplatesWorkspace } from "./InspectionTemplatesWorkspace.jsx";
-import { inspectionTemplateFromApi as fromApi, inspectionTemplateDefinition as definition } from "./inspection-template-model.js";
+import { inspectionTemplateFromApi as fromApi, inspectionTemplateDefinition as definition, matchingInspectionAssignments } from "./inspection-template-model.js";
 
 // Backend integration contract: POST revisions clones an immutable published version into a new draft.
 // POST publish atomically persists the supplied draft definition, publishes it, and assigns it.
@@ -48,7 +48,7 @@ export function InspectionTemplatesPage({ actor, locations = [] }) {
 
   async function create(template) {
     try {
-      const result = await api("/api/admin/inspection-templates", { method: "POST", body: JSON.stringify({ companyId, name: template.name, applicabilityKey: template.unitType, presetKey: template.sourcePreset, definition: definition(template) }) });
+      const result = await api("/api/admin/inspection-templates", { method: "POST", body: JSON.stringify({ companyId, name: template.name, applicabilityKey: template.unitType, inspectionType: template.inspectionType || "weekly", presetKey: template.sourcePreset, definition: definition(template) }) });
       await load(companyId); setSelectedId(result.version.id);
     } catch (createError) { setError(createError.message); }
   }
@@ -92,17 +92,19 @@ export function InspectionTemplatesPage({ actor, locations = [] }) {
     window.clearTimeout(saveTimer.current);
     try {
       await flushDraftSave();
-      const currentAssignment = assignments.find((entry) => !entry.locationId && entry.applicabilityKey === template.unitType);
+      const currentAssignments = matchingInspectionAssignments(assignments, { unitType: template.unitType, inspectionType: template.inspectionType || "weekly" });
+      if (currentAssignments.length > 1) throw new Error("This assignment is ambiguous. Reload before publishing.");
+      const currentAssignment = currentAssignments[0];
       const expectedVersion = saveRef.current.versions.get(template.id) || template.optimisticVersion;
-      await api(`/api/admin/inspection-templates/${encodeURIComponent(template.versionId)}/publish`, { method: "POST", body: JSON.stringify({ companyId, expectedVersion, definition: definition(template), assignment: { companyId, locationId: null, familyKey: "inspection", applicabilityKey: template.unitType, templateVersionId: template.versionId, expectedVersion: currentAssignment?.version || 0 } }) });
+      await api(`/api/admin/inspection-templates/${encodeURIComponent(template.versionId)}/publish`, { method: "POST", body: JSON.stringify({ companyId, expectedVersion, definition: definition(template), assignment: { companyId, locationId: null, familyKey: "inspection", applicabilityKey: template.unitType, inspectionType: template.inspectionType || "weekly", templateVersionId: template.versionId, expectedVersion: currentAssignment?.version || 0 } }) });
       await load(companyId); setSaveStatus("saved");
     } catch (publishError) { setSaveStatus("error"); setError(publishError.message); }
   }
-  async function assign({ locationId, templateVersionId, unitType }) {
-    const matches = assignments.filter((entry) => (entry.locationId || null) === (locationId || null) && entry.applicabilityKey === unitType);
+  async function assign({ locationId, templateVersionId, unitType, inspectionType = "weekly" }) {
+    const matches = matchingInspectionAssignments(assignments, { locationId, unitType, inspectionType });
     if (matches.length > 1) { setError("This assignment is ambiguous. Reload and choose the intended assignment."); return; }
     try {
-      await api("/api/admin/inspection-templates/assignments", { method: "POST", body: JSON.stringify({ companyId, locationId: locationId || null, familyKey: "inspection", applicabilityKey: unitType, templateVersionId, expectedVersion: matches[0]?.version || 0 }) });
+      await api("/api/admin/inspection-templates/assignments", { method: "POST", body: JSON.stringify({ companyId, locationId: locationId || null, familyKey: "inspection", applicabilityKey: unitType, inspectionType, templateVersionId, expectedVersion: matches[0]?.version || 0 }) });
       await load(companyId); setError("");
     } catch (assignmentError) { setError(assignmentError.message); }
   }

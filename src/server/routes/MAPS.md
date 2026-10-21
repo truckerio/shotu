@@ -36,3 +36,22 @@ Live location refresh first loads the asset through the actor's authorized
 company IDs. The subsequent update also includes the resolved `company_id` in
 its SQL predicate as defense in depth. Latitude or longitude values of zero are
 valid GPS coordinates.
+
+## Inspection business-address suggestions
+
+Inspection creation always supports manual business addresses. Saved customer
+addresses prefill the field; editing or clearing applies only to that report.
+
+To enable optional Google suggestions, set
+`NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY` on the server and restart it. Enable
+Maps JavaScript API and Places API (New) in that key's Google Cloud project,
+and restrict the browser key to the application's HTTP referrers and required
+APIs. No server-side Google secret is needed.
+
+The field loads the Places library on demand, debounces input, uses a session
+token, and requests only the selected place's formatted address. Missing keys,
+SDK failures, or unavailable suggestions never prevent manual entry. Google
+addresses are stored only after the user selects and submits them as part of
+an inspection.
+
+Provider behavior and setup: [Google Place Autocomplete Data API](https://developers.google.com/maps/documentation/javascript/place-autocomplete-data).

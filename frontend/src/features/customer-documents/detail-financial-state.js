@@ -43,6 +43,7 @@ export function detailFinancialSourceDirty(form = {}, saved = {}) {
   return input(form) !== input(saved);
 }
 export function passiveFinancialErrorMessage(error) {
-  if (error?.code === "CUSTOMER_DOCUMENT_EMPTY_ESTIMATE") return "";
+  if (["CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", "CUSTOMER_DOCUMENT_PROFILE_UNAVAILABLE",
+    "CUSTOMER_DOCUMENT_PROFILE_STALE"].includes(error?.code)) return "";
   return error?.message || "Current charges could not be calculated.";
 }

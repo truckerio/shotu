@@ -272,8 +272,8 @@ export function WorkorderDetailPage({
       maximumOfficePercentage={actor.role === "office" ? documentController.maximumOfficePercentage : null}
       disabled={!documentController.canAdjustDiscount || Boolean(documentController.invoice) || documentController.busy} />,
     message: financialSourceDirty ? "Save changes to update totals."
-      : documentController.financialError || documentController.error
-        || (documentController.financialBusy || documentController.busy ? "Updating totals…" : ""),
+      : documentController.financialError
+        || (documentController.financialBusy ? "Updating totals…" : ""),
   } : isOfficeDetail ? { hidden: true } : null;
   const visibleConversationMessages = useMemo(() => photosPolicy.canRead
     ? conversationMessages

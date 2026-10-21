@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { INSPECTION_RENDERER_VERSION, INSPECTION_SCHEMA_VERSION } from "../../../../shared/inspection-template.js";
+import { INSPECTION_RENDERER_VERSION, INSPECTION_ANNUAL_RENDERER_VERSION, INSPECTION_SCHEMA_VERSION } from "../../../../shared/inspection-template.js";
 import { DATABASE_UUID_PATTERN } from "../../db/company.js";
+const inspectionTypeSchema = z.enum(["weekly", "annual", "pre_trip", "post_trip", "custom"]);
+const presetSchema = z.enum(["weekly-truck", "weekly-trailer", "annual-truck", "annual-trailer", "pre-trip-truck", "pre-trip-trailer", "post-trip-truck", "post-trip-trailer", "custom"]);
 const companyIdSchema = z.string().regex(DATABASE_UUID_PATTERN, "Invalid company ID");
 
 const checklistItem = z.object({
@@ -19,13 +21,21 @@ const section = z.object({
 
 export const inspectionTemplateDefinitionSchema = z.object({
   familyKey: z.literal("inspection"),
-  presetKey: z.enum(["weekly-truck", "weekly-trailer"]).or(z.literal("custom")),
+  inspectionType: inspectionTypeSchema.default("weekly"),
+  presetKey: presetSchema,
   label: z.string().trim().min(1).max(200),
   assetType: z.enum(["Truck", "Trailer"]),
   schemaVersion: z.literal(INSPECTION_SCHEMA_VERSION),
-  rendererVersion: z.literal(INSPECTION_RENDERER_VERSION),
-  sections: z.array(section).min(1).max(12),
+  rendererVersion: z.enum([INSPECTION_RENDERER_VERSION, INSPECTION_ANNUAL_RENDERER_VERSION]),
+  printLayout: z.enum(["standard", "annual_report"]).optional(),
+  sections: z.array(section).min(1).max(20),
 }).strict().superRefine((definition, context) => {
+  const expectedRenderer = definition.printLayout === "annual_report" ? INSPECTION_ANNUAL_RENDERER_VERSION : INSPECTION_RENDERER_VERSION;
+  if (definition.rendererVersion !== expectedRenderer) context.addIssue({ code: "custom", path: ["rendererVersion"], message: "Renderer must match the selected print layout." });
+  if (definition.presetKey !== "custom") {
+    const expected = `${definition.inspectionType.replaceAll("_", "-")}-${definition.assetType.toLowerCase()}`;
+    if (definition.presetKey !== expected) context.addIssue({ code: "custom", path: ["presetKey"], message: "Preset must match the inspection and unit types." });
+  }
   const keys = definition.sections.flatMap((entry) => [entry.key, ...entry.items.map((item) => item.key)]);
   if (new Set(keys).size !== keys.length) context.addIssue({ code: "custom", path: ["sections"], message: "Section and item keys must be unique." });
   if (definition.sections.reduce((count, entry) => count + entry.items.length, 0) > 100) {
@@ -34,12 +44,14 @@ export const inspectionTemplateDefinitionSchema = z.object({
 });
 
 export const createTemplateSchema = z.object({
+  inspectionType: inspectionTypeSchema.optional(),
   companyId: companyIdSchema,
   name: z.string().trim().min(1).max(200),
   applicabilityKey: z.enum(["Truck", "Trailer"]),
-  presetKey: z.enum(["weekly-truck", "weekly-trailer", "custom"]),
+  presetKey: presetSchema,
   definition: inspectionTemplateDefinitionSchema,
 }).strict().superRefine((value, context) => {
+  if (value.inspectionType && value.inspectionType !== value.definition.inspectionType) context.addIssue({ code: "custom", path: ["inspectionType"], message: "Template inspection type must match its definition." });
   if (value.applicabilityKey !== value.definition.assetType) context.addIssue({ code: "custom", path: ["definition", "assetType"], message: "Template unit type must match its applicability." });
   if (value.presetKey !== value.definition.presetKey) context.addIssue({ code: "custom", path: ["definition", "presetKey"], message: "Template preset must match its definition." });
   if ((value.presetKey === "weekly-truck" && value.applicabilityKey !== "Truck") || (value.presetKey === "weekly-trailer" && value.applicabilityKey !== "Trailer")) context.addIssue({ code: "custom", path: ["presetKey"], message: "Weekly preset must match the unit type." });
@@ -66,6 +78,7 @@ export const assignTemplateSchema = z.object({
   companyId: companyIdSchema,
   locationId: z.string().uuid().nullable().optional(),
   familyKey: z.literal("inspection"),
+  inspectionType: inspectionTypeSchema.default("weekly"),
   applicabilityKey: z.enum(["Truck", "Trailer"]),
   templateVersionId: z.string().uuid(),
   expectedVersion: z.number().int().nonnegative(),
@@ -77,6 +90,7 @@ export const publishInspectionTemplateSchema = z.object({
   definition: inspectionTemplateDefinitionSchema,
   assignment: assignTemplateSchema.optional(),
 }).strict().superRefine((value, context) => {
+  if (value.assignment && value.assignment.inspectionType !== value.definition.inspectionType) context.addIssue({ code: "custom", path: ["assignment", "inspectionType"], message: "Assignment inspection type must match its definition." });
   if (value.assignment && value.assignment.applicabilityKey !== value.definition.assetType) {
     context.addIssue({ code: "custom", path: ["assignment", "applicabilityKey"], message: "Template assignment unit type must match its definition." });
   }

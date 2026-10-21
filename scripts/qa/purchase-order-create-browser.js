@@ -21,13 +21,11 @@ try{for(const width of [1440,768,390]){
  await page.goto(`http://localhost:5173/${name}`);
  await page.locator('.purchase-orders-page').waitFor();
 
- assert.equal(await page.locator('#purchase-order-filters').count(),0);
- await page.getByRole('button',{name:'Filters',exact:true}).click();
+ assert.equal(await page.locator('#purchase-order-filters').count(),1);
  const filtered=page.waitForRequest(request=>request.url().includes('query=PO-TEST'));
- await page.getByRole('searchbox').fill('PO-TEST');
+ await page.locator('#purchase-order-filters input[type=search]').fill('PO-TEST');
  await filtered;
- await page.getByRole('button',{name:'Clear',exact:true}).click();
- await page.getByRole('button',{name:'Filters',exact:true}).click();
+ await page.getByRole('button',{name:'Clear purchase order filters',exact:true}).click();
  await page.screenshot({path:`.tmp/local-server/po-table-${width}.png`,fullPage:true});
  await page.getByRole('button',{name:'New purchase order',exact:true}).click();
  await page.getByRole('dialog',{name:'New purchase order',exact:true}).waitFor();
