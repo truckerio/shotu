@@ -47,11 +47,15 @@ export function InspectionMaintenancePanel({ recordKind, recordId, unitType = "T
 
   useEffect(() => {
     generation.current += 1;
-    const controller = new AbortController();
     setData(null); setError(""); setEditing(null); setReadingOpen(false); setFeedback(""); setBusy(false); setReason(""); setPolicy(emptyDeferral()); setMiles(""); setObservedAt(""); setReadingReason(""); requestKeys.current.clear();
+    return () => { generation.current += 1; };
+  }, [reload]);
+
+  useEffect(() => {
+    const controller = new AbortController();
     const scope = generation.current;
     reload({ signal: controller.signal }).catch(failure => { if (!controller.signal.aborted && generation.current === scope && failure.name !== "AbortError") setError(failure.message || "Maintenance reminders unavailable."); });
-    return () => { generation.current += 1; controller.abort(); };
+    return () => controller.abort();
   }, [reload, refreshKey]);
 
   useAutomaticRefresh(async ({ signal }) => { if (!editingRef.current) await reload({ signal }); }, { enabled: Boolean(endpoint) });

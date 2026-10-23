@@ -75,8 +75,32 @@ try {
   await mechanic.page.getByText("Previous report reviewed", { exact: true }).click();
   await mechanic.page.getByRole("button", { name: "Start inspection", exact: true }).click();
   await panel.getByText("Due for review", { exact: true }).waitFor();
-  // Hold one real mileage request while checklist autosave advances the record scope.
-  // The new panel scope must clear busy/form state and ignore the old completion.
+  // A checklist autosave must not tear down maintenance content or drafts.
+  await panel.getByRole("button", { name: "Record dashboard mileage", exact: true }).click();
+  await panel.getByLabel("Dashboard miles", { exact: true }).fill("9835");
+  await panel.getByRole("textbox", { name: /^Reason for reading\/correction/ }).fill("Keep this unsaved dashboard draft");
+  await mechanic.page.evaluate(() => {
+    window.maintenanceLoadingFlashes = 0;
+    window.maintenanceObserver = new MutationObserver(records => {
+      for (const record of records) for (const node of record.addedNodes) {
+        if (node.textContent?.includes("Checking previous issues and upcoming maintenance…")) window.maintenanceLoadingFlashes += 1;
+      }
+    });
+    window.maintenanceObserver.observe(document.querySelector(".inspection-maintenance"), { childList: true, subtree: true });
+  });
+  const passSaved = mechanic.page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/responses") && response.request().method() === "PATCH");
+  const remindersRefreshed = mechanic.page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/maintenance"));
+  await mechanic.page.getByLabel("Pass", { exact: true }).check();
+  assert.equal((await passSaved).status(), 200);
+  assert.equal((await remindersRefreshed).status(), 200);
+  await mechanic.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(await mechanic.page.evaluate(() => window.maintenanceLoadingFlashes), 0, "Checklist autosave flashed maintenance loading state");
+  assert.equal(await panel.getByLabel("Dashboard miles", { exact: true }).inputValue(), "9835");
+  assert.equal(await panel.getByRole("textbox", { name: /^Reason for reading\/correction/ }).inputValue(), "Keep this unsaved dashboard draft");
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await mechanic.page.evaluate(() => window.maintenanceObserver.disconnect());
+  // Hold a real mileage request while checklist autosave refreshes reminders.
+  // Same-record refresh must preserve busy/form state and ignore stale loads.
   let releaseOldRefresh;
   let refreshHeld;
   let firstRefresh = true;
@@ -102,7 +126,7 @@ try {
   const heldObservation = new Date();
   const heldLocal = new Date(heldObservation.getTime() - heldObservation.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
   await panel.getByLabel("When observed", { exact: true }).fill(heldLocal);
-  await panel.getByLabel("Reason for reading/correction", { exact: true }).fill("Dashboard verified before scope change");
+  await panel.getByRole("textbox", { name: /^Reason for reading\/correction/ }).fill("Dashboard verified before scope change");
   await panel.getByRole("button", { name: "Save mileage", exact: true }).click();
   await held;
   assert.equal(await panel.getByRole("button", { name: "Refresh", exact: true }).isDisabled(), true);
@@ -114,17 +138,19 @@ try {
   const checklistSaved = mechanic.page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/responses") && response.request().method() === "PATCH");
   await mechanic.page.getByRole("option", { name: "Office follow-up required", exact: true }).click();
   assert.equal((await checklistSaved).status(), 200);
-  await mechanic.page.waitForFunction(() => { const button = document.querySelector(".inspection-maintenance button"); return button && !button.disabled; });
+  assert.equal(await panel.getByRole("button", { name: "Refresh", exact: true }).isDisabled(), true);
+  assert.equal(await panel.getByLabel("Dashboard miles", { exact: true }).inputValue(), "9840");
   const heldResponse = mechanic.page.waitForResponse(response => response.url() === mileageUrl && response.request().method() === "POST");
   const oldRefreshResponse = mechanic.page.waitForResponse(response => response.url() === maintenanceUrl && response.status() === 503);
   releaseOldRefresh();
   await oldRefreshResponse;
   releaseReading();
   assert.equal((await heldResponse).status(), 200);
+  await panel.getByLabel("Dashboard miles", { exact: true }).waitFor({ state: "hidden" });
   await mechanic.page.unroute(mileageUrl);
   await mechanic.page.unroute(maintenanceUrl);
   await panel.getByRole("button", { name: "Record dashboard mileage", exact: true }).click();
-  assert.equal(await panel.getByLabel("Reason for reading/correction", { exact: true }).inputValue(), "");
+  assert.equal(await panel.getByRole("textbox", { name: /^Reason for reading\/correction/ }).inputValue(), "");
   assert.equal(await panel.getByText("Stale refresh failure", { exact: true }).count(), 0);
   await panel.getByRole("button", { name: "Cancel", exact: true }).click();
   await panel.getByRole("button", { name: "Refresh", exact: true }).click();
@@ -135,7 +161,7 @@ try {
   const observedAt = new Date().toISOString();
   const localDate = new Date(new Date(observedAt).getTime() - new Date(observedAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
   await panel.getByLabel("When observed", { exact: true }).fill(localDate);
-  await panel.getByLabel("Reason for reading/correction", { exact: true }).fill("Dashboard verified during shop visit");
+  await panel.getByRole("textbox", { name: /^Reason for reading\/correction/ }).fill("Dashboard verified during shop visit");
   await panel.getByRole("button", { name: "Save mileage", exact: true }).click();
   await panel.getByText("150 mi remaining", { exact: true }).waitFor();
   await assertNoOverflow(mechanic.page);
@@ -186,7 +212,7 @@ try {
   await office.page.setViewportSize({ width: 768, height: 1024 });
   await assertNoOverflow(office.page);
   await office.page.screenshot({ path: join(storage, "office-tablet.png"), fullPage: true });
-  console.log(JSON.stringify({ result: "PASS", workflow: "authenticated mechanic/Office through real app routes and disposable PostgreSQL", checks: ["carryover before start", "early margin", "actual visit due", "manual audit", "pending-save scope resets and stale success/failure ignored", "provider conflict and explicit reconciliation", "refresh persistence", "defer form additional miles and shared calendar", "completion preserves next-visit due", "repair planned", "mechanic write rejection", "guessed inspection rejection", "1440/768/390 no overflow"], artifacts: storage }));
+  console.log(JSON.stringify({ result: "PASS", workflow: "authenticated mechanic/Office through real app routes and disposable PostgreSQL", checks: ["carryover before start", "early margin", "actual visit due", "manual audit", "checklist saves preserve maintenance drafts and busy state without loading flashes", "stale refresh failures ignored", "provider conflict and explicit reconciliation", "refresh persistence", "defer form additional miles and shared calendar", "completion preserves next-visit due", "repair planned", "mechanic write rejection", "guessed inspection rejection", "1440/768/390 no overflow"], artifacts: storage }));
 } catch (error) {
   console.error(error);
   if (browser) { for (const context of browser.contexts()) { for (const page of context.pages()) { try { console.error(await page.locator(".inspection-detail-primary").ariaSnapshot({ timeout: 2000 })); await page.screenshot({ path: join(storage, `failure-${context === browser.contexts()[0] ? "mechanic" : "office"}.png`), fullPage: true }); } catch {} } } }
