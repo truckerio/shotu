@@ -44,6 +44,8 @@ import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
 import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extraction.routes.js";
+import { handleInventoryEventsApi } from "./src/server/modules/inventory/inventory-events.routes.js";
+import { closeInventoryChangeFeed } from "./src/server/modules/inventory/inventory-change-feed.js";
 import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
 import { handlePartFulfillmentApi } from "./src/server/routes/part-fulfillment.routes.js";
 import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-unit-workorder.routes.js";
@@ -774,6 +776,7 @@ async function handleApi(req, res) {
   if (await handleMechanicApi(req, res, url, helpers)) return;
   if (await handleInventoryUnitWorkorderApi(req, res, url, helpers)) return;
   if (await handleInventoryReuseApi(req, res, url, helpers)) return;
+  if (await handleInventoryEventsApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
   if (await handlePartFulfillmentApi(req, res, url, helpers)) return;
   if (await handleInventoryApi(req, res, url, helpers)) return;
@@ -992,6 +995,7 @@ server.listen(port, process.env.HOST || "0.0.0.0", () => {
 installGracefulShutdown(server, {
   closeDatabase: closePool,
   stopBackgroundJobs: () => {
+    closeInventoryChangeFeed();
     stopSamsaraAutoSync();
     stopIntegrationWorker();
     stopInvoiceRetention();

@@ -1538,3 +1538,13 @@ Approval completeness: Final Office approval checks current canonical part price
 - Local price configuration gaps use amber `Price missing`; one pill summarizes the highest known severity, with `+N` for additional distinct issues. Full reasons and shops remain in the row accessible name, tooltip, and part detail summary. Unknown issue codes fall back to neutral `Check details`; shared component also supports red blocking errors for workflows that provide that severity.
 - Part number and pill wrap together within narrow layouts. Existing issue-first ordering, scope, exact refresh, price rules and mutation behavior unchanged. No new server conflict conditions introduced.
 - Local focused checks, production build and responsive browser evidence tracked in external stock-pill task. No commit/push/deployment.
+
+
+### INV-20261025-01 — Real-time Stock updates without permanent header action
+
+- Removed the persistent Refresh inventory button. Successful writes still refresh their owner. A same-origin, authenticated SSE stream invalidates Stock reads after committed changes from other users or app instances; reconnect also resynchronizes. A 15-second recovery check runs when the stream is disconnected.
+- Migration 204 adds transaction-bound PostgreSQL notifications on Stock projection sources. One shared LISTEN connection serves each app process. Office/Admin company scopes match Stock reads; SSE carries no stock values or tenant IDs. Access is revalidated on events and 15-second heartbeats, with bounded connections and slow-client cleanup.
+- While a part, intake/create/import dialog or physical count is open, incoming events remain queued. Closing the editor flushes one safe refresh. Hidden/offline tabs and loading/error states defer reads too. No automatic editor reload or submitted-value mutation. Checkpoint queues retain filters, batches and row anchors; selected-position refresh keeps rows mounted.
+- Failures retain explicit Retry. Stream cleanup closes connections and aborts owned location reads on view/scope change. No stock or pricing business rules change.
+- Rollback: stop the new event consumers/server, drop migration 204's named triggers on its listed tables and then `notify_inventory_stock_change()`; no data conversion requires reversal. Hosted migration/deployment remains a separate delivery action.
+- Verification tracked in external stock-auto-refresh task. Local implementation only; no commit/push/deployment.

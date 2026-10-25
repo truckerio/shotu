@@ -10,23 +10,23 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /sort: stockSort/);
   assert.doesNotMatch(workspace, /filterAndSortStock\(items/);
   assert.match(workspace, /All locations/);
-  assert.match(workspace, /<IconButton className="inventory-refresh-button" icon=\{RefreshCw01\} label="Refresh inventory"/);
+  assert.doesNotMatch(workspace, /label="Refresh inventory"/);
+  assert.match(workspace, /useStockAutoRefresh\(/);
   assert.match(workspace, /Filter stock by availability/);
   assert.match(workspace, /Sort inventory stock/);
   assert.match(workspace, /<option value="low_stock_first">Low stock first<\/option>/);
   assert.match(workspace, /No matching stock/);
   assert.match(workspace, /Reset view/);
-  assert.match(workspace, /aria-live="polite"/);
   assert.match(workspace, /<OperationalCollectionPage/);
   assert.match(workspace, /presentation=\{presentation\}/);
   assert.match(workspace, /<OperationalCollectionTabs/);
   assert.match(workspace, /<OperationalCollectionToolbar className="inventory-toolbar inventory-stock-toolbar">/);
-  assert.match(workspace, /<OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">/);
+  assert.match(workspace, /<OperationalCollectionResultHeader className="inventory-results-line">/);
   assert.match(workspace, /<CheckpointCollection queue=\{stockQueue\}/);
   assert.match(workspace, /<OperationalCollectionRow/);
   assert.match(workspace, /<OperationalCollectionCell/);
   assert.match(workspace, /queryKey: stockQueryKey, refreshKey, getItemKey: stockItemKey/);
-  assert.match(workspace, /Updating results/);
+  assert.doesNotMatch(workspace, /<strong>\{stockMeta.total\}<\/strong>/);
   assert.match(workspace, /stockLoaded/);
   assert.doesNotMatch(workspace, /\/api\/office\/inventory\/invoices/);
   assert.doesNotMatch(workspace, /Invoice history/);
@@ -761,7 +761,7 @@ test("inventory availability filters use the shared collection template without 
   assert.match(workspace, /setSelectedLocationPart\(item\)/);
   assert.match(styles, /\.inventory-stock-table\.is-refreshing/);
   assert.doesNotMatch(styles, /\.inventory-workspace \{|\.inventory-workspace-header|\.inventory-workspace-heading|\.inventory-workspace-actions|\.inventory-stock-controls|\.inventory-stock-filters|\.inventory-stock-list|\.inventory-stock-head|\.inventory-stock-results|\.inventory-stock-row:hover|\.inventory-stock-row:focus-visible/);
-  assert.match(styles, /\.inventory-results-progress/);
+  assert.doesNotMatch(styles, /\.inventory-results-progress/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
 });
 
@@ -924,13 +924,10 @@ test("desktop inventory section actions stay compact inside the navigation line"
   const styles = await readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8");
   assert.match(styles, /@media \(min-width: 761px\)[\s\S]*?\.inventory-workspace\.is-section-root \.operational-collection-section-nav button\s*\{[^}]*min-height:\s*32px;/);
   assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.button\s*\{[^}]*font-size:\s*var\(--text-body\);[^}]*font-weight:\s*var\(--weight-semibold\);[^}]*height:\s*32px;[^}]*line-height:\s*16px;[^}]*padding:\s*4px 16px;/s);
-  assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.inventory-refresh-button\s*\{[^}]*height:\s*32px;[^}]*min-width:\s*32px;[^}]*width:\s*32px;/s);
-  assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.inventory-refresh-button > svg\s*\{[^}]*height:\s*16px;[^}]*width:\s*16px;/s);
 });
 
 test("inventory filters keep the 40px desktop baseline while header actions align at 44px", async () => {
   const styles = await readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8");
-  assert.match(styles, /\.inventory-workspace \.page-header-actions \.inventory-refresh-button\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*width:\s*44px;/s);
   assert.match(styles, /\.inventory-workspace \.page-header-actions \.inventory-invoice-upload-button\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*width:\s*44px;/s);
   assert.match(styles, /\.inventory-search-control\s*\{[^}]*min-height:\s*40px;/);
   assert.match(styles, /\.inventory-scope-field select,\s*\.inventory-stock-sort select\s*\{[^}]*min-height:\s*40px;/);

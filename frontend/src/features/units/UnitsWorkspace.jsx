@@ -7,7 +7,7 @@ import { CheckpointCollection } from "../../components/ui/CheckpointCollection.j
 import { SecondaryDetailPanel, SecondaryDetailSection } from "../../components/ui/SecondaryDetailPanel.jsx";
 import { SectionHelpDisclosure } from "../../components/workorders/SectionHelpDisclosure.jsx";
 import {
-  OperationalCollectionPage, OperationalCollectionToolbar, OperationalCollectionResultHeader,
+  OperationalCollectionPage, OperationalCollectionToolbar,
   OperationalCollectionTable, OperationalCollectionRow, OperationalCollectionCell,
 } from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
@@ -134,7 +134,6 @@ export function UnitsWorkspace({ presentation = "page", actorId = "", section = 
         <label><span>Sort</span><Dropdown value={filters.sort} onChange={(event) => changeFilters({ ...filters, sort: event.target.value })} aria-label="Sort units"><option value="unit_asc">Unit A–Z</option><option value="unit_desc">Unit Z–A</option><option value="tags_asc">Tags A–Z</option><option value="repair_first">Under repair first</option></Dropdown></label>
         {hasFilters ? <Button type="button" onClick={clearFilters}>Clear filters</Button> : null}
       </OperationalCollectionToolbar>
-      <OperationalCollectionResultHeader><span role="status">{queue.loading && !queue.pages.length ? `Loading ${directorySection.label.toLowerCase()}…` : queue.error ? `${directorySection.label} could not be loaded` : `${queue.total} ${directorySection.label.toLowerCase()}`}</span></OperationalCollectionResultHeader>
       <CheckpointCollection
         ariaLabel={directorySection.label}
         getItemKey={(unit) => unit.id}

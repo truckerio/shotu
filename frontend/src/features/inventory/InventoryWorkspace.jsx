@@ -9,7 +9,7 @@ import { InventoryReports } from './InventoryReports.jsx';
 import { InventoryTaskQueue } from './InventoryTaskQueue.jsx';
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, MarkerPin01, Package, Plus, RefreshCw01, SearchMd, SwitchVertical01, UploadCloud02 } from "@untitledui/icons";
+import { ArrowLeft, ChevronRight, MarkerPin01, Package, Plus, SearchMd, SwitchVertical01, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
@@ -46,6 +46,7 @@ import {
   stockIssueLabel,
   stockIssuePill,
 } from "./inventory-workspace-model.js";
+import { useStockAutoRefresh } from "./useStockAutoRefresh.js";
 import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
 import { configuredPriceView, effectiveSellingPrice } from "./part-commercial-model.js";
 import "./inventory-workspace.css";
@@ -209,8 +210,16 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const error = stockQueue.error?.message || "";
   const stockMeta = { total: stockQueue.total, counts: stockQueue.pages[0]?.meta?.counts || { all: 0, available: 0, reserved: 0, out: 0 } };
   const stockCounts = stockMeta.counts;
+  const stockAutoRefreshEnabled = inventorySection === "stock";
+  const stockAutoRefreshPaused = Boolean(invoiceWorkflowOpen || countWorkflowOpen
+    || selectedStockKey || createPartOpen || receivingPart);
+  useStockAutoRefresh({
+    enabled: stockAutoRefreshEnabled && stockMode === "part",
+    sessionKey: stockQueryKey,
+    refresh: () => stockQueue.refresh(),
+    canRefresh: () => !stockAutoRefreshPaused && !loading && !stockQueue.error,
+  });
   const initialLoading = stockQueue.loading && !stockLoaded;
-  const refreshing = stockQueue.loadingMore;
   const selectedItem = useMemo(() => {
     const item = (selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey ? selectedLocationPart : null)
       || items.find((entry) => stockItemKey(entry) === selectedStockKey);
@@ -472,7 +481,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   /> : null;
   const stockActions = <>
     <Button type="button" variant="primary" onClick={() => setReceivingPart({})} disabled={!locations.length}>Add stock</Button>
-    <IconButton className="inventory-refresh-button" icon={RefreshCw01} label="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
     <Button type="button" icon={Plus} onClick={() => setCreatePartOpen(true)} disabled={!locations.length}>New part</Button>
   </>;
   const taskActions = !taskWorkflow ? <Button type="button" onClick={openPhysicalCountTasks}>Physical counts</Button> : null;
@@ -645,10 +653,9 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       {initialLoading ? <div className="inventory-stock-skeleton" role="status" aria-label="Loading inventory" aria-busy="true"><OperationalCollectionTable className="inventory-stock-table" ariaLabel="Inventory loading" columns={[{ id: "part", label: "Part" }, { id: "on-hand", label: "Our on hand" }, { id: "reserved", label: "Reserved" }, { id: "available", label: "Our available" }]}>{Array.from({ length: 10 }, (_, index) => <OperationalCollectionRow className="inventory-stock-row" key={index}><OperationalCollectionCell><span className="inventory-skeleton-bar is-part" /><span className="inventory-skeleton-bar is-description" /></OperationalCollectionCell>{[0, 1, 2].map((cell) => <OperationalCollectionCell key={cell}><span className="inventory-skeleton-bar" /></OperationalCollectionCell>)}</OperationalCollectionRow>)}</OperationalCollectionTable></div> : null}
 
       {stockLoaded ? <>
-        <OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">
-          <span>{refreshing ? <><RefreshCw01 className="inventory-results-progress" aria-hidden="true" />Updating results</> : <><strong>{stockMeta.total}</strong> part{stockMeta.total === 1 ? "" : "s"} · {locationId === "master" ? "Odoo master catalog" : locationId === "all" ? "All locations" : browseLocations.find((location) => location.id === locationId)?.name || "Selected location"}</>}</span>
-          {(query || locationId !== "all" || stockFilter !== "all" || stockSort !== DEFAULT_STOCK_SORT) ? <Button type="button" onClick={clearStockView}>Reset view</Button> : null}
-        </OperationalCollectionResultHeader>
+        {(query || locationId !== "all" || stockFilter !== "all" || stockSort !== DEFAULT_STOCK_SORT) ? <OperationalCollectionResultHeader className="inventory-results-line">
+          <Button type="button" onClick={clearStockView}>Reset view</Button>
+        </OperationalCollectionResultHeader> : null}
         <CheckpointCollection queue={stockQueue} label="parts" pageSize={20} getItemKey={stockItemKey}
           storageKey={`inventory-stock:${stockQueryKey}`}
           className="inventory-stock-table inventory-data-table"
@@ -684,7 +691,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           {query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
         </CheckpointCollection>
       </> : null}
-      </> : <InventoryLocationStockWorkspace locations={browseLocations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
+      </> : <InventoryLocationStockWorkspace locations={browseLocations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} autoRefreshEnabled={stockAutoRefreshEnabled} autoRefreshPaused={stockAutoRefreshPaused} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
       </> : null}
       </section>
       {inventorySection === "stock" ? <SecondaryDetailPanel

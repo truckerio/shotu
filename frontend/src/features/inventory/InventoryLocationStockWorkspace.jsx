@@ -12,6 +12,7 @@ import {
   compactPlacementPath,
   visibleLocationTree,
 } from "./inventory-location-model.js";
+import { useStockAutoRefresh } from "./useStockAutoRefresh.js";
 import { PositionCountPanel } from "./PositionCountPanel.jsx";
 import "./inventory-locations-workspace.css";
 
@@ -34,7 +35,7 @@ function arrivalTarget(position, positionId) {
   return { positionId };
 }
 
-export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, canApplyInventoryCount = false, onShopChange, onOpenPart, onAddStock }) {
+export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, autoRefreshEnabled = true, autoRefreshPaused = false, canApplyInventoryCount = false, onShopChange, onOpenPart, onAddStock }) {
   const [shopId, setShopId] = useState(initialShopId);
   const [positions, setPositions] = useState([]);
   const [selectedPositionId, setSelectedPositionId] = useState("");
@@ -49,6 +50,7 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
   const [countMode, setCountMode] = useState({ active: false, selectedCount: 0, busy: false });
   const [initialPositionPending, setInitialPositionPending] = useState(Boolean(initialPositionId));
   const countPanelRef = useRef(null);
+  const stockReadRef = useRef(null);
   const selected = positions.find((entry) => locationId(entry) === selectedPositionId) || null;
   const selectedShop = locations.find((entry) => locationId(entry) === shopId) || null;
   const canManageShop = selectedShop?.canManage !== false;
@@ -94,14 +96,43 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
       return undefined;
     }
     let active = true;
+    const request = {};
+    stockReadRef.current = request;
     setLoadingStock(true);
     setError("");
     api(`/api/office/inventory/locations/${encodeURIComponent(shopId)}/positions/${encodeURIComponent(selectedPositionId)}/stock?scope=${scope}`)
       .then((result) => { if (active) setStock(responseStock(result)); })
       .catch((next) => { if (active) setError(next.message || "Stock could not be loaded."); })
-      .finally(() => { if (active) setLoadingStock(false); });
-    return () => { active = false; };
+      .finally(() => {
+        if (stockReadRef.current === request) stockReadRef.current = null;
+        if (active) setLoadingStock(false);
+      });
+    return () => {
+      active = false;
+      if (stockReadRef.current === request) stockReadRef.current = null;
+    };
   }, [refreshKey, scope, selectedPositionId, shopId, stockRefreshKey]);
+  useStockAutoRefresh({
+    enabled: autoRefreshEnabled && Boolean(shopId),
+    sessionKey: `${shopId}:${selectedPositionId}:${scope}`,
+    canRefresh: () => !autoRefreshPaused && !countMode.active && !stockReadRef.current && !loadingPositions && !loadingStock && !openingPartId && !error,
+    refresh: async ({ signal }) => {
+      const request = {};
+      stockReadRef.current = request;
+      try {
+        const nextPositions = await api(`/api/office/inventory/locations/${encodeURIComponent(shopId)}/positions`, { signal });
+        const result = selectedPositionId ? await api(`/api/office/inventory/locations/${encodeURIComponent(shopId)}/positions/${encodeURIComponent(selectedPositionId)}/stock?scope=${scope}`, { signal }) : null;
+        if (!signal.aborted) {
+          setPositions(responsePositions(nextPositions));
+          if (result) setStock(responseStock(result));
+        }
+      } catch (next) {
+        if (!signal.aborted) setError(next.message || "Stock could not be loaded.");
+      } finally {
+        if (stockReadRef.current === request) stockReadRef.current = null;
+      }
+    },
+  });
   function openShop(nextShopId) {
     setShopId(nextShopId);
     setPositions([]);
@@ -207,7 +238,7 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     <div className="inventory-location-shop-context">
       <div className="inventory-location-shop-heading"><IconButton icon={ArrowLeft} label="Back to all shops" onClick={closeShop} /><span className="inventory-detail-location-name"><strong>{locationName(selectedShop)}</strong>{!canManageShop ? <span className="inventory-view-only-badge">View only</span> : null}</span></div>
     </div>
-    {error ? <p className="ops-error" role="alert">{error}</p> : null}
+    {error ? <p className="ops-error" role="alert">{error} <Button type="button" onClick={() => { loadPositions(); setStockRefreshKey((value) => value + 1); }} disabled={loadingPositions || loadingStock}>Retry</Button></p> : null}
     <div className={`inventory-location-layout inventory-location-stock-layout${selected ? " has-detail" : ""}`}>
       <section className="inventory-location-tree" aria-label="Location hierarchy">
         {loadingPositions ? <p role="status"><RefreshCw01 className="loading-icon" /> Loading locations…</p> : tree.length ? <div className="inventory-location-tree-items" role="tree">
