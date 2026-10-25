@@ -244,21 +244,86 @@ export async function runApiRoleWorkflow({ clients, config, logger = console, on
     },
   });
   const actualPartNumber = `USED-${runId.slice(-8).toUpperCase()}-PRINTED`;
-  await clients.office.request(`/api/office/workorders/${workorder.id}/parts`, {
+  const createdPart = await clients.office.request("/api/office/inventory/parts", {
     method: "POST",
+    expectedStatuses: [201],
     body: {
-      query: actualPartNumber,
+      locationId: primary.id,
       partNumber: actualPartNumber,
-      description: "Long legacy-compatible actual-used part description that must remain printable.",
-      quantity: 1,
+      description: "Long actual-used QA fixture description that must remain printable.",
       uomCode: "ea",
-      repairOrder: "Install the actual-used QA fixture and include it in printed work performed.",
-      fitmentStatus: "confirmed",
-      fitmentNotes: "Office actual-used QA fixture",
-      allocations: [],
+      trackingMode: "no_stock",
     },
   });
+  const actualPartId = createdPart.body?.part?.id;
+  if (!actualPartId) throw new Error("Office did not create the QA no-stock catalog part.");
+  const configuredPartPrice = await clients.office.request(`/api/office/inventory/parts/${actualPartId}/locations/${primary.id}/prices/internal`, {
+    method: "PUT",
+    body: { expectedVersion: 0, amount: "12.0000", currency: "USD",
+      reason: "Price the isolated QA used part", idempotencyKey: randomUUID() },
+  });
+  if (configuredPartPrice.body?.price?.status !== "known") {
+    throw new Error("Office did not configure the QA location part price.");
+  }
+  const actualPart = await clients.office.request(`/api/office/workorders/${workorder.id}/used-parts`, {
+    method: "PATCH",
+    body: { parts: [{ catalogPartId: actualPartId, trackingMode: "no_stock",
+      partNo: actualPartNumber, qty: "1", uomCode: "ea",
+      repairOrder: "Install the actual-used QA fixture and include it in printed work performed." }] },
+  });
+  const noStockLineId = actualPart.body?.workorder?.formData?.parts?.find(
+    (part) => part.catalogPartId === actualPartId,
+  )?.noStockLineId;
+  if (!noStockLineId) throw new Error("Office actual-used part did not receive a canonical no-stock line identity.");
+  const partPricingPath = `/api/workorders/${workorder.id}/modules/parts/actions/record`;
+  const partPreview = await clients.office.request(partPricingPath, {
+    method: "POST", body: { operation: "partPricingPreview", usageKind: "no_stock", noStockLineId },
+  });
+  const partFingerprint = partPreview.body?.result?.fingerprint;
+  if (!partFingerprint || partPreview.body?.result?.options?.internal_cost?.status !== "known") {
+    throw new Error("The QA no-stock part has no current internal price preview.");
+  }
+  const selectedPart = await clients.office.request(partPricingPath, {
+    method: "POST",
+    body: { operation: "partPriceSelection", usageKind: "no_stock", noStockLineId,
+      selection: "internal_cost", expectedFingerprint: partFingerprint,
+      reason: "Use the configured QA part price", idempotencyKey: randomUUID() },
+  });
+  if (selectedPart.body?.result?.kind !== "saved") throw new Error("Office did not select the QA part price.");
   record("office-parts-projection");
+
+  const createdLabor = await clients.office.request("/api/labor-products", {
+    method: "POST",
+    expectedStatuses: [201],
+    body: { locationId: primary.id, name: `QA labor ${runId}`, uomCode: "hr" },
+  });
+  const laborProduct = createdLabor.body?.item;
+  if (!laborProduct?.id) throw new Error("Office did not create the QA labor product.");
+  const laborRate = await clients.office.request(`/api/labor-products/${laborProduct.id}/rates`, {
+    method: "PUT",
+    body: { locationId: primary.id, priceKind: "internal_cost", expectedVersion: 0,
+      amount: "25.0000", currency: "USD", reason: "Price the isolated QA labor",
+      idempotencyKey: randomUUID() },
+  });
+  const rateVersionId = laborRate.body?.kind === "saved" ? laborRate.body.rate?.id : null;
+  if (!rateVersionId) throw new Error("Office did not configure the QA labor rate.");
+  const laborUpdate = await clients.office.request(`/api/office/workorders/${workorder.id}`, {
+    method: "PATCH",
+    body: { formData: { laborProduct: { productId: laborProduct.id, name: laborProduct.name,
+      code: laborProduct.code || "", uomCode: laborProduct.uomCode }, laborHours: "1" } },
+  });
+  if (Number(laborUpdate.body?.workorder?.formData?.laborHours) !== 1) {
+    throw new Error("Office did not record the QA labor quantity.");
+  }
+  const selectedLabor = await clients.office.request(
+    `/api/workorders/${workorder.id}/modules/diagnosisRepair/actions/record`, {
+      method: "POST",
+      body: { operation: "laborPriceSelection", selection: "internal_cost",
+        expectedRateVersionId: rateVersionId, reason: "Use the configured QA labor rate",
+        idempotencyKey: randomUUID() },
+    },
+  );
+  if (selectedLabor.body?.result?.kind !== "saved") throw new Error("Office did not select the QA labor price.");
 
   const done = await clients.mechanic.request(`/api/mechanic/workorders/${workorder.id}/mark-done`, {
     method: "POST",

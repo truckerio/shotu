@@ -17,7 +17,10 @@ test("collection pagination shares one rail without changing collection data own
 test("shared frame places rail outside clipping results and preserves responsive compact navigation", () => {
   const css = read("./collection-pagination.css");
   assert.match(css, /padding-left: 25px/);
-  assert.match(css, /height: min\(100%, 280px\)/);
+  // Shared CheckpointRail owns count-aware sizing; the frame must not stretch it.
+  const railCss = read("./checkpoint-rail.css");
+  assert.match(railCss, /height: min\(100%, calc\(var\(--checkpoint-batch-count, 28\) \* 10px\), 280px\)/);
+  assert.doesNotMatch(css, /height: min\(100%, 280px\)/);
   assert.match(css, /@media \(max-width: 960px\)/);
   assert.match(css, /position: sticky/);
   assert.match(css, /position: static; width: auto/);

@@ -192,6 +192,7 @@ export const invoiceHistoryQuerySchema = z.object({
 }).strict();
 
 export const inventoryStockQuerySchema = z.object({
+  catalogPartId: z.string().uuid().optional(),
   q: z.string().trim().max(200).optional().default(""),
   locationId: z.string().uuid().optional(),
   scope: z.enum(["all", "master"]).optional().default("all"),

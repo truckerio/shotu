@@ -310,5 +310,5 @@
 /* Keep list contents and their count inside one continuous card. */
 .purchasing-split-pane .checkpoint-collection.is-footer-status { border:1px solid #e4e7ec; border-radius:10px; overflow:hidden; row-gap:0; }
 .purchasing-split-pane .is-footer-status > .checkpoint-collection-viewport { border:0; border-radius:0; }
-.purchasing-split-pane .is-footer-status > .checkpoint-collection-footer { margin:0; padding:4px 12px; line-height:16px; }
 .purchasing-split-pane .is-footer-status .inventory-inbound-empty { border:0; border-radius:0; }
+.purchasing-split-pane:has(.checkpoint-collection) { padding-bottom:0; }

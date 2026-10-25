@@ -45,6 +45,20 @@
 .admin-tabs svg { height: 17px; width: 17px; }
 .admin-tabs span { background: #f2f4f7; border-radius: 10px; font-size: var(--text-caption); padding: 2px 7px; }
 .admin-location-work { margin-top: 4px; min-width: 0; }
+@media (min-width: 701px) {
+  .admin-content:has(> .admin-location-work) { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
+  .admin-content:has(> .admin-location-work) > :is(.page-header, .admin-tabs) { flex-shrink: 0; }
+  .admin-location-work,
+  .admin-location-work :is(.operations-workspace, .operations-results-scroll, .part-request-queue, .workorder-drafts-queue, .workorder-drafts-results) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .admin-location-work :is(.operations-toolbar, .mobile-queue-toolbar, .workorder-drafts-toolbar) { flex-shrink: 0; }
+  .admin-location-work :is(.operations-table, .part-request-queue-table, .workorder-drafts-results) { overflow: auto; overscroll-behavior: contain; }
+}
 .admin-panel { padding: 22px; }
 .admin-panel h2, .admin-template-form h2 { font-size: var(--text-heading); font-weight: var(--weight-semibold); margin: 0 0 4px; }
 .admin-rules-layout { display: grid; gap: 12px; margin-top: 24px; }

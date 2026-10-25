@@ -3,7 +3,7 @@
   align-self: center;
   box-sizing: border-box;
   flex: 0 0 25px;
-  height: min(100%, 280px);
+  height: min(100%, calc(var(--checkpoint-batch-count, 28) * 10px), 280px);
   min-height: 0;
   padding-inline: 0.5px;
   position: relative;
@@ -12,7 +12,7 @@
 
 .checkpoint-rail-track {
   display: grid;
-  grid-auto-rows: minmax(10px, 1fr);
+  grid-auto-rows: 10px;
   height: 100%;
   overflow: visible;
   width: 24px;

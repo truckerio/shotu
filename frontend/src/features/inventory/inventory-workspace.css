@@ -473,3 +473,9 @@
  .inventory-unit-row-actions {margin-left:auto;}
  .inventory-serial-filters {flex-wrap:wrap;gap:8px;}
 }
+
+/* Price attention stays with its part, without an extra queue or section. */
+.inventory-part-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.inventory-part-number { min-width: 0; overflow-wrap: anywhere; }
+
+.inventory-part-issue-summary { margin: 0; color: #b42318; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }

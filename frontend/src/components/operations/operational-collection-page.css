@@ -21,6 +21,21 @@
   padding: 0 16px 16px;
 }
 
+.operational-collection-surface:has(> .checkpoint-collection) {
+  padding-bottom: 0;
+}
+
+@media (min-width: 701px) {
+  .operational-collection-surface:has(> .checkpoint-collection) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .operational-collection-surface:has(> .checkpoint-collection) > :not(.checkpoint-collection) {
+    flex-shrink: 0;
+  }
+}
+
 .operational-collection-tabs-wrap {
   border-bottom: 1px solid #d0d5dd;
   overflow-x: auto;

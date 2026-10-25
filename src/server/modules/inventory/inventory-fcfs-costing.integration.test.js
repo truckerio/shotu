@@ -268,7 +268,12 @@ test("two inbound invoice batches allocate FCFS and preserve a transparent mixed
   const transaction = await getPool().connect();
   try {
     await transaction.query("begin");
-    await markAggregateUsagesPending(transaction, { workorderId, companyId, actorId });
+    await markAggregateUsagesPending(transaction, { workorderId, companyId, actorId, includeQuantity: true });
+    const pendingUsage = await transaction.query(
+      "select status from workorder_aggregate_part_usages where company_id=$1 and id=$2",
+      [companyId, reserved.usage.id],
+    );
+    assert.equal(pendingUsage.rows[0].status, "installed_pending_approval");
     await consumeAggregateUsagesForApproval(transaction, { workorderId, companyId, actorId });
     await transaction.query("commit");
   } finally {

@@ -46,12 +46,14 @@ function PriceHistory({ prices, locationScoped }) {
   return groups.map(([label, history]) => <div className="inventory-commercial-history-group" key={label}><h6>{label}</h6>{history.length ? <ul>{history.map((price) => <li key={price.id}><strong>{configuredPriceView(price).label}</strong><span>Version {price.version} · {new Date(price.effectiveAt).toLocaleString()}</span><small>{price.reason}{price.createdBy?.name ? ` · ${price.createdBy.name}` : ""}</small></li>)}</ul> : <p>No saved history.</p>}</div>);
 }
 
-function ConfiguredRates({ internal, sellingPolicy, locationScoped, canEdit, uomCode, onEdit }) {
+function ConfiguredRates({ internal, sellingPolicy, locationScoped, canEdit, uomCode, onEdit, noStock = false }) {
   const internalState = locationScoped ? locationPriceEditState(internal) : { effective: internal?.current || null, source: internal?.current ? "company_default" : null };
+  const missingInternal = !internalState.effective || internalState.effective.amount === null;
+  const fixedPriceRequired = noStock && sellingPolicy?.method !== "fixed";
   const sellingSource = sellingPolicy ? (locationScoped && sellingPolicy.locationId ? "location_override" : "company_default") : null;
   return <section className="inventory-configured-rates" aria-label="Configured rates">
-    <div><span>Internal price</span><strong>{configuredPriceView(internalState.effective).label} / {uomCode || "unit"}</strong><small>{rateSourceLabel(internalState.source, locationScoped)}</small></div>
-    <div><span>Selling price</span><strong>{sellingPolicySummary(sellingPolicy)} / {uomCode || "unit"}</strong><small>{rateSourceLabel(sellingSource, locationScoped)}</small></div>
+    <div><span>Internal price</span><strong>{configuredPriceView(internalState.effective).label} / {uomCode || "unit"}</strong><small>{missingInternal ? "Missing internal price" : rateSourceLabel(internalState.source, locationScoped)}</small></div>
+    <div><span>Selling price</span><strong>{sellingPolicySummary(fixedPriceRequired ? null : sellingPolicy)} / {uomCode || "unit"}</strong><small>{fixedPriceRequired ? "Fixed selling price required" : !sellingPolicy ? "Missing selling price" : rateSourceLabel(sellingSource, locationScoped)}</small></div>
     {canEdit ? <Button type="button" onClick={onEdit}>Set rates</Button> : null}
   </section>;
 }
@@ -176,7 +178,7 @@ export function PartCommercialDetails({ part, location = null, secondary = false
     const internal = details.prices?.internal;
     return <section className="inventory-commercial-details inventory-no-stock-pricing" aria-label="No-stock pricing">
       {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
-      <ConfiguredRates internal={internal} sellingPolicy={details.sellingPolicy?.policy} locationScoped={Boolean(locationId)} canEdit={canEditConfiguredRates} uomCode={part.uomCode} onEdit={() => setRatesKind(canEditSellingPolicy ? "selling_price" : "internal_cost")} />
+      <ConfiguredRates noStock internal={internal} sellingPolicy={details.sellingPolicy?.policy} locationScoped={Boolean(locationId)} canEdit={canEditConfiguredRates} uomCode={part.uomCode} onEdit={() => setRatesKind(canEditSellingPolicy ? "selling_price" : "internal_cost")} />
       <details className="inventory-commercial-configured-history"><summary>Cost history</summary><PriceHistory prices={internal} locationScoped={Boolean(locationId)} /></details>
       {ratesDialog}
     </section>;

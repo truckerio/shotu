@@ -1,4 +1,11 @@
 .inventory-task-queue { display: grid; min-width: 0; gap: 14px; }
+.inventory-section-surface:has(> .inventory-task-queue) { padding-bottom: 0; }
+@media (min-width: 701px) {
+  .inventory-section-surface:has(> .inventory-task-queue),
+  .inventory-section-surface > .inventory-task-queue { display: flex; flex-direction: column; min-height: 0; }
+  .inventory-section-surface > .inventory-task-queue { flex: 1 1 auto; }
+  .inventory-task-queue > :not(.checkpoint-collection) { flex-shrink: 0; }
+}
 .inventory-task-toolbar { grid-template-columns: minmax(170px,.8fr) minmax(210px,1fr) minmax(260px,1.4fr) auto; align-items: end; }
 .inventory-task-toolbar label { display: grid; min-width: 0; gap: 6px; color: #344054; font-size: 12px; font-weight: 650; }
 .inventory-task-toolbar input { width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 11px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; font: inherit; }

@@ -112,6 +112,15 @@ test("workflow source covers every requested stage and avoids production domain 
   assert.match(source, /expectedStatuses: \[403, 404\]/);
   assert.match(source, /WORKORDER_ALREADY_ACCEPTED/);
   assert.match(source, /decision: "rejected"/);
+  assert.match(source, /trackingMode: "no_stock"/);
+  assert.match(source, /\/api\/office\/inventory\/parts", \{\s*method: "POST",\s*expectedStatuses: \[201\]/);
+  assert.match(source, /\/locations\/\$\{primary\.id\}\/prices\/internal/);
+  assert.match(source, /\/api\/labor-products", \{\s*method: "POST",\s*expectedStatuses: \[201\]/);
+  assert.match(source, /noStockLineId/);
+  assert.match(source, /operation: "partPricingPreview"/);
+  assert.match(source, /operation: "partPriceSelection"/);
+  assert.match(source, /laborHours: "1"/);
+  assert.match(source, /operation: "laborPriceSelection"/);
   assert.match(source, /modules\/odoo\/readiness/);
   assert.match(source, /active Parts browser fixture/);
   assert.match(source, /active Parts available-queue acceptance/);

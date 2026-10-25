@@ -94,7 +94,7 @@ Purchasing is the single operational destination for ordering demand, purchase o
 
 Stock's By part / By location page tabs remain unchanged. In By part, counted availability is a Queue dropdown, Location and Sort are accessible icon-only dropdowns, and the initial table load uses reduced-motion-aware skeleton rows. These controls retain existing read scopes and checkpoint loading; no stock or pricing commands changed.
 
-Inventory Stock, invoices, count imports, authority exceptions, Inbound, Purchasing, Tasks, stock tasks, movement history, custody and serialized-unit lists use the shared checkpoint collection viewport and bounded loading engine. Stock and Reconciliation reports load independently; capped report summaries are not presented as paginated collections. Exact page APIs preserve existing permission filters and cursor compatibility. No inventory mutation or schema ownership changes. Final verification evidence is recorded in the change entry below.
+Inventory Stock, invoices, count imports, Inbound, Purchasing, Tasks, stock tasks, movement history, custody and serialized-unit lists use the shared checkpoint collection viewport and bounded loading engine. Stock and Reconciliation reports load independently; capped report summaries are not presented as paginated collections. Exact page APIs preserve existing permission filters and cursor compatibility. No inventory mutation or schema ownership changes. Final verification evidence is recorded in the change entry below.
 
 ### Developer source integration (2026-09-15, local)
 
@@ -1520,3 +1520,21 @@ Each implementation slice records applicable evidence:
 
 
 Approval completeness: Final Office approval checks current canonical part prices and labor quantity/rate before posting inventory consumption or closing. Missing values remain unknown; an explicit selected zero price is valid. Every workorder requires a valid positive labor quantity and a current labor price at final approval. Waived charges are recorded through the existing Discount section; discounts never waive quantity or price completeness. Work done remains a handoff for Office review. Existing closed history is not rewritten.
+
+
+### INV-20261024-01 — Stock price attention in the part list
+
+- Status: IMPLEMENTED locally; verification tracked in the external stock-attention task.
+- Stock no longer mounts the legacy catalog-authority reconciliation panel or fetches its queue. Existing backend reconciliation evidence and protection remain intact.
+- The server Stock projection returns `issues` on parts and locations for missing configured internal price or selling policy. Latest location overrides precede company defaults; a cleared internal override stays unknown, explicit zero is valid, and fixed/markup selling rules count as configured (No stock requires fixed). Receipt costs and Odoo reference prices remain separate from configured rates.
+- All locations aggregates issues across visible active shops; a selected shop checks that shop only. Issue rows precede every selected secondary order before pagination, with existing availability/search/company scope preserved.
+- Each affected part gets a compact red dot with a named accessible reason and affected shops. Opening part details shows the missing rates and affected shops as compact text; existing price details identify the missing rate. No-stock items with an inherited markup require a fixed selling price. Existing Set rates save refreshes the list and the open part through a scoped exact `catalogPartId` Stock read, even when sorting moves it off the loaded batch; resolving configuration removes the flag on the next read. No new page or exception section.
+- Owners: `local-inventory.repo.js`, `InventoryWorkspace.jsx`, stock model/styles, and `PartCommercialDetails.jsx`. No schema, price/stock writes, provider calls, commit, push, or deployment in this change.
+
+
+### INV-20261024-02 — Compact severity pills for Stock issues
+
+- Stock now uses shared `SeverityPill` instead of a red dot: 22px height, 12px medium text, 8px horizontal padding, rounded ends, subtle border, no icons/shadows/animation.
+- Local price configuration gaps use amber `Price missing`; one pill summarizes the highest known severity, with `+N` for additional distinct issues. Full reasons and shops remain in the row accessible name, tooltip, and part detail summary. Unknown issue codes fall back to neutral `Check details`; shared component also supports red blocking errors for workflows that provide that severity.
+- Part number and pill wrap together within narrow layouts. Existing issue-first ordering, scope, exact refresh, price rules and mutation behavior unchanged. No new server conflict conditions introduced.
+- Local focused checks, production build and responsive browser evidence tracked in external stock-pill task. No commit/push/deployment.

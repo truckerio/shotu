@@ -101,7 +101,7 @@ export function CheckpointRail({
   }
 
   return (
-    <div className="checkpoint-rail">
+    <div className="checkpoint-rail" style={{ "--checkpoint-batch-count": count }}>
       <nav className="checkpoint-rail-track" aria-label={`${label} batches`} ref={railRef}>
         {pages.map((page) => {
           const active = page === selectedPage;

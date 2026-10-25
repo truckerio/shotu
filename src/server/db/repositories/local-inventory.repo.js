@@ -937,7 +937,7 @@ export async function listLocalInvoiceHistory({ companyIds, adminCompanyIds = []
   };
 }
 
-export async function listLocalInventoryStock({ companyIds, locationIds = [], isAdmin = false, locationId = null, scope = "all", availability = "all", sort = "available_desc", queryText = "", limit = 100, offset = 0 }) {
+export async function listLocalInventoryStock({ companyIds, catalogPartId = null, locationIds = [], isAdmin = false, locationId = null, scope = "all", availability = "all", sort = "available_desc", queryText = "", limit = 100, offset = 0 }) {
   const search = `%${String(queryText || "").trim().toLocaleLowerCase("en-US").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
   const normalizedReferencePrefix = `${normalizePartNumber(queryText)}%`;
   const result = await query(
@@ -995,6 +995,10 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
               ) then 'odoo' else catalog.source_provider end as source_provider,
               exists (select 1 from odoo_product_mappings ownership where ownership.company_id=catalog.company_id and ownership.catalog_part_id=catalog.id) as provider_managed,
               exists (select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.catalog_part_id=catalog.id and alert.resolved_at is null) as low_stock,
+              array_remove(array[
+                case when bool_or(internal_price.amount is null) then 'missing_internal_price' end,
+                case when bool_or(selling_policy.id is null or (catalog.tracking_mode = 'no_stock' and selling_policy.method <> 'fixed')) then 'missing_selling_price' end
+              ], null) as issues,
               coalesce(sum(balance.quantity_on_hand), 0) as quantity_on_hand,
               coalesce(sum(balance.quantity_reserved), 0) as quantity_reserved,
               coalesce(sum(balance.quantity_available), 0) as quantity_available,
@@ -1007,6 +1011,10 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
               coalesce(jsonb_agg(jsonb_build_object(
                 'locationId', catalog_location.id,
                 'locationName', catalog_location.name,
+                'issues', array_remove(array[
+                  case when internal_price.amount is null then 'missing_internal_price' end,
+                  case when selling_policy.id is null or (catalog.tracking_mode = 'no_stock' and selling_policy.method <> 'fixed') then 'missing_selling_price' end
+                ], null),
                 'binLocation', coalesce(balance.bin_location, ''),
                 'quantityOnHand', coalesce(balance.quantity_on_hand, 0),
                 'quantityReserved', coalesce(balance.quantity_reserved, 0),
@@ -1026,7 +1034,25 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
          on balance.company_id = catalog.company_id
         and balance.catalog_part_id = catalog.id
         and balance.location_id = catalog_location.id
+       -- Match the configured-rates editor: local overrides precede company defaults.
+       -- A cleared internal override stays unknown; provider reference prices are separate.
+       left join lateral (
+         select price.amount
+         from inventory_part_price_versions price
+         where price.company_id = catalog.company_id and price.catalog_part_id = catalog.id
+           and price.price_kind = 'internal'
+           and (price.location_id is null or price.location_id = catalog_location.id)
+         order by (price.location_id is not null) desc, price.version desc limit 1
+       ) internal_price on true
+       left join lateral (
+         select policy.id, policy.method
+         from inventory_part_selling_policy_versions policy
+         where policy.company_id = catalog.company_id and policy.catalog_part_id = catalog.id
+           and (policy.location_id is null or policy.location_id = catalog_location.id)
+         order by (policy.location_id is not null) desc, policy.version desc limit 1
+       ) selling_policy on true
        where catalog.company_id = any($1::uuid[])
+         and ($12::uuid is null or catalog.id = $12)
          and ($3::boolean or catalog_location.id = any($2::uuid[]))
          and ($4::uuid is null or catalog_location.id = $4)
          and (($8 = 'master' and exists (
@@ -1069,6 +1095,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
             (select count(*) from stock where quantity_on_hand = 0) as out_count
      from filtered
      order by
+       (cardinality(issues) > 0) desc,
        case when $10 = 'low_stock_first' then low_stock end desc,
        case when $10 = 'low_stock_first' and low_stock then quantity_available end asc,
        case when $10 = 'available_desc' then quantity_available end desc,
@@ -1077,7 +1104,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
        case when $10 in ('available_desc', 'low_stock_first', 'reserved_desc', 'locations_desc') then quantity_available end desc,
        lower(part_number), catalog_part_id
      limit $6 offset $7`,
-    [companyIds, locationIds, isAdmin, locationId, search, limit, offset, scope, availability, sort, normalizedReferencePrefix],
+    [companyIds, locationIds, isAdmin, locationId, search, limit, offset, scope, availability, sort, normalizedReferencePrefix, catalogPartId],
   );
   const items = result.rows.map((row) => ({
     companyId: row.company_id,
@@ -1094,6 +1121,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     uomLocked: row.uom_locked_at !== null,
     trackingMode: row.tracking_mode || null,
     lowStock: row.low_stock === true,
+    issues: row.issues || [],
     editableFields: row.provider_managed === true ? ["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "trackingMode", "referenceNumbers"],
     uomCode: row.inventory_display_uom_code || row.uom_code,
     canonicalUomCode: row.uom_code,

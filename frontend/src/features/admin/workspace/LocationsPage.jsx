@@ -106,7 +106,7 @@ export function LocationDetailPage({
         <button className={tab === "rules" ? "active" : ""} type="button" onClick={() => setTab("rules")}><Settings01 /> Rules</button>
         <button className={tab === "kiosk" ? "active" : ""} type="button" onClick={() => setTab("kiosk")}><Key01 /> Kiosk</button>
       </nav>
-      {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace actor={actor} locations={[detail.location]} fixedLocationId={detail.location.id} {...draftQueue} onOpenWorkorder={onOpenWorkorder} /></div> : null}
+      {tab === "work" ? <div className="operational-collection-surface admin-location-work"><OperationsWorkspace actor={actor} locations={[detail.location]} fixedLocationId={detail.location.id} {...draftQueue} onOpenWorkorder={onOpenWorkorder} /></div> : null}
       {tab === "users" ? <UsersPage actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePage detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
       {tab === "rules" ? <WorkorderRulesPage detail={detail} policy={policy} onChange={setPolicy} onOpenModules={onOpenModules} onSave={onSavePolicy} saving={saving} /> : null}

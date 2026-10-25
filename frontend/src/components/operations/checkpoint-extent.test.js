@@ -42,7 +42,13 @@ test("empty and single batch results have no phantom runway", () => {
   assert.deepEqual(extent.spacing(1, 1), { before: 0, after: 0 });
 });
 
-test("phone loading and recovery notices stay viewport-relative, not at the virtual document bottom", () => {
-  const css = readFileSync(new URL("./checkpoint-queue-table.css", import.meta.url), "utf8");
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.checkpoint-queue-notice \{ position: fixed; bottom: calc\(16px \+ env\(safe-area-inset-bottom\)\)/);
+test("collection status stays in a compact footer instead of covering records", () => {
+  const css = readFileSync(new URL("../ui/collection-count-footer.css", import.meta.url), "utf8");
+  const component = readFileSync(new URL("../ui/CheckpointCollection.jsx", import.meta.url), "utf8");
+  const overlayCss = readFileSync(new URL("./checkpoint-queue-table.css", import.meta.url), "utf8");
+  assert.doesNotMatch(component, /statusPlacement|checkpoint-queue-notice|reached<\/div>/);
+  assert.match(component, /<CollectionCountFooter/);
+  assert.match(component, /error=\{queue\.error\}[\s\S]*queue\.retry\(\)/);
+  assert.match(css, /padding: 4px 12px; line-height: 16px;/);
+  assert.doesNotMatch(overlayCss, /checkpoint-queue-notice/);
 });

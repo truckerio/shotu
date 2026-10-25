@@ -63,9 +63,10 @@
 }
 
 .checkpoint-collection.is-footer-status { grid-template-rows: minmax(0, 1fr) auto; }
-.checkpoint-collection-footer { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; padding: 12px 0 0; border-top: 1px solid #eaecf0; color: #667085; font-size: 12px; }
-.checkpoint-collection-footer .error { color: #b42318; overflow-wrap: anywhere; }
-.checkpoint-collection-footer button { border: 0; background: transparent; color: #475467; font: inherit; text-decoration: underline; cursor: pointer; }
 @media (min-width: 961px) {
   .checkpoint-collection.is-footer-status > .checkpoint-rail { grid-row: 1; }
+}
+
+@media (min-width: 701px) and (max-width: 960px) {
+  .checkpoint-collection.is-footer-status:not(.is-single-batch) { grid-template-rows: auto minmax(0, 1fr) auto; }
 }

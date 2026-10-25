@@ -26,6 +26,33 @@ export function stockStateLabel(state) {
   }[state] || "Stock unknown";
 }
 
+const STOCK_ISSUES = {
+  missing_internal_price: { label: "Missing internal price", pill: "Price missing", severity: "warning" },
+  missing_selling_price: { label: "Missing selling price", pill: "Price missing", severity: "warning" },
+};
+const ISSUE_SEVERITY = { review: 0, warning: 1, error: 2 };
+
+export function stockIssueLabel(item) {
+  return (item?.issues || []).map((code) => {
+    const label = STOCK_ISSUES[code]?.label || "Part needs attention";
+    const locations = (item.locations || []).filter((location) => location.issues?.includes(code));
+    return locations.length ? `${label}: ${locations.map((location) => location.locationName).join(", ")}` : label;
+  }).join("; ");
+}
+
+export function stockIssuePill(item) {
+  const codes = [...new Set(item?.issues || [])];
+  if (!codes.length) return null;
+  const issues = codes.map((code) => STOCK_ISSUES[code] || { pill: "Check details", severity: "review" });
+  const primary = issues.reduce((highest, issue) => ISSUE_SEVERITY[issue.severity] > ISSUE_SEVERITY[highest.severity] ? issue : highest);
+  return {
+    label: primary.pill,
+    severity: primary.severity,
+    additionalCount: codes.length - 1,
+    description: stockIssueLabel({ ...item, issues: codes }),
+  };
+}
+
 export function stockFilterCounts(items = []) {
   return items.reduce((counts, item) => {
     counts.all += 1;
@@ -37,6 +64,8 @@ export function stockFilterCounts(items = []) {
 export function filterAndSortStock(items = [], { filter = "all", sort = DEFAULT_STOCK_SORT } = {}) {
   const filtered = filter === "all" ? [...items] : items.filter((item) => stockState(item) === filter);
   return filtered.sort((left, right) => {
+    const issueDifference = Number(Boolean(right.issues?.length)) - Number(Boolean(left.issues?.length));
+    if (issueDifference) return issueDifference;
     if (sort === "low_stock_first") {
       const alertDifference = Number(Boolean(right.lowStock)) - Number(Boolean(left.lowStock));
       if (alertDifference) return alertDifference;

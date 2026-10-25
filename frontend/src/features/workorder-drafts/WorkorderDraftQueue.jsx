@@ -2,6 +2,7 @@ import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useMemo, useState } from "react";
 import { ArrowRight, Clock, File02, SearchMd, Trash01, Users01 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { CollectionCountFooter } from "../../components/ui/CollectionCountFooter.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { DraftDiscardDialog } from "./DraftDiscardDialog.jsx";
 import {
@@ -274,6 +275,10 @@ export function WorkorderDraftQueue({
           </div>
         ) : null}
       </div>
+
+      <CollectionCountFooter label="Saved workorder drafts count">
+        {loading ? "Loading drafts…" : `${visibleDrafts.length.toLocaleString()} of ${visibleDrafts.length.toLocaleString()}`}
+      </CollectionCountFooter>
 
       <DraftDiscardDialog
         open={Boolean(discardDraft)}

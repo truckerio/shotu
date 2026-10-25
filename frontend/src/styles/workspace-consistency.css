@@ -77,7 +77,12 @@
   border-radius: var(--workspace-card-radius);
   box-shadow: var(--workspace-card-shadow);
   margin-top: var(--workspace-card-gap);
-  padding: 0 16px 16px;
+  padding: 0 16px;
+}
+
+.admin-panel:has(> .checkpoint-collection:last-child),
+.integration-card:has(> .checkpoint-collection:last-child) {
+  padding-bottom: 0;
 }
 
 @media (min-width: 701px) {
@@ -212,7 +217,7 @@
   }
 
   .admin-shell .admin-location-work {
-    padding: 0 12px 12px;
+    padding: 0 12px;
   }
 
   .workspace-operations .mechanic-queue-shell {

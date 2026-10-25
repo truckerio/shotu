@@ -59,8 +59,9 @@ test("rail source keeps previews local and exposes keyboard and responsive exact
   assert.match(styles, /flex:\s*0 0 25px/);
   assert.match(styles, /padding-inline:\s*0.5px/);
   assert.match(styles, /align-self:\s*center/);
-  assert.match(styles, /height:\s*min\(100%, 280px\)/);
-  assert.match(styles, /grid-auto-rows:\s*minmax\(10px, 1fr\)/);
+  assert.match(component, /"--checkpoint-batch-count": count/);
+  assert.match(styles, /height:\s*min\(100%, calc\(var\(--checkpoint-batch-count, 28\) \* 10px\), 280px\)/);
+  assert.match(styles, /grid-auto-rows:\s*10px/);
   assert.match(styles, /min-height:\s*10px/);
   assert.match(styles, /\.checkpoint-rail-tick\s*\{[^}]*box-sizing:\s*border-box;[^}]*justify-content:\s*flex-start;[^}]*padding:\s*0 0 0 6px;/);
   assert.match(styles, /\.checkpoint-rail-mark\s*\{[\s\S]*?background:\s*#8492a6;[\s\S]*?border-radius:\s*50%;[\s\S]*?height:\s*2px;[\s\S]*?width:\s*2px;/);

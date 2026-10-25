@@ -102,7 +102,8 @@ test("PostgreSQL direct receipt concurrency, exact identities, rollback, isolati
   assert.equal(activity.items[0].quantity, 2);
   assert.equal(activity.items[0].receiptId, concurrent[0].receipt.id);
   assert.equal(activity.hasMore, false);
-  assert.deepEqual((await readPartStockMovements(parts.quantity, new URLSearchParams(), { ...context, locationIds: new Set() })).items, []);
+  assert.deepEqual((await readPartStockMovements(parts.quantity, new URLSearchParams(), { ...context, locationIds: new Set() })).items, activity.items);
+  await assert.rejects(readPartStockMovements(parts.quantity, new URLSearchParams(), { ...context, companyIds: new Set([randomUUID()]), locationIds: new Set() }), { statusCode: 404 });
   await assert.rejects(readPartStockMovements(parts.quantity, new URLSearchParams("page=0"), context));
   const balances = await query(`select catalog_part_id,quantity_on_hand,quantity_reserved from inventory_items where company_id=$1`, [companyId]);
   assert.equal(balances.rows.find((row) => row.catalog_part_id === parts.quantity).quantity_on_hand, "2.000");

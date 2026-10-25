@@ -927,3 +927,32 @@ test("database no-stock guards return a stable physical-mutation conflict", asyn
     retryable: false,
   });
 });
+
+
+test("stock route returns scoped price attention, validates inputs and denies other roles", async () => {
+  const item = { catalogPartId: CATALOG_PART_ID, issues: ["missing_internal_price"], locations: [{ locationId: LOCATION_ID, issues: ["missing_internal_price"] }] };
+  const stock = Object.assign([item], { total: 1, counts: { all: 1, available: 0, reserved: 0, out: 1 } });
+  const url = new URL(`http://localhost/api/office/inventory/stock?sort=part_asc&limit=1&catalogPartId=${CATALOG_PART_ID}`);
+  const response = {};
+  await handleInventoryApi({ method: "GET" }, response, url, helpers(), { listStock: async (scope) => {
+    assert.deepEqual(scope.companyIds, [COMPANY_ID]);
+    assert.equal(scope.sort, "part_asc");
+    assert.equal(scope.catalogPartId, CATALOG_PART_ID);
+    return stock;
+  } });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.payload.items[0].issues, ["missing_internal_price"]);
+  assert.deepEqual(response.payload.items[0].locations[0].issues, ["missing_internal_price"]);
+  const invalid = {};
+  await handleInventoryApi({ method: "GET" }, invalid, new URL("http://localhost/api/office/inventory/stock?sort=raw_sql"), helpers(), { listStock: () => assert.fail("Invalid sort reached repository") });
+  assert.equal(invalid.status, 400);
+  const invalidId = {};
+  await handleInventoryApi({ method: "GET" }, invalidId, new URL("http://localhost/api/office/inventory/stock?catalogPartId=bad-id"), helpers(), { listStock: () => assert.fail("Invalid identity reached repository") });
+  assert.equal(invalidId.status, 400);
+  for (const role of ["mechanic", "surveillance"]) {
+    const forbidden = {};
+    const ctx = { ...context(), actor: { id: ACTOR_ID, role }, companyRoles: new Map([[COMPANY_ID, role]]) };
+    await handleInventoryApi({ method: "GET" }, forbidden, url, helpers(null, ctx), { listStock: () => assert.fail("Unauthorized stock read") });
+    assert.equal(forbidden.status, 403);
+  }
+});

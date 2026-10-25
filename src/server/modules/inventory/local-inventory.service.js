@@ -364,6 +364,7 @@ export async function readLocalInventoryStock(searchParams, requestContext, depe
   const listStock = dependencies.listStock || listLocalInventoryStock;
   const stockQuery = {
     ...companyInventoryReadScope(requestContext),
+    catalogPartId: parsed.catalogPartId || null,
     locationId: parsed.locationId || null,
     scope: parsed.locationId ? "location" : parsed.scope,
     availability: parsed.availability,

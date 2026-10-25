@@ -20,9 +20,18 @@ test("no-stock pricing uses versioned configured cost and fixed selling policy w
   assert.match(source, /if \(part\.trackingMode === "no_stock"\) \{/);
   assert.match(source, /details\.prices\?\.internal/);
   assert.match(source, /details\.capabilities\?\.canEditPrices/);
-  assert.match(source, /<ConfiguredRates internal=\{internal\}/);
+  assert.match(source, /<ConfiguredRates noStock internal=\{internal\}/);
   assert.match(source, /<PartRatesDialog/);
   assert.match(source, /<summary>Cost history<\/summary>/);
   assert.ok(source.indexOf('if (part.trackingMode === "no_stock")') < source.indexOf('className="inventory-batch-list"'));
 });
 test("rate failures remain retryable while receipt evidence stays read only", async () => { const source = await readFile(component, "utf8"); const wrapper = await readFile(ratesWrapper, "utf8"); assert.match(source, /icon=\{RefreshCw01\}/); assert.match(source, /onClick=\{\(\) => load\(\{ preserveError: true \}\)\}/); assert.match(source, /if \(!preserveError\) setError\(""\)/); assert.ok(source.indexOf("if (error && !details)") < source.indexOf("if (loading && !details)")); assert.match(source, /loading \? "Refreshing…" : "Refresh"/); assert.match(wrapper, /retryCommand/); assert.match(wrapper, /editablePartRateKinds/); assert.doesNotMatch(source, /tax-profiles\?companyId=/); assert.doesNotMatch(source, />Tax profiles</); assert.match(source, /invoiceRun: entry\.invoiceRunId \|\| entry\.source\.id/); assert.match(source, /displayMoney\(entry\.unitCost, entry\.currency\)/); });
+
+
+test("no-stock rates explain why an inherited markup still needs attention", async () => {
+  const source = await readFile(new URL("./PartCommercialDetails.jsx", import.meta.url), "utf8");
+  assert.match(source, /fixedPriceRequired = noStock && sellingPolicy\?\.method !== "fixed"/);
+  assert.match(source, /sellingPolicySummary\(fixedPriceRequired \? null : sellingPolicy\)/);
+  assert.match(source, /Fixed selling price required/);
+  assert.match(source, /<ConfiguredRates noStock internal=/);
+});

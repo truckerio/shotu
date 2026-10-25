@@ -1,0 +1,5 @@
+.checkpoint-collection-footer { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; margin: 0; padding: 4px 12px; line-height: 16px; border-top: 1px solid #eaecf0; color: #667085; font-size: 12px; }
+.checkpoint-collection-footer > [role="status"] { margin-left: auto; order: 1; }
+.checkpoint-collection-footer { flex-shrink: 0; margin-top: auto; }
+.checkpoint-collection-footer .error { color: #b42318; overflow-wrap: anywhere; }
+.checkpoint-collection-footer button { border: 0; background: transparent; color: #475467; font: inherit; text-decoration: underline; cursor: pointer; }

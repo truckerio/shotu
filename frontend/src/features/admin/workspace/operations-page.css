@@ -42,6 +42,10 @@
   overflow: hidden;
 }
 
+.admin-operations-content > .operational-collection-page-body:has(> .operations-workspace, > div:not([hidden]) > .operations-workspace) {
+  padding-bottom: 0;
+}
+
 .admin-operations-content > .operational-collection-page-body > div:not([hidden]) {
   display: flex;
   flex: 1 1 auto;
@@ -94,6 +98,10 @@
 
 /* Inspections scroll as one document inside the bounded Operations shell.
  * Workorder queues keep their existing independent table scroll owners. */
+.admin-operations-content.is-inspection-workspace > .operational-collection-page-body:has(.inspection-queue) {
+  padding-bottom: 0;
+}
+
 @media (min-width: 701px) {
   .admin-operations-content.is-inspection-workspace > .operational-collection-page-body {
     overflow: auto;
@@ -101,6 +109,18 @@
   }
 
   .admin-operations-content.is-inspection-workspace > .operational-collection-page-body > :not([hidden]) {
+    flex-shrink: 0;
+  }
+
+  .admin-operations-content.is-inspection-workspace > .operational-collection-page-body > .inspection-experience,
+  .admin-operations-content.is-inspection-workspace .inspection-queue {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .admin-operations-content.is-inspection-workspace .inspection-queue > :not(.checkpoint-collection) {
     flex-shrink: 0;
   }
 }

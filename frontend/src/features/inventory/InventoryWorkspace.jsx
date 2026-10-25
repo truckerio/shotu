@@ -14,6 +14,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
+import { SeverityPill } from "../../components/ui/SeverityPill.jsx";
 import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
 import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
 import { readCheckpointPosition } from "../../components/operations/checkpoint-position.js";
@@ -36,13 +37,14 @@ import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
 import { AddInventoryStockDialog } from "./AddInventoryStockDialog.jsx";
 import { StockMovementHistory } from "./StockMovementHistory.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
-import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
 import { InventoryCustodyWorkspace } from "./InventoryCustodyWorkspace.jsx";
 import {
   DEFAULT_STOCK_SORT,
   STOCK_FILTER_OPTIONS,
   stockState,
   stockStateLabel,
+  stockIssueLabel,
+  stockIssuePill,
 } from "./inventory-workspace-model.js";
 import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
 import { configuredPriceView, effectiveSellingPrice } from "./part-commercial-model.js";
@@ -85,7 +87,7 @@ function stockItemKey(item) {
   return `${item.companyId}:${item.catalogPartId}`;
 }
 
-export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = false, canReconcileAuthority = false, presentation = "page", activeSection = "", onSectionChange = null, onSectionTitleChange = null, onSectionActionsChange = null, showSectionNavigation = true, showSectionNavigationOnPhone = false }) {
+export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = false, presentation = "page", activeSection = "", onSectionChange = null, onSectionTitleChange = null, onSectionActionsChange = null, showSectionNavigation = true, showSectionNavigationOnPhone = false }) {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const [invoiceWorkflowOpen, setInvoiceWorkflowOpen] = useState(() => (
     initialParams.get("view") === "invoices"
@@ -112,6 +114,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedStockKey, setSelectedStockKey] = useState("");
   const [selectedLocationPart, setSelectedLocationPart] = useState(null);
+  const [partStockError, setPartStockError] = useState("");
   const [selectedPositionContext, setSelectedPositionContext] = useState(null);
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [partDetailPage, setPartDetailPage] = useState("stock");
@@ -185,7 +188,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     const timer = window.setTimeout(() => setStockQuery(query), 200);
     return () => window.clearTimeout(timer);
   }, [query]);
-  const stockQueryKey = JSON.stringify([actorId, locationId, stockQuery.trim(), stockFilter, stockSort]);
+  const stockQueryKey = JSON.stringify(["price-attention-v1", actorId, locationId, stockQuery.trim(), stockFilter, stockSort]);
   const initialStockPage = useMemo(() => readCheckpointPosition(`inventory-stock:${stockQueryKey}`)?.page || 1, [stockQueryKey]);
   const stockQueue = useCheckpointPages({
     queryKey: stockQueryKey, refreshKey, getItemKey: stockItemKey, initialPage: initialStockPage,
@@ -209,10 +212,33 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const initialLoading = stockQueue.loading && !stockLoaded;
   const refreshing = stockQueue.loadingMore;
   const selectedItem = useMemo(() => {
-    const item = items.find((entry) => stockItemKey(entry) === selectedStockKey)
-      || (selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey ? selectedLocationPart : null);
-    return item && partIdentityOverride?.catalogPartId === item.catalogPartId ? { ...item, ...partIdentityOverride } : item;
+    const item = (selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey ? selectedLocationPart : null)
+      || items.find((entry) => stockItemKey(entry) === selectedStockKey);
+    return item && partIdentityOverride?.catalogPartId === item.catalogPartId
+      ? { ...item, ...partIdentityOverride, issues: item.issues, locations: item.locations } : item;
   }, [items, partIdentityOverride, selectedLocationPart, selectedStockKey]);
+  // Keep the open part current even when fixing its rates moves it off this batch.
+  const selectedPartId = selectedLocationPart?.catalogPartId;
+  useEffect(() => {
+    if (!selectedStockKey || !selectedPartId) return undefined;
+    const controller = new AbortController();
+    setPartStockError("");
+    const params = new URLSearchParams({ catalogPartId: selectedPartId, limit: "1" });
+    const shopId = selectedPositionContext?.shopId || locationId;
+    if (shopId === "master") params.set("scope", "master");
+    else if (shopId && shopId !== "all") params.set("locationId", shopId);
+    api(`/api/office/inventory/stock?${params}`, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        const item = result.items?.find((entry) => entry.catalogPartId === selectedPartId);
+        if (item) setSelectedLocationPart(item);
+        else setPartStockError("This part is no longer available in this view. Close it and refresh Stock.");
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setPartStockError(failure.message || "Could not refresh this part's status.");
+      });
+    return () => controller.abort();
+  }, [selectedStockKey, selectedPartId, refreshKey, locationId, selectedPositionContext?.shopId]);
   const noStockLocations = selectedItem?.trackingMode === "no_stock"
     ? browseLocations.filter((location) => location.companyId === selectedItem.companyId)
     : [];
@@ -268,9 +294,10 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   }
 
   async function openLocationPart({ item, shopId, positionId, positionPath, canStore }) {
-    const params = new URLSearchParams({ q: item.partNumber || "", locationId: shopId, limit: "100", page: "1" });
+    const catalogPartId = item.catalogPartId || item.partId || item.id;
+    const params = new URLSearchParams({ catalogPartId, locationId: shopId, limit: "1" });
     const result = await api(`/api/office/inventory/stock?${params}`);
-    const fullItem = (result.items || []).find((entry) => entry.catalogPartId === (item.catalogPartId || item.partId || item.id));
+    const fullItem = (result.items || []).find((entry) => entry.catalogPartId === catalogPartId);
     if (!fullItem) throw new Error("This part is no longer available at the selected location. Refresh and try again.");
     setSelectedLocationPart(fullItem);
     setSelectedPositionContext({ shopId, positionId: canStore ? positionId : "", positionPath });
@@ -318,11 +345,12 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
 
   useEffect(() => {
     if (!partIdentityRefreshPending) return;
-    const refreshedItem = items.find((item) => item.catalogPartId === partIdentityRefreshPending.catalogPartId);
+    const refreshedItem = selectedLocationPart?.catalogPartId === partIdentityRefreshPending.catalogPartId
+      ? selectedLocationPart : items.find((item) => item.catalogPartId === partIdentityRefreshPending.catalogPartId);
     if (!hasRefreshedPartIdentityVersion(refreshedItem, partIdentityRefreshPending)) return;
     setPartIdentityRefreshPending(null);
     window.requestAnimationFrame(() => document.getElementById("inventory-part-name")?.focus({ preventScroll: true }));
-  }, [items, partIdentityRefreshPending]);
+  }, [items, selectedLocationPart, partIdentityRefreshPending]);
 
   const onPartIdentityEditStateChange = useCallback((state) => {
     setPartIdentityBusy(Boolean(state?.busy));
@@ -634,14 +662,16 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           renderItem={(item) => {
             const state = stockState(item);
             const stateText = stockStateLabel(state);
+            const issue = stockIssuePill(item);
+            const issueLabel = issue?.description || "";
             return <OperationalCollectionRow
             className="inventory-stock-row"
             key={stockItemKey(item)}
             aria-haspopup="dialog"
-            ariaLabel={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
+            ariaLabel={`Open details for ${item.partNumber}, ${issueLabel ? `${issueLabel}, ` : ""}${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
             onAction={() => openListedPart(item)}
           >
-            <OperationalCollectionCell className="inventory-part-cell" label="Part"><strong>{item.partNumber}</strong><small>{item.description || "No part name"}</small></OperationalCollectionCell>
+            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span className="inventory-part-heading"><strong className="inventory-part-number">{item.partNumber}</strong>{issue ? <SeverityPill {...issue} /> : null}</span><small>{item.description || "No part name"}</small></OperationalCollectionCell>
             <OperationalCollectionCell label="Usable on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell label="Reserved">{quantity(item.quantityReserved)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell className={`inventory-available-cell is-${state}`} label="Our available">
@@ -654,7 +684,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           {query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
         </CheckpointCollection>
       </> : null}
-      {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
       </> : <InventoryLocationStockWorkspace locations={browseLocations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
       </> : null}
       </section>
@@ -673,6 +702,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         closeLabel={partIdentityBusy ? "Saving part details" : partIdentityDirty ? "Reset changes before closing" : "Close part details"}
       >
         {selectedItem ? <>
+          {partStockError ? <p className="ops-error" role="alert">{partStockError}</p> : null}
+          {stockIssueLabel(selectedItem) ? <p className="inventory-part-issue-summary" role="status">{stockIssueLabel(selectedItem)}</p> : null}
           <div className="inventory-part-detail-navigation">
             <nav className="inventory-part-detail-pages" aria-label="Part detail pages">
               {[{ id: "stock", label: "Stock" }, { id: "activity", label: "Activity" }, { id: "details", label: "Details" }].map((page) => <button key={page.id} type="button" aria-current={partDetailPage === page.id ? "page" : undefined} disabled={partIdentityDirty && page.id !== "details"} onClick={() => { setPartDetailPage(page.id); setShelvingOpen(false); }}>{page.label}</button>)}
