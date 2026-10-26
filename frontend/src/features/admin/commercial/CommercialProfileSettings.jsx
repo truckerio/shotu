@@ -6,6 +6,7 @@ import { api } from "../../../lib/api.js";
 import { CustomerDocumentRenderer } from "../../customer-documents/CustomerDocumentRenderer.jsx";
 import { customerDocumentProjection } from "../../customer-documents/customer-document-model.js";
 import { CustomerDocumentReports } from "./CustomerDocumentReports.jsx";
+import { commercialProfileInitialScope } from "../../customer-documents/commercial-profile-navigation.js";
 import "./commercial-profile.css";
 
 function commandKey() { return globalThis.crypto?.randomUUID?.() || `commercial-${Date.now()}-${Math.random()}`; }
@@ -23,8 +24,14 @@ function ProfileSection({ title, summary, required = false, initiallyOpen = fals
 
 export function CommercialProfileSettings({ locations = [] }) {
   const companies = useMemo(() => companiesFrom(locations), [locations]);
-  const [companyId, setCompanyId] = useState(""); const [locationId, setLocationId] = useState(""); const [draft, setDraft] = useState(blank); const [state, setState] = useState("loading"); const [error, setError] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { if (!companyId && companies[0]) setCompanyId(companies[0].id); }, [companies, companyId]);
+  const initialScope = commercialProfileInitialScope(locations, typeof window === "undefined" ? "" : window.location.search);
+  const [companyId, setCompanyId] = useState(initialScope.companyId); const [locationId, setLocationId] = useState(initialScope.locationId); const [draft, setDraft] = useState(blank); const [state, setState] = useState("loading"); const [error, setError] = useState(""); const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!companyId && initialScope.companyId) {
+      setCompanyId(initialScope.companyId);
+      setLocationId(initialScope.locationId);
+    }
+  }, [companyId, initialScope.companyId, initialScope.locationId]);
   useEffect(() => { if (!companyId) { setState("blocked"); return; } let active = true; setState("loading"); setError(""); const params = new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) }); api(`/api/customer-documents/profile?${params}`).then(({ profile }) => { if (active) { setDraft(fromProfile(profile)); setState("ready"); } }).catch((reason) => { if (!active) return; if (reason.status === 404) { setDraft(blank()); setState("ready"); } else { setError(reason.message || "Commercial profile could not be loaded."); setState("error"); } }); return () => { active = false; }; }, [companyId, locationId]);
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
   const validDiscount = /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/.test(draft.maxOfficePercentage.trim());

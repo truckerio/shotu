@@ -111,7 +111,7 @@ test("approval rejects missing, stale and manual actual-part prices", () => {
   }
 });
 
-test("approval accepts explicitly selected zero and rejects mixed currency or basis", () => {
+test("approval accepts explicitly selected zero and independent price sources but rejects mixed currencies", () => {
   const zero = pricing({
     installedSerializedParts: [{ quantity: 1, price: partPrice({ totalPrice: "0.0000" }) }],
     laborPrice: laborPrice({ totalPrice: "0.0000" }),
@@ -126,7 +126,7 @@ test("approval accepts explicitly selected zero and rejects mixed currency or ba
   const mixedBasis = pricing({
     installedSerializedParts: [{ quantity: 1, price: partPrice({ selection: "batch_cost" }) }],
   });
-  rejectsCode(() => assertWorkorderApprovalReadiness(mixedBasis), "WORKORDER_APPROVAL_PRICING_MIXED");
+  assert.equal(assertWorkorderApprovalReadiness(mixedBasis).grandTotal, "110.0000");
 });
 
 test("approval accepts current labor and exact part prices with a separate customer discount", () => {

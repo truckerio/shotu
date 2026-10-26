@@ -204,7 +204,7 @@
   align-items: start;
   display: grid;
   gap: 14px;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .office-layout.is-drafts {
@@ -406,7 +406,7 @@
 @media (min-width: 1800px) {
   .office-layout {
     gap: 18px;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .office-layout.is-drafts {
@@ -568,4 +568,12 @@
     height: 20px;
     width: 20px;
   }
+}
+
+@media (min-width: 701px) {
+  .office-filter-row { align-items: end; flex-wrap: wrap; padding-top: 14px; }
+  .office-queue-field { flex: 0 1 220px; min-width: 170px; }
+  .office-filter-row .mechanic-search { align-self: flex-end; box-sizing: border-box; height: 40px; min-width: min(260px, 100%); }
+  .office-filter-row .mechanic-search input { height: 100%; min-height: 0; }
+  .office-filter-row > .dropdown-select.office-inline-filter { flex: 0 1 180px; width: 180px; }
 }

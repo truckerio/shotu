@@ -9,7 +9,7 @@ function projectionMoney(projection, key) {
 export function workorderPricingFooterPresentation(pricing, projection = null, message = "") {
   const currentProjection = projection?.financialFingerprint ? projection : null;
   const rawPricing = workorderPricingPresentation(pricing);
-  const rawPartsLabor = rawPricing.status === "complete" && pricing?.reason !== "mixed_price_basis"
+  const rawPartsLabor = rawPricing.status === "complete"
     ? rawPricing.grand
     : null;
   const explicitMessage = String(message || "").trim();

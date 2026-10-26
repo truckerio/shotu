@@ -3,6 +3,7 @@ import { CustomerDocumentReview } from "./CustomerDocumentReview.jsx";
 import { CustomerDocumentDiscountEditor } from "./CustomerDocumentDiscountEditor.jsx";
 import { WorkorderCustomerChat } from "./WorkorderCustomerChat.jsx";
 import { revisionProjection, useWorkorderCustomerDocuments } from "./useWorkorderCustomerDocuments.js";
+import { commercialProfileSetupUrl } from "./commercial-profile-navigation.js";
 import "./workorder-customer-documents.css";
 
 function reconciliationCopy(reconciliation, status) {
@@ -23,12 +24,16 @@ function StandaloneDocuments(props) {
   return <DocumentsBody {...props} controller={controller} />;
 }
 
-function DocumentsBody({ companyId, locationId, workorderId, controller }) {
+function DocumentsBody({ companyId, locationId, workorderId, actorRole, controller }) {
   const { summary, projection, previewType, shareLink, adjustments, busy, error, setError, refresh, preview, issue, createReplacementGrant, updateAdjustments, effectiveStatus, estimate, invoice, reconciliation, canPreviewInvoice, canPreviewRevision } = controller;
   return <section className="workorder-customer-documents" aria-labelledby="workorder-customer-documents-title">
     <header><div><h2 id="workorder-customer-documents-title">Customer documents</h2><p>{controller.discountRevisionRequired ? "Discount terms changed. Issue a revised Estimate before preparing the Invoice." : reconciliationCopy(reconciliation, effectiveStatus)}</p></div><Button variant="secondary" type="button" onClick={refresh} disabled={busy}>Refresh</Button></header>
     <dl className="workorder-customer-document-status"><div><dt>Estimate</dt><dd>{estimate ? `${estimate.documentNumber} · R${estimate.revisionNumber} · ${estimate.response?.status || "pending"}` : "Not linked"}</dd></div><div><dt>Invoice</dt><dd>{invoice ? invoice.documentNumber : effectiveStatus === "mechanic_done" ? "Not issued" : "Available after Work done"}</dd></div></dl>
     {error ? <p role="alert" className="workorder-customer-document-error">{error}</p> : null}
+    {error && controller.errorCode === "CUSTOMER_DOCUMENT_PROFILE_UNAVAILABLE" ? actorRole === "admin"
+      ? <p><a href={commercialProfileSetupUrl(companyId, locationId)} target="_blank" rel="noopener noreferrer" aria-label="Create profile (opens in new tab)">Create profile</a></p>
+      : <p>Ask an Admin to create the commercial profile.</p>
+      : null}
     {!projection && busy ? <p role="status">Loading customer documents…</p> : null}
     {canPreviewRevision ? <details className="workorder-customer-document-revision">
       <summary>Revise estimate</summary>

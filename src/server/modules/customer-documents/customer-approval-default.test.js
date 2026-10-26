@@ -187,7 +187,7 @@ test("direct submission rejects saved discounts when commercial pricing or polic
   await assert.rejects(
     issueInformationalDraftEstimate(officeContext(), draft, prepared, customerClient(), {
       ...dependencies,
-      readCreatePricing: async () => commercialPricing({ parts: [{ partIndex: 0, status: "known", price: { selection: "batch_cost", unitPrice: "100", currency: "USD" } }] }),
+      readCreatePricing: async () => commercialPricing({ parts: [{ partIndex: 0, status: "known", price: { selection: "unknown", unitPrice: "100", currency: "USD" } }] }),
     }),
     (error) => error.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED",
   );

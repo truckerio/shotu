@@ -26,7 +26,12 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
   const [shareLink, setShareLink] = useState("");
   const [adjustments, setAdjustments] = useState(() => emptyCustomerDocumentAdjustments());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setErrorMessage] = useState("");
+  const [errorCode, setErrorCode] = useState("");
+  function setError(message, code = "") {
+    setErrorMessage(message);
+    setErrorCode(code);
+  }
   const [currentFinancial, setCurrentFinancial] = useState(null);
   const [financialError, setFinancialError] = useState("");
   const [financialBusy, setFinancialBusy] = useState(false);
@@ -74,7 +79,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       }
     }
     openDocument().catch((nextError) => {
-      if (!cancelled) setError(nextError.message || "Customer documents could not be loaded.");
+      if (!cancelled) setError(nextError.message || "Customer documents could not be loaded.", nextError.code);
     }).finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
   }, [active, autoReview, autoReview && sourceDirty, companyId, locationId, workorderId, workorderVersion, workorderStatus, sourceKey]);
@@ -144,7 +149,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       setSummary((current) => ({ ...current, reconciliation: result.reconciliation || current?.reconciliation }));
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = "";
     } catch (nextError) {
-      if (scopeRef.current === requestedScope) setError(nextError.message || `The ${documentType} preview could not be prepared.`);
+      if (scopeRef.current === requestedScope) setError(nextError.message || `The ${documentType} preview could not be prepared.`, nextError.code);
     } finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
 
@@ -204,7 +209,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       setPreviewType("");
       await loadSummary({ preservePreview: true });
     } catch (nextError) {
-      if (scopeRef.current === requestedScope) setError(nextError.message || `The ${previewType} could not be issued.`);
+      if (scopeRef.current === requestedScope) setError(nextError.message || `The ${previewType} could not be issued.`, nextError.code);
     } finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
 
@@ -214,7 +219,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
     if (!revision?.id) return;
     setBusy(true); setError(""); grantKeyRef.current = ""; grantExpiresAtRef.current = "";
     try { await grantForRevision(revision.id, revision.documentType); }
-    catch (nextError) { if (scopeRef.current === requestedScope) setError(nextError.message || "A replacement customer link could not be created."); }
+    catch (nextError) { if (scopeRef.current === requestedScope) setError(nextError.message || "A replacement customer link could not be created.", nextError.code); }
     finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
 
@@ -229,7 +234,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
         setProjection(current.projection);
       }
       await loadSummary({ preservePreview: Boolean(revisionId) });
-    } catch (nextError) { if (scopeRef.current === requestedScope) setError(nextError.message || "Customer document status could not be refreshed."); }
+    } catch (nextError) { if (scopeRef.current === requestedScope) setError(nextError.message || "Customer document status could not be refreshed.", nextError.code); }
     finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
 
@@ -252,5 +257,5 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
     }
   }
 
-  return { summary, projection, previewType, shareLink, adjustments, busy, error, setError, refresh, preview, issue, createReplacementGrant, updateAdjustments, effectiveStatus, estimate, invoice, reconciliation, canPreviewInvoice, canPreviewRevision, currentFinancialProjection, financialBusy, financialError, maximumOfficePercentage, discountRevisionRequired, canAdjustDiscount };
+  return { summary, projection, previewType, shareLink, adjustments, busy, error, errorCode, setError, refresh, preview, issue, createReplacementGrant, updateAdjustments, effectiveStatus, estimate, invoice, reconciliation, canPreviewInvoice, canPreviewRevision, currentFinancialProjection, financialBusy, financialError, maximumOfficePercentage, discountRevisionRequired, canAdjustDiscount };
 }

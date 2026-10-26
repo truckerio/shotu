@@ -1,5 +1,6 @@
+import { WorkorderQueueFilter } from "../../components/workorders/WorkorderQueueFilter.jsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { Briefcase02, ClipboardCheck, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
@@ -207,7 +208,7 @@ export function MechanicWorkspace({
       createLabel={t("mechanic.createWorkorder")}
     />
   );
-  const mechanicRail = <RoleNavigationRail actor={actor} locale={locale} ariaLabel="Mechanic workspace" activeId={product} groups={[{ id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] }]} onNavigate={(nextProduct) => { setProduct(nextProduct); setCreatingInspection(false); setCreatedInspectionId(""); }} />;
+  const mechanicRail = <RoleNavigationRail actor={actor} locale={locale} ariaLabel="Mechanic workspace" activeId={product} groups={[{ id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: ClipboardCheck, visible: inspectionAccess.canRead }] }]} onNavigate={(nextProduct) => { setProduct(nextProduct); setCreatingInspection(false); setCreatedInspectionId(""); }} />;
 
   if (product === "inspections" && inspectionAccess.canRead) {
     return (
@@ -244,15 +245,13 @@ export function MechanicWorkspace({
         {!online ? <p className="workspace-connection-state" role="status">{t("mechanic.offline")}</p> : null}
         <section className="mechanic-queue-shell" aria-label={t("mechanic.work")}>
           <div className="mechanic-primary-queues">
-            <div className="mechanic-wide-queues">
-              <WorkorderQueueTabs tabs={queueTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
-            </div>
             <div className="mechanic-phone-queues">
               <WorkorderQueueTabs tabs={phonePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
             </div>
           </div>
 
           <section className="mechanic-visible-tools" aria-label={t("mechanic.searchFilters")}>
+            <div className="mechanic-wide-queues"><WorkorderQueueFilter options={queueTabs} value={activeTab} onChange={setActiveTab} locale={locale} /></div>
             <label className="mechanic-search">
               <SearchMd aria-hidden="true" />
               <input aria-label={t("mechanic.searchWorkorders")} {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("mechanic.searchPlaceholder")} />

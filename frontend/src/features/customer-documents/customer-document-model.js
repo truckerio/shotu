@@ -4,6 +4,25 @@ export function customerDocumentMoney(value, currency = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(amount);
 }
 
+function scaledDisplayDecimal(value, scale) {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(String(value));
+  if (!match || (match[2] || "").length > scale) return null;
+  return BigInt(match[1]) * 10n ** BigInt(scale) + BigInt((match[2] || "").padEnd(scale, "0"));
+}
+
+export function customerDocumentUnitPrice(line, currency = "USD") {
+  if (line.unitPrice === null || line.unitPrice === undefined || line.unitPrice === "") return "—";
+  const value = Number(line.unitPrice);
+  if (!Number.isFinite(value)) return "—";
+  const label = new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 4 }).format(value);
+  const quantity = scaledDisplayDecimal(line.quantity, 3);
+  const unitPrice = scaledDisplayDecimal(line.unitPrice, 4);
+  const sourceTotal = scaledDisplayDecimal(line.sourceTotal, 4);
+  const average = quantity !== null && unitPrice !== null && sourceTotal !== null
+    && (quantity * unitPrice + 500n) / 1000n !== sourceTotal;
+  return average ? `Avg. ${label}` : label;
+}
+
 export function customerDocumentProjection(value = {}) {
   const document = value.document && typeof value.document === "object" ? value.document : value;
   const totals = value.totals && typeof value.totals === "object" ? value.totals : value;
@@ -13,6 +32,7 @@ export function customerDocumentProjection(value = {}) {
     quantity: line.quantity ?? "",
     unit: line.unit || "",
     unitPrice: line.unitPrice ?? null,
+    ...(line.sourceTotal == null ? {} : { sourceTotal: line.sourceTotal }),
     amount: line.total ?? line.amount ?? null,
     change: line.change || "unchanged",
   })) : [];

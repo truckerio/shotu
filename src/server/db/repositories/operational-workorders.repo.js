@@ -412,10 +412,10 @@ export function assertWorkorderApprovalReadiness(pricing) {
     );
   }
   const summary = workorderPricingSummary(pricing);
-  if (summary.status === "mixed_currency" || summary.reason === "mixed_price_basis") {
+  if (summary.status === "mixed_currency") {
     throw lifecycleConflict(
       "WORKORDER_APPROVAL_PRICING_MIXED",
-      "Use one currency and one price basis for all labor and parts before approving this workorder.",
+      "Use one currency for all labor and parts before approving this workorder.",
     );
   }
   if (summary.status !== "complete") {

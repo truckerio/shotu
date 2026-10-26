@@ -458,7 +458,7 @@ export async function issueInformationalDraftEstimate(context, draft, preparedIn
   }
   if (!sourceInput) {
     if (hasAdjustments) {
-      throw new AuthError(409, "CUSTOMER_DOCUMENT_DISCOUNT_PROFILE_REQUIRED", "A configured commercial profile and selling prices are required before a saved discount can be issued.");
+      throw new AuthError(409, "CUSTOMER_DOCUMENT_DISCOUNT_PROFILE_REQUIRED", "A configured commercial profile and selected prices are required before a saved discount can be issued.");
     }
     const pricing = await (dependencies.readCreatePricing || readCreatePricing)(preparedInput, client);
     const formData = draft.payload?.formData || {};
@@ -733,6 +733,7 @@ function publicCustomerDocumentSnapshot(snapshot, response) {
       id: `line-${index + 1}`,
       type: line.type, description: line.description, quantity: line.quantity, unit: line.unit,
       unitPrice: line.unitPrice, taxCategory: line.taxCategory, taxTreatment: line.taxTreatment,
+      ...(line.sourceTotal == null ? {} : { sourceTotal: line.sourceTotal }),
       gross: line.gross, lineDiscount: line.lineDiscount,
       documentDiscountAllocation: line.documentDiscountAllocation, net: line.net,
       tax: line.tax, total: line.total, taxComponents: line.taxComponents,

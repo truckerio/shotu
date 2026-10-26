@@ -110,7 +110,7 @@ export function WorkorderAttention({ reasons = [], locale = "en" }) {
   );
 }
 
-export function WorkorderTableHeader({ office = false, variant = office ? "office" : "mechanic", locale = "en" }) {
+export function WorkorderTableHeader({ office = false, variant = office ? "office" : "mechanic", locale = "en", mechanicFilter = null }) {
   const t = (key) => interfaceText(locale, key);
   if (variant === "surveillance") {
     return (
@@ -121,8 +121,8 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   }
   if (variant === "office") {
     return (
-      <div className="mechanic-list-head queue-variant-office" aria-hidden="true">
-        <span>Unit / Workorder</span><span>Problem</span><span>Location</span><span>Mechanics</span><span>Attention</span><span>Waiting</span><span>Status</span><span></span>
+      <div className="mechanic-list-head queue-variant-office" aria-hidden={mechanicFilter ? undefined : true}>
+        <span>Unit / Workorder</span><span>Problem</span><span>Location</span><span>{mechanicFilter || "Mechanics"}</span><span>Attention</span><span>Waiting</span><span>Status</span><span></span>
       </div>
     );
   }

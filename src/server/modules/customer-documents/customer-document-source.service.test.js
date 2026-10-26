@@ -66,12 +66,12 @@ test("draft adapter derives customer lines and lineage only from the saved sourc
   assert.equal(output.sourceEvidence.pricingFingerprint, "a".repeat(64));
 });
 
-test("draft adapter rejects internal pricing and discounts above published Office authority", async () => {
+test("draft adapter rejects unknown pricing and discounts above published Office authority", async () => {
   await assert.rejects(
     buildCustomerDocumentSource(context(), { kind: "draft", id: draftId, expectedVersion: 3 },
       { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile,
       { getDraft: async () => draft(), readCreatePricing: async () => pricing({
-        parts: [{ partIndex: 0, status: "known", price: { selection: "batch_cost", unitPrice: "20", currency: "USD" } }],
+        parts: [{ partIndex: 0, status: "known", price: { selection: "unknown", unitPrice: "20", currency: "USD" } }],
       }) }),
     (error) => error.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED",
   );

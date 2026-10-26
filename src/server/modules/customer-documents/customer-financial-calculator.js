@@ -117,7 +117,9 @@ export function calculateCustomerFinancials(rawInput) {
   const prepared = input.lines.map((line) => {
     const quantity = parseFinancialDecimal(line.quantity, { maximumScale: 3, maximumIntegerDigits: 9 });
     const unitPrice = parseFinancialDecimal(line.unitPrice, { maximumScale: 4, maximumIntegerDigits: 10 });
-    const unsignedGross = roundHalfUp(multiplyFraction(quantity, unitPrice), minorDigits);
+    const unsignedGross = line.sourceTotal === null
+      ? roundHalfUp(multiplyFraction(quantity, unitPrice), minorDigits)
+      : fixedMinor(line.sourceTotal, minorDigits);
     const sign = line.type === CUSTOMER_DOCUMENT_LINE_TYPE.CREDIT ? -1n : 1n;
     const lineDiscountMinor = sign < 0n ? 0n : discountMinor(unsignedGross, line.lineDiscount, minorDigits);
     return {
@@ -152,6 +154,7 @@ export function calculateCustomerFinancials(rawInput) {
       quantity: line.quantity,
       unit: line.unit,
       unitPrice: line.unitPrice,
+      ...(line.sourceTotal === null ? {} : { sourceTotal: normalizeFinancialDecimal(line.sourceTotal) }),
       priceBasis: line.priceBasis,
       taxCategory: line.taxCategory,
       taxTreatment: line.taxTreatment,

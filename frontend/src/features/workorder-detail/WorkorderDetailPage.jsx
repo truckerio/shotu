@@ -463,6 +463,7 @@ export function WorkorderDetailPage({
       id: "customer-documents",
       label: "Documents",
       content: <WorkorderCustomerDocumentsPanel
+        actorRole={actor.role}
         controller={documentController}
         active={officeToolsOpen && officeToolView === "customer-documents"}
         autoReview

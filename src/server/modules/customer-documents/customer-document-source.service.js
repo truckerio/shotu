@@ -63,7 +63,7 @@ function applyAdjustments(lines, adjustments, context, profile, companyId) {
     const { manualOverride: _manualOverride, ...safeLine } = line;
     return {
       ...safeLine,
-      priceBasis: line.manualOverride ? "customer_override" : "selling_price",
+      priceBasis: line.manualOverride ? "customer_override" : line.priceBasis || "selling_price",
       lineDiscount: discounts.get(line.id) || null,
       source: { ...line.source, overrideReason, discountReason: discounts.get(line.id)?.reason || null },
     };
@@ -133,11 +133,12 @@ async function draftFinancialSource(context, source, adjustments, profile, depen
   for (const [index, part] of (input.formData.parts || []).entries()) {
     if (!(part?.partNo || Number(part?.qty) > 0 || part?.repairOrder)) continue;
     if (!part.catalogPartId || part.purchaseRequested) {
-      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Every Estimate part requires an exact inventory source and selling price.");
+      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Every Estimate part requires an exact inventory source and selected price.");
     }
     const priced = pricedParts.get(index);
-    if (priced?.status !== "known" || priced.price?.selection !== "selling_price") {
-      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Every Estimate part must use the current selling price.");
+    if (priced?.status !== "known" || !["selling_price", "batch_cost", "internal_cost"].includes(priced.price?.selection)
+      || (part.trackingMode === "no_stock" && priced.price.selection === "batch_cost")) {
+      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Every Estimate part requires a valid selected price.");
     }
     if (priced.price.currency !== profile.defaultCurrency) conflict("CUSTOMER_DOCUMENT_CURRENCY_MISMATCH", "Estimate prices must use the profile currency.");
     lines.push({
@@ -147,20 +148,26 @@ async function draftFinancialSource(context, source, adjustments, profile, depen
       quantity: String(part.qty),
       unit: part.uomCode || "ea",
       unitPrice: String(priced.price.unitPrice),
+      sourceTotal: priced.price.totalPrice,
+      priceBasis: priced.price.selection,
       manualOverride: priced.price.manualOverride === true,
       discountEligible: true,
       ...taxEvidence(profile, "part"),
       source: {
         kind: "inventory_part",
         id: part.catalogPartId,
-        priceVersionId: priced.price.sellingPolicyVersionId || null,
+        priceVersionId: priced.price.sellingPolicyVersionId || priced.price.configuredPriceVersionId || priced.price.receiptLineId || null,
         pricingFingerprint: pricing.fingerprint,
+        ...(priced.price.allocations?.length ? {
+          receiptLineIds: [...new Set(priced.price.allocations.map((allocation) => allocation.receiptLineId).filter(Boolean))],
+          costLayerIds: [...new Set(priced.price.allocations.map((allocation) => allocation.costLayerId).filter(Boolean))],
+        } : {}),
       },
     });
   }
   if (Number(input.formData.laborHours) > 0) {
-    if (pricing.labor?.status !== "known" || pricing.labor.price?.selection !== "selling_price") {
-      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Estimate labor must use the current selling rate.");
+    if (pricing.labor?.status !== "known" || !["selling_price", "internal_cost"].includes(pricing.labor.price?.selection)) {
+      conflict("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "Estimate labor requires a valid selected rate.");
     }
     if (pricing.labor.price.currency !== profile.defaultCurrency) conflict("CUSTOMER_DOCUMENT_CURRENCY_MISMATCH", "Estimate prices must use the profile currency.");
     lines.unshift({
@@ -170,13 +177,15 @@ async function draftFinancialSource(context, source, adjustments, profile, depen
       quantity: String(input.formData.laborHours),
       unit: input.formData.laborProduct?.uomCode === "ea" ? "ea" : "hr",
       unitPrice: String(pricing.labor.price.unitPrice),
+      sourceTotal: pricing.labor.price.totalPrice,
+      priceBasis: pricing.labor.price.selection,
       manualOverride: pricing.labor.price.manualOverride === true,
       discountEligible: true,
       ...taxEvidence(profile, "labor"),
       source: {
-        kind: pricing.labor.price.sellingPolicyVersionId ? "inventory_selling_policy" : "labor_rate",
+        kind: pricing.labor.price.configuredPriceVersionId ? "inventory_internal_price" : pricing.labor.price.sellingPolicyVersionId ? "inventory_selling_policy" : "labor_rate",
         id: input.formData.laborProduct?.productId || "labor",
-        priceVersionId: pricing.labor.price.rateVersionId || pricing.labor.price.sellingPolicyVersionId || null,
+        priceVersionId: pricing.labor.price.rateVersionId || pricing.labor.price.sellingPolicyVersionId || pricing.labor.price.configuredPriceVersionId || null,
         pricingFingerprint: pricing.fingerprint,
       },
     });
@@ -202,7 +211,7 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
   } catch (error) {
     if (error?.code === "CUSTOMER_DOCUMENT_WORKORDER_NOT_FOUND") throw resourceNotFound("Workorder");
     if (error?.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED") {
-      conflict(error.code, "Every Workorder labor and part line must have an exact selling-price snapshot.");
+      conflict(error.code, "Every Workorder labor and part line must have an exact selected-price snapshot.");
     }
     throw error;
   }
@@ -216,6 +225,8 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
       quantity: row.quantity,
       unit: row.unit,
       unitPrice: row.unitPrice,
+      sourceTotal: row.totalPrice,
+      priceBasis: row.selection || "selling_price",
       manualOverride: row.manualOverride,
       discountEligible: true,
       ...taxEvidence(profile, "part"),
@@ -228,6 +239,8 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
       id: "labor", type: "labor",
       description: actual.labor.description,
       quantity: actual.labor.hours, unit: actual.labor.uomCode || "hr", unitPrice: actual.labor.unitPrice,
+      sourceTotal: actual.labor.totalPrice,
+      priceBasis: actual.labor.selection || "selling_price",
       manualOverride: actual.labor.manualOverride, discountEligible: true,
       ...taxEvidence(profile, "labor"),
       source: { kind: "workorder_labor", id: actual.labor.productId, priceVersionId: actual.labor.id, pricingFingerprint: actual.pricingFingerprint },

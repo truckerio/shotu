@@ -143,7 +143,6 @@ export function workorderPricingSummary({
   if (laborExpected) rows.push({ kind: "labor", price: laborCurrent ? laborPrice : null, quantity: form.laborHours });
   let missingCount = manual.length + (pricingRowsTruncated ? 1 : 0);
   const currencies = new Set();
-  const bases = new Set();
   let partsTotal = 0n;
   let laborTotal = 0n;
   for (const row of rows) {
@@ -152,18 +151,17 @@ export function workorderPricingSummary({
     const total = price && sameHours(quantityRecorded, row.quantity)
       ? amount(price.totalPrice)
       : null;
-    if (total === null || !price.currency) {
+    if (total === null || !price.currency || !["batch_cost", "internal_cost", "selling_price"].includes(price.selection)) {
       missingCount += 1;
       continue;
     }
     currencies.add(price.currency);
-    bases.add(price.selection === "batch_cost" || price.selection === "internal_cost" ? "internal" : "selling");
     if (row.kind === "labor") laborTotal += total;
     else partsTotal += total;
   }
   const mixedCurrency = currencies.size > 1;
   const rowCount = rows.length + manual.length + (pricingRowsTruncated ? 1 : 0);
-  const complete = rowCount > 0 && missingCount === 0 && !mixedCurrency && bases.size <= 1;
+  const complete = rowCount > 0 && missingCount === 0 && !mixedCurrency;
   const currency = currencies.size === 1 ? [...currencies][0] : null;
   return {
     status: mixedCurrency ? "mixed_currency" : complete ? "complete" : "incomplete",
@@ -173,6 +171,5 @@ export function workorderPricingSummary({
     grandTotal: complete ? formatted(partsTotal + laborTotal) : null,
     missingCount,
     rowCount,
-    ...(bases.size > 1 ? { reason: "mixed_price_basis" } : {}),
   };
 }

@@ -135,12 +135,13 @@ export async function readLockedWorkorderFinancialSource(input, client) {
     ...noStock,
   ];
   for (const row of partRows) {
-    if (!row.price_snapshot_id || row.selection !== "selling_price"
+    if (!row.price_snapshot_id || !["selling_price", "batch_cost", "internal_cost"].includes(row.selection)
+      || (row.sourceKind === "no_stock_line" && row.selection === "batch_cost")
       || Number(row.price_quantity) !== Number(row.quantity)) {
       sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
     }
   }
-  if (labor && labor.selection !== "selling_price") sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+  if (labor && !["selling_price", "internal_cost"].includes(labor.selection)) sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
 
   const pricingEvidence = [
     ...(labor ? [{ kind: "labor", id: labor.id, sourceId: labor.labor_product_id, quantity: asText(labor.hours), unit: labor.uom_code || labor.product_uom_code || "hr", unitPrice: asText(labor.unit_price), total: asText(labor.total_price), currency: labor.currency }] : []),
@@ -179,6 +180,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
       totalPrice: asText(labor.total_price),
       currency: labor.currency,
       rateVersionId: labor.rate_version_id,
+      selection: labor.selection,
       sellingPolicyVersionId: labor.selling_policy_version_id || null,
       manualOverride: labor.manual_override === true,
     } : null,
@@ -192,6 +194,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
       unit: row.uom_code || "ea",
       priceSnapshotId: row.price_snapshot_id,
       sellingPolicyVersionId: row.selling_policy_version_id,
+      selection: row.selection,
       unitPrice: asText(row.unit_price),
       totalPrice: asText(row.total_price),
       currency: row.currency,

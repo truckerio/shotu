@@ -9,7 +9,7 @@ test("desktop mechanic home exposes one next-job action and visible queue tools"
   assert.match(workspace, /<h2>\{t\("mechanic\.nextJob"\)\}<\/h2>/);
   assert.match(workspace, /className="[^"]*mechanic-next-job-action[^"]*"/);
   assert.match(workspace, /mechanicJobActionKey\(nextJob\)/);
-  assert.match(workspace, /className="mechanic-wide-queues"[\s\S]*tabs=\{queueTabs\}/);
+  assert.match(workspace, /className="mechanic-wide-queues"[\s\S]*options=\{queueTabs\}/);
   assert.match(workspace, /className="mechanic-visible-tools"[\s\S]*aria-label=\{t\("mechanic\.searchWorkorders"\)\}/);
   assert.match(css, /\.mechanic-home-more[\s\S]*display:\s*none/);
 });

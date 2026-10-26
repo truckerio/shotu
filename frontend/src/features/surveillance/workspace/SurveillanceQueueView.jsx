@@ -1,3 +1,4 @@
+import { WorkorderQueueFilter } from "../../../components/workorders/WorkorderQueueFilter.jsx";
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { DatePicker } from "../../../components/forms/DatePicker.jsx";
 import { RefreshCw01, SearchMd } from "@untitledui/icons";
@@ -9,7 +10,6 @@ import { MobileQueueToolbar } from "../../../components/operations/MobileQueueTo
 import { ProgressiveQueue } from "../../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../../components/responsive/ProgressiveQueue.js";
 import {
-  WorkorderQueueTabs,
   WorkorderRow,
   WorkorderTableHeader,
 } from "../../../components/workorders/WorkorderQueue.jsx";
@@ -55,9 +55,6 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, rail, ins
       {inspectionAccess.canRead && workorderAccess.canRead ? <div className="role-phone-product-switch"><ProductModeSwitch value={product} onChange={onProductChange} /></div> : null}
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
-          <div className="surveillance-desktop-queues">
-            <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-          </div>
           <MobileQueueToolbar
             className="surveillance-compact-queues"
             tabs={compactTabs}
@@ -96,6 +93,7 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, rail, ins
             <label><span>To</span><DatePicker value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" /></label>
           </MobileQueueToolbar>
           <div className="surveillance-filter-row">
+            <div className="surveillance-desktop-queues"><WorkorderQueueFilter options={tabs} value={activeTab} onChange={setActiveTab} /></div>
             <label className="mechanic-search"><SearchMd /><input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? (
               <Dropdown value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">

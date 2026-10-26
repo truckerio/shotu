@@ -26,5 +26,9 @@ test("workorder totals appear only with a complete, single-currency server summa
   assert.equal(workorderPricingPresentation({ status: "incomplete", ...amounts, missingCount: 2 }).status, "incomplete");
   assert.equal(workorderPricingPresentation({ status: "complete", ...amounts, grandTotal: null }).status, "incomplete");
   assert.equal(workorderPricingPresentation({ status: "mixed_currency", ...amounts }).status, "mixed_currency");
+  assert.deepEqual(workorderPricingPresentation({ status: "complete", reason: "mixed_price_basis", ...amounts }), {
+    status: "complete", parts: "$12.50", labor: "$15.00", grand: "$27.50",
+  });
+  assert.equal(workorderPricingPresentation({ status: "incomplete", reason: "mixed_price_basis", missingCount: 1 }).message, "Incomplete pricing. 1 line needs a price.");
   assert.equal(formatWorkorderMoney(null, "USD"), null);
 });

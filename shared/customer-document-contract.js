@@ -20,6 +20,8 @@ export const CUSTOMER_DOCUMENT_LINE_TYPE = Object.freeze({
 
 export const CUSTOMER_DOCUMENT_PRICE_BASIS = Object.freeze({
   SELLING_PRICE: "selling_price",
+  BATCH_COST: "batch_cost",
+  INTERNAL_COST: "internal_cost",
   CUSTOMER_OVERRIDE: "customer_override",
 });
 

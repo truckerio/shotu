@@ -51,9 +51,6 @@ export function workorderPricingPresentation(pricing) {
   if (pricing?.status === "complete" && parts && labor && grand) {
     return { status: "complete", parts, labor, grand };
   }
-  if (pricing?.reason === "mixed_price_basis") {
-    return { status: "incomplete", message: "Incomplete pricing. Internal cost and selling prices are mixed." };
-  }
   const count = Number(pricing?.missingCount);
   const missing = Number.isInteger(count) && count > 0 ? ` ${count} ${count === 1 ? "line needs" : "lines need"} a price.` : "";
   return { status: "incomplete", message: `Incomplete pricing.${missing}` };

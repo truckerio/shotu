@@ -90,7 +90,7 @@ test("primary admin cannot revise or select labor pricing for mechanic-only comp
   });
 });
 
-test("summary totals exact current snapshots and refuses missing, changed, mixed currency or basis", () => {
+test("summary totals exact current snapshots and refuses missing, changed, or mixed currency", () => {
   const base = {
     workorder: { formData: { laborHours: "2.5", laborProduct: { productId }, parts: [] } },
     installedSerializedParts: [{ quantity: 1, price: { selection: "selling_price", totalPrice: "10.0000", currency: "USD" } }],
@@ -102,9 +102,13 @@ test("summary totals exact current snapshots and refuses missing, changed, mixed
     grandTotal: "112.5000", missingCount: 0, rowCount: 3,
   });
   assert.equal(workorderPricingSummary({ ...base, laborPrice: null }).status, "incomplete");
+  assert.equal(workorderPricingSummary({ ...base, laborPrice: { ...base.laborPrice, selection: "unknown" } }).missingCount, 1);
   assert.equal(workorderPricingSummary({ ...base, aggregatePartUsages: [{ ...base.aggregatePartUsages[0], effectiveQuantity: 3 }] }).missingCount, 1);
   assert.equal(workorderPricingSummary({ ...base, laborPrice: { ...base.laborPrice, currency: "CAD" } }).status, "mixed_currency");
-  assert.equal(workorderPricingSummary({ ...base, laborPrice: { ...base.laborPrice, selection: "internal_cost" } }).reason, "mixed_price_basis");
+  assert.deepEqual(workorderPricingSummary({ ...base, laborPrice: { ...base.laborPrice, selection: "internal_cost" } }), {
+    status: "complete", currency: "USD", partsTotal: "50.0000", laborTotal: "62.5000",
+    grandTotal: "112.5000", missingCount: 0, rowCount: 3,
+  });
   const legacyManual = workorderPricingSummary({
     ...base,
     workorder: { ...base.workorder, formData: { ...base.workorder.formData, parts: [{ partNo: "P1", qty: "2" }] } },
@@ -133,6 +137,20 @@ test("summary totals exact current snapshots and refuses missing, changed, mixed
   const truncated = workorderPricingSummary({ ...base, pricingRowsTruncated: true });
   assert.equal(truncated.status, "incomplete");
   assert.equal(truncated.missingCount, 1);
+});
+
+test("G2026 batch cost part and selling labor total their selected snapshots", () => {
+  const summary = workorderPricingSummary({
+    workorder: { formData: { laborHours: "2", laborProduct: { productId }, parts: [] } },
+    aggregatePartUsages: [{ effectiveQuantity: 1, status: "consumed", price: {
+      selection: "batch_cost", quantity: "1", totalPrice: "98.0000", currency: "USD",
+    } }],
+    laborPrice: { productId, selection: "selling_price", hours: "2", totalPrice: "100.0000", currency: "USD" },
+  });
+  assert.deepEqual(summary, {
+    status: "complete", currency: "USD", partsTotal: "98.0000", laborTotal: "100.0000",
+    grandTotal: "198.0000", missingCount: 0, rowCount: 2,
+  });
 });
 
 test("mechanic projection omits all labor financials and Office sees required shape", () => {

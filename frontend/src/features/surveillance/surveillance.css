@@ -595,3 +595,9 @@
   .surveillance-detail-page .control-panel > .detail-context-bar { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 112px; }
   .surveillance-detail-page .detail-context-actions { justify-content: space-between; padding-left: 44px; }
 }
+
+@media (min-width: 701px) {
+  .surveillance-filter-row { align-items: end; display: flex; flex-wrap: wrap; padding-top: 14px; }
+  .surveillance-filter-row .mechanic-search { flex: 1 1 260px; min-width: 0; }
+  .surveillance-desktop-queues { flex: 0 1 220px; min-width: 170px; }
+}

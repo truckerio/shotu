@@ -467,3 +467,8 @@
     touch-action: pan-y pinch-zoom;
   }
 }
+
+@media (min-width: 701px) {
+  .mechanic-primary-queues { display: none; }
+  .mechanic-visible-tools { align-items: end; grid-template-columns: minmax(170px, 240px) minmax(0, 1fr); }
+}

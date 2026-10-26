@@ -28,6 +28,59 @@ const digest = (value) => createHash("sha256").update(JSON.stringify(value)).dig
 
 after(async () => { if (enabled) await closePool(); });
 
+test("real PostgreSQL and customer preview route preserve batch part plus selling labor prices", { skip: !enabled }, async () => {
+  const { previewCustomerDocument } = await import("../customer-documents/customer-documents.service.js");
+  const { handleCustomerDocumentsApi } = await import("../../routes/customer-documents.routes.js");
+  const { permissionsForRole } = await import("../../auth/permissions.js");
+  const fixture = await createFixture();
+  try {
+    const rate = await appendLaborRateVersion({ companyId: fixture.companyId, locationId: fixture.locationId,
+      productId: fixture.laborProductId, priceKind: "selling_price", expectedVersion: 0, amount: "100", currency: "USD",
+      reason: "Independent selling labor fixture", actorId: fixture.actorId,
+      idempotencyKey: `mixed-selling-${fixture.suffix}`, requestHash: digest("mixed-selling") });
+    assert.equal(rate.kind, "saved");
+    fixture.input.formData.laborHours = "1";
+    fixture.input.formData.parts = [{ ...fixture.input.formData.parts[1], qty: "1" }];
+    fixture.input.inventoryUnitSelections = [];
+    fixture.input.inventoryPositionSelections = [{ ...fixture.input.inventoryPositionSelections[0], partIndex: 0 }];
+    fixture.input.pricing.parts = [{ partIndex: 0, selection: "batch_cost" }];
+    fixture.input.pricing.labor = { selection: "selling_price" };
+    const pricing = await readCreatePricing(fixture.input);
+    assert.equal(pricing.summary.status, "complete");
+    assert.equal(pricing.summary.grandTotal, "110.0000");
+    const created = await createOperationalWorkorder({ ...fixture.input, pricing: { ...fixture.input.pricing, expectedFingerprint: pricing.fingerprint } });
+    const version = (await query("select progress_version from operational_workorders where id=$1", [created.id])).rows[0].progress_version;
+    const input = { companyId: fixture.companyId, locationId: fixture.locationId,
+      source: { kind: "workorder", id: created.id, expectedVersion: Number(version) }, adjustments: {} };
+    const context = { actor: { id: fixture.actorId, role: "office" }, companyIds: new Set([fixture.companyId]),
+      companyRoles: new Map([[fixture.companyId, "office"]]), locationIds: new Set([fixture.locationId]), permissions: permissionsForRole("office") };
+    const profile = { id: randomUUID(), defaultCurrency: "USD", taxProfileVersionId: randomUUID(),
+      shopIdentity: { legalName: "Fixture shop" }, authorizationText: "Fixture authorization",
+      lineTaxPolicy: { labor: "exempt", part: "exclusive" }, taxComponents: [{ name: "Fixture tax", rate: "10", compound: false }],
+      discountPolicy: { maxOfficePercentage: "5" } };
+    const dependencies = { getProfile: async () => profile, readAcceptedEstimate: async () => null };
+    let sent;
+    await handleCustomerDocumentsApi({ method: "POST" }, {}, new URL("http://fixture/api/customer-documents/previews"), {
+      requestContext: context, readBody: async () => input, sendJson: (_res, status, body) => { sent = { status, body }; },
+    }, { preview: (actor, body) => previewCustomerDocument(actor, body, dependencies) });
+    assert.equal(sent.status, 200);
+    assert.equal(sent.body.projection.totals.subtotal, "110.00");
+    assert.equal(sent.body.projection.totals.total, "111.00");
+    assert.deepEqual(sent.body.projection.lines.map((line) => line.priceBasis), ["selling_price", "batch_cost"]);
+    const snapshots = (await query("select selection,unit_price from workorder_part_price_snapshots where workorder_id=$1", [created.id])).rows;
+    assert.equal(snapshots[0].selection, "batch_cost");
+    assert.equal(snapshots[0].unit_price, "10.0000");
+    await assert.rejects(previewCustomerDocument({ ...context, companyIds: new Set() }, input, dependencies));
+    await assert.rejects(previewCustomerDocument({ ...context, permissions: permissionsForRole("mechanic"),
+      actor: { ...context.actor, role: "mechanic" }, companyRoles: new Map([[fixture.companyId, "mechanic"]]) }, input, dependencies),
+    (error) => error.code === "PERMISSION_DENIED");
+    await assert.rejects(previewCustomerDocument(context, { ...input, totalAmount: "1" }, dependencies), (error) => error.name === "ZodError");
+    await assert.rejects(previewCustomerDocument(context, { ...input, sourceTotal: "1" }, dependencies), (error) => error.name === "ZodError");
+    await assert.rejects(previewCustomerDocument(context, { ...input, source: { ...input.source, expectedVersion: Number(version) + 1 } }, dependencies),
+    (error) => error.code === "CUSTOMER_DOCUMENT_SOURCE_CHANGED");
+  } finally { await cleanupFixture(fixture); }
+});
+
 async function placeSerializedUnit({ companyId, locationId, catalogPartId, unitId, actorId, receiptId, suffix }) {
   const client = await getPool().connect();
   try {

@@ -1,6 +1,8 @@
+import { WorkorderQueueFilter } from "../../components/workorders/WorkorderQueueFilter.jsx";
+import { OperationsFilterPopover } from "../../components/operations/OperationsFilterPopover.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, Package, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { BarChart03, Briefcase02, CheckCircle, CheckSquare, ClipboardCheck, Clock, File02, FileCheck02, Inbox01, Package, RefreshCw01, SearchMd, ShoppingCart01, Tool02, Truck01, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
@@ -367,7 +369,7 @@ export function OfficeWorkspace({
     <nav className="office-mobile-nav" aria-label="Office workspace">
       <button className={!['inventory', 'units'].includes(activeTab) ? "active" : ""} type="button" onClick={() => selectWorkspace("operations")}><Briefcase02 /><span>Operations</span></button>
       <button className={activeTab === "inventory" ? "active" : ""} type="button" onClick={() => selectWorkspace("inventory")}><Package /><span>Inventory</span></button>
-      <button className={activeTab === "units" ? "active" : ""} type="button" onClick={() => selectWorkspace("units")}><Tool02 /><span>Units</span></button>
+      <button className={activeTab === "units" ? "active" : ""} type="button" onClick={() => selectWorkspace("units")}><Truck01 /><span>Units</span></button>
       <ProfileMenu actor={actor} mobileNav />
     </nav>
   );
@@ -375,10 +377,10 @@ export function OfficeWorkspace({
   const officeRail = (
     <RoleNavigationRail actor={actor} ariaLabel="Office workspace" activeId={activeTab === "customers" ? "customers" : activeTab === "inventory" ? `inventory-${inventorySection}` : activeTab === "units" ? "units" : product}
       groups={[
-        { id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "customers", label: "Customers", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] },
-        { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: Package }, { id: "inventory-tasks", label: "Tasks", icon: Package }, { id: "inventory-reports", label: "Reports", icon: Package }] },
+        { id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "customers", label: "Customers", icon: Users01, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: ClipboardCheck, visible: inspectionAccess.canRead }] },
+        { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: ShoppingCart01 }, { id: "inventory-tasks", label: "Tasks", icon: CheckSquare }, { id: "inventory-reports", label: "Reports", icon: BarChart03 }] },
       ]}
-      items={[{ id: "units", label: "Units", variant: "parent" }]}
+      items={[{ id: "units", label: "Units", icon: Truck01 }]}
       onNavigate={(id) => id === "workorders" || id === "inspections" ? selectOperationsProduct(id) : id === "customers" ? selectWorkspace("customers") : id === "units" ? selectWorkspace("units") : selectInventorySection(id.replace("inventory-", ""))}
     />
   );
@@ -418,25 +420,8 @@ export function OfficeWorkspace({
       />
       {isOperationsWorkspace ? officePhoneOperationsNavigation : null}
       <section className={`office-layout${["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? " is-drafts" : ""}${isOperationsWorkspace ? " operational-collection-surface office-primary-work-surface" : ""}`}>
-        {!["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
-          <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>
-          <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => selectMechanic("")}>
-            <span>All mechanics</span><strong>{allRows.length}</strong>
-          </button>
-          {mechanics.map((mechanic) => (
-            <button className={mechanicFilter === mechanic.name ? "active" : ""} key={mechanic.id || mechanic.name} type="button" onClick={() => selectMechanic(mechanic.name)}>
-              <span>{mechanic.name}</span>
-              <small>{mechanic.active} active · {mechanic.attention} need attention</small>
-              <strong>{mechanic.total}</strong>
-            </button>
-          ))}
-        </aside> : null}
-
         <section className={`mechanic-queue-shell office-table-shell${["inventory", "units"].includes(activeTab) ? " is-frameless-collection" : ""}`}>
           {isOperationsWorkspace && activeTab !== "customers" ? <div className="queue-toolbar office-toolbar role-queue-toolbar">
-            <div className="role-desktop-queues">
-              <WorkorderQueueTabs tabs={desktopQueueTabs} activeTab={activeTab} onChange={selectQueue} />
-            </div>
             <MobileQueueToolbar
               className="role-mobile-primary-queues"
               tabs={mobilePrimaryTabs}
@@ -460,7 +445,9 @@ export function OfficeWorkspace({
                 <label><span>Stage</span><Dropdown value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option><option value="cancelled">Cancelled</option></Dropdown></label>
               </> : null}
             </MobileQueueToolbar>
-            {!["drafts", "inventory", "units", "parts"].includes(activeTab) ? <div className="office-filter-row operations-filter-row role-desktop-filters">
+            <div className="office-filter-row operations-filter-row role-desktop-filters">
+              <div className="office-queue-field"><WorkorderQueueFilter options={desktopQueueTabs} value={activeTab} onChange={selectQueue} /></div>
+              {!["drafts", "inventory", "units", "parts"].includes(activeTab) ? <>
                   <label className="mechanic-search">
                     <SearchMd />
                     <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
@@ -481,7 +468,8 @@ export function OfficeWorkspace({
                     <option value="odoo_entered">Odoo entered</option>
                     <option value="cancelled">Cancelled</option>
                   </Dropdown>
-                </div> : null}
+              </> : null}
+            </div>
           </div> : null}
 
           {activeTab === "customers" ? (
@@ -514,7 +502,9 @@ export function OfficeWorkspace({
           ) : (
             <>
               {error ? <p className="ops-error" role="alert">{error}</p> : null}
-              <WorkorderTableHeader variant="office" />
+              <WorkorderTableHeader variant="office" mechanicFilter={<OperationsFilterPopover column label="Mechanics" active={Boolean(mechanicFilter)}>
+                <label><span>Mechanic</span><Dropdown aria-label="Mechanic filter" value={mechanicFilter} onChange={(event) => selectMechanic(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</Dropdown></label>
+              </OperationsFilterPopover>} />
               <div className="mechanic-work-list" aria-live="polite">
                 {loading ? (
                   <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>

@@ -38,7 +38,7 @@ test("Office separates workspace destinations from workorder queues", () => {
   assert.match(workspace, /activeSection=\{inventorySection\} onSectionChange=\{syncInventorySection\}/);
   assert.match(workspace, /showSectionNavigation=\{false\}/);
   assert.match(workspace, /const desktopQueueTabs = tabs\.filter\(\(tab\) => !\["customers", "inventory", "units"\]\.includes\(tab\.key\)\)/);
-  assert.match(workspace, /<WorkorderQueueTabs tabs=\{desktopQueueTabs\}/);
+  assert.match(workspace, /<WorkorderQueueFilter options=\{desktopQueueTabs\}/);
   assert.match(workspace, /const mobileSecondaryTabs = tabs\.filter\(\(tab\) => OFFICE_SECONDARY_TAB_KEYS\.includes\(tab\.key\)\)/);
   assert.match(workspace, /const isOperationsWorkspace = !\["inventory", "units"\]\.includes\(activeTab\)/);
   assert.match(workspace, /workspace-operations is-\$\{activeTab === "inventory" \? "inventory" : activeTab === "units" \? "units" : "operations"\}-workspace/);
@@ -125,8 +125,9 @@ test("Office opens the newly created inspection instead of returning to the queu
 test("Manager queue controls clear incompatible Unassigned filters", () => {
   assert.match(workspace, /officeQueueFilterState\(nextTab, \{ lifecycleFilter, mechanicFilter \}\)/);
   assert.match(workspace, /officeTabForMechanicFilter\(current, nextMechanic\)/);
-  assert.match(workspace, /WorkorderQueueTabs tabs=\{desktopQueueTabs\} activeTab=\{activeTab\} onChange=\{selectQueue\}/);
-  assert.match(workspace, /onClick=\{\(\) => selectMechanic\(mechanic\.name\)\}/);
+  assert.match(workspace, /WorkorderQueueFilter options=\{desktopQueueTabs\} value=\{activeTab\} onChange=\{selectQueue\}/);
+  assert.match(workspace, /<WorkorderTableHeader variant="office" mechanicFilter=/);
+  assert.doesNotMatch(workspace, /aria-label="Mechanic workload"/);
 });
 
 test("every role exposes a recovery action when a narrowing filter hides its queue", () => {

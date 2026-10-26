@@ -56,7 +56,8 @@
     "verify": "npm run check:structure && npm run test:backup-restore && npm run test:performance-tooling && npm run test:unit && npm run test:units && npm run check",
     "test:inventory:workflows:db": "node --env-file=.env scripts/qa/run-direct-receipt-integration.js",
     "test:inventory:workflows:browser": "node scripts/qa/inventory-workspace-browser.js",
-    "inventory:import-chino-manager": "node --env-file=.env scripts/inventory/import-chino-manager-inventory.js"
+    "inventory:import-chino-manager": "node --env-file=.env scripts/inventory/import-chino-manager-inventory.js",
+    "test:role-filters:browser": "node --env-file-if-exists=.env scripts/qa/run-inspection-maintenance-integration.js --browser-script scripts/qa/workorder-role-filters.browser.js"
   },
   "dependencies": {
     "@better-auth/passkey": "^1.6.25",

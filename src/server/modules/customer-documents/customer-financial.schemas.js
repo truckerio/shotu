@@ -37,6 +37,9 @@ export const customerFinancialLineSchema = z.object({
   quantity: decimal(3, 9).refine((value) => !/^0+(?:\.0+)?$/.test(value), "Quantity must be greater than zero."),
   unit: z.string().trim().min(1).max(32),
   unitPrice: decimal(4, 10),
+  // Supplied by the authoritative pricing reader, never by preview request bodies.
+  // Weighted batch averages may not reproduce their exact total at four decimals.
+  sourceTotal: decimal(4).nullable().optional().default(null),
   priceBasis: z.enum(CUSTOMER_DOCUMENT_PRICE_BASES),
   taxCategory: z.string().trim().min(1).max(80),
   taxTreatment: z.enum(["not_configured", "exclusive", "inclusive", "zero_rated", "exempt", "out_of_scope"]),
@@ -50,6 +53,8 @@ export const customerFinancialLineSchema = z.object({
     pricingFingerprint: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional().default(null),
     overrideReason: z.string().trim().min(2).max(500).nullable().optional().default(null),
     discountReason: z.string().trim().min(2).max(500).nullable().optional().default(null),
+    receiptLineIds: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
+    costLayerIds: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
   }).strict(),
 }).strict();
 

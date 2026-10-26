@@ -55,8 +55,8 @@ test("calculator supports inclusive compound tax, credits, exempt lines, and fou
   assert.equal(Number(inclusive.lines[0].net) + Number(inclusive.lines[0].tax), 115.5);
 });
 
-test("calculator rejects internal bases, unknown tax, duplicate IDs, mixed client currency, and excessive discounts", () => {
-  assert.throws(() => calculateCustomerFinancials({ currency: "USD", basis: "estimated", lines: [line({ priceBasis: "internal_cost" })] }));
+test("calculator rejects unknown bases, unknown tax, duplicate IDs, mixed client currency, and excessive discounts", () => {
+  assert.throws(() => calculateCustomerFinancials({ currency: "USD", basis: "estimated", lines: [line({ priceBasis: "unknown" })] }));
   assert.throws(() => calculateCustomerFinancials({ currency: "USD", basis: "estimated", lines: [line({ taxTreatment: "not_configured", taxComponents: [] })] }), /explicit tax treatment/i);
   assert.throws(() => calculateCustomerFinancials({ currency: "USD", basis: "estimated", lines: [line(), line()] }), /line IDs must be unique/i);
   assert.throws(() => calculateCustomerFinancials({ currency: "USD", basis: "estimated", lines: [line()], documentDiscount: { kind: "fixed", value: "999", reason: "Invalid" } }), /cannot exceed/i);

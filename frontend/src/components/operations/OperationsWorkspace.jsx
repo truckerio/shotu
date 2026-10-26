@@ -1,7 +1,8 @@
 import { Dropdown } from "../forms/Dropdown.jsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Clock, FilterLines, Inbox01, SearchMd } from "@untitledui/icons";
-import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
+import { Clock, Inbox01, SearchMd } from "@untitledui/icons";
+import { OperationsFilterPopover } from "./OperationsFilterPopover.jsx";
+import { WorkorderQueueFilter } from "../workorders/WorkorderQueueFilter.jsx";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
@@ -114,19 +115,6 @@ function OperationsFilters({
   );
 }
 
-function OperationsFilterPopover({ label, active, column = false, children }) {
-  return <DialogTrigger>
-    <Button className={`operations-filter-trigger${column ? " is-column" : ""}${active ? " is-active" : ""}`} aria-label={column ? `${label} filters and sort` : label}>
-      {column ? <span>{label}</span> : null}<FilterLines aria-hidden="true" />
-    </Button>
-    <Popover className="operations-filter-popover" placement="bottom end" offset={8}>
-      <Dialog aria-label={label}>{({ close }) => <>
-        <header><h3>{label}</h3><Button onPress={close}>Done</Button></header>
-        <div className="operations-filter-fields">{children}</div>
-      </>}</Dialog>
-    </Popover>
-  </DialogTrigger>;
-}
 
 function OperationRow({ item, onOpenWorkorder, ...rowProps }) {
   const attentionReasons = Array.isArray(item.attentionReasons) ? item.attentionReasons : [];
@@ -473,12 +461,10 @@ export function OperationsWorkspace({
       </MobileQueueToolbar>
 
       <OperationalCollectionToolbar className="operations-toolbar operations-toolbar-with-queue role-desktop-filters">
-        <label className="operations-queue-field">
-          <span className="operations-field-label">Queue</span>
-          <Dropdown aria-label="Queue" value={filters.category} onChange={(event) => updateFilter("category", event.target.value)}>
-            {OPERATION_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label} ({category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "—") : category.id !== "drafts" && summary.loading ? "—" : categoryCounts[category.countKey]})</option>)}
-          </Dropdown>
-        </label>
+        <WorkorderQueueFilter value={filters.category} onChange={(value) => updateFilter("category", value)} options={OPERATION_CATEGORIES.map((category) => ({
+          key: category.id, label: category.label,
+          count: category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "—") : category.id !== "drafts" && summary.loading ? "—" : categoryCounts[category.countKey],
+        }))} />
         {filters.category !== "drafts" && filters.category !== "parts" ? <OperationsFilters
           filters={filters}
           fixedLocationId={fixedLocationId}

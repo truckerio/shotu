@@ -733,7 +733,7 @@ export function UsedPartsEditor({
           {!activeSerializedParts.length && !savedParts.length && !aggregatePartUsages.length ? <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p> : null}
           {serializedHistory}
         </section>
-        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
+        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter?.message ? null : pricingForDisplay} {...financialFooter} /> : null}
         {measuredDialog}
         {removalDialog}
       </div>
@@ -783,7 +783,7 @@ export function UsedPartsEditor({
           {activeDraftIndex < 0 ? serializedDialog : null}
           <div className="used-parts-feedback" aria-live="polite">{message ? <span>{message}</span> : null}</div>
         </section>
-        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
+        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter?.message ? null : pricingForDisplay} {...financialFooter} /> : null}
         {measuredDialog}
         {removalDialog}
       </div>
@@ -939,7 +939,7 @@ export function UsedPartsEditor({
           {message ? <span>{message}</span> : <span></span>}
         </div>
       </section>
-      {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
+      {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter?.message ? null : pricingForDisplay} {...financialFooter} /> : null}
       {measuredDialog}
       {removalDialog}
     </div>

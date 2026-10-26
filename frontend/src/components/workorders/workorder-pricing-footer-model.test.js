@@ -41,7 +41,7 @@ test("a fingerprinted server projection owns all customer-facing financial total
   });
 });
 
-test("stale, incomplete, and mixed-basis summaries fail closed to placeholders", () => {
+test("stale and incomplete summaries fail closed while a complete mixed-source summary displays", () => {
   const staleProjection = { currency: "USD", subtotal: "9", discount: "1", tax: "1", total: "9" };
   const incomplete = workorderPricingFooterPresentation({ status: "incomplete", currency: "USD", grandTotal: "100", missingCount: 1 }, staleProjection);
   assert.equal(incomplete.partsLabor, "—");
@@ -49,8 +49,8 @@ test("stale, incomplete, and mixed-basis summaries fail closed to placeholders",
   assert.equal(incomplete.message, "");
 
   const mixedBasis = workorderPricingFooterPresentation({ ...pricing, reason: "mixed_price_basis" });
-  assert.equal(mixedBasis.partsLabor, "—");
-  assert.equal(mixedBasis.hasRawPartsLabor, false);
+  assert.equal(mixedBasis.partsLabor, "$100.00");
+  assert.equal(mixedBasis.hasRawPartsLabor, true);
 });
 
 test("messages are caller-controlled and do not reinterpret server pricing status", () => {
