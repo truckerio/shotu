@@ -393,3 +393,12 @@
     transition: none;
   }
 }
+
+.checkpoint-rail-loading {
+  color: #667085;
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  padding-top: 4px;
+  white-space: nowrap;
+}

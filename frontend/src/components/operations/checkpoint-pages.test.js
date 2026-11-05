@@ -235,3 +235,66 @@ test("stop treats generic errors from an aborted request as stale", async () => 
   controller.stop();
   assert.equal(await loading, false);
 });
+
+test("pending jump publishes target immediately, supersedes reads and ignores a late failure", async () => {
+  const pending = new Map();
+  const signals = new Map();
+  const controller = createCheckpointPagesController({ fetchPage: (page, { signal }) => {
+    if (page === 1) return Promise.resolve(response(1, ['committed']));
+    const request = deferred(); pending.set(page, request); signals.set(page, signal);
+    return request.promise;
+  } });
+  await controller.start();
+  const first = controller.jumpTo(6);
+  await tick();
+  assert.equal(controller.getSnapshot().pendingPage, 6);
+  assert.equal(controller.getSnapshot().loading, true);
+  assert.equal(controller.getSnapshot().pages[0].page, 1);
+  const latest = controller.jumpTo(8);
+  await tick();
+  assert.equal(signals.get(6).aborted, true);
+  assert.equal(controller.getSnapshot().pendingPage, 8);
+  pending.get(8).resolve(response(8, ['latest']));
+  assert.equal(await latest, true);
+  pending.get(6).reject(new Error('stale failure'));
+  assert.equal(await first, false);
+  assert.equal(controller.getSnapshot().pendingPage, null);
+  assert.equal(controller.getSnapshot().error, null);
+  assert.deepEqual(controller.getSnapshot().pages.map(batch => batch.page), [8]);
+});
+
+test("reselecting a pending target keeps its request and signal instead of restarting it", async () => {
+  const request = deferred(); const calls = []; let targetSignal;
+  const controller = createCheckpointPagesController({ fetchPage: (page, { signal }) => {
+    calls.push(page);
+    if (page === 1) return Promise.resolve(response(1, ['first']));
+    targetSignal = signal;
+    return request.promise;
+  } });
+  await controller.start();
+  const loading = controller.jumpTo(6); await tick();
+  const again = controller.jumpTo(6); await tick();
+  assert.deepEqual(calls, [1, 6]);
+  assert.equal(targetSignal.aborted, false);
+  request.resolve(response(6, ['six']));
+  await Promise.all([loading, again]);
+  assert.equal(controller.getSnapshot().pendingPage, null);
+  assert.deepEqual(controller.getSnapshot().pages.map(batch => batch.page), [6]);
+});
+
+test("failed jump clears pending target, keeps committed rows and retries intended batch", async () => {
+  let fail = true;
+  const controller = createCheckpointPagesController({ fetchPage: async page => {
+    if (page === 6 && fail) throw new Error('offline');
+    return response(page, [`row-${page}`]);
+  } });
+  await controller.start();
+  assert.equal(await controller.jumpTo(6), false);
+  assert.equal(controller.getSnapshot().pendingPage, null);
+  assert.equal(controller.getSnapshot().pages[0].page, 1);
+  assert.equal(controller.getSnapshot().failedDirection, 'jump');
+  fail = false;
+  assert.equal(await controller.retry(), true);
+  assert.equal(controller.getSnapshot().pages[0].page, 6);
+  assert.equal(controller.getSnapshot().pendingPage, null);
+});

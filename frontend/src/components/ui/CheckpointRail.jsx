@@ -21,9 +21,11 @@ function previewLines(preview) {
 export function CheckpointRail({
   pageCount,
   currentPage,
+  pendingPage = null,
   total,
   pageSize = 20,
   onJump,
+  onOpenChange,
   getPreview,
   disabled = false,
   label = "Records",
@@ -36,7 +38,7 @@ export function CheckpointRail({
   const [focusedPage, setFocusedPage] = useState(null);
   const [previewPosition, setPreviewPosition] = useState({ left: 34, top: 98 });
   const count = normalizePageCount(pageCount, total, pageSize);
-  const selectedPage = clampCheckpointPage(currentPage, count);
+  const selectedPage = clampCheckpointPage(pendingPage ?? currentPage, count);
   const pages = useMemo(
     () => selectCheckpointPages(count, selectedPage, railHeight),
     [count, railHeight, selectedPage],
@@ -101,7 +103,7 @@ export function CheckpointRail({
   }
 
   return (
-    <div className="checkpoint-rail" style={{ "--checkpoint-batch-count": count }}>
+    <div className="checkpoint-rail" aria-busy={pendingPage != null || undefined} style={{ "--checkpoint-batch-count": count }}>
       <nav className="checkpoint-rail-track" aria-label={`${label} batches`} ref={railRef}>
         {pages.map((page) => {
           const active = page === selectedPage;
@@ -111,6 +113,7 @@ export function CheckpointRail({
           return (
             <button
               aria-current={active ? "page" : undefined}
+              aria-busy={active && pendingPage != null || undefined}
               aria-describedby={showingPreview ? tooltipId : undefined}
               aria-label={`${label}: ${checkpointAriaLabel(page, count, total, pageSize)}`}
               className="checkpoint-rail-tick"
@@ -166,6 +169,7 @@ export function CheckpointRail({
             className="checkpoint-rail-dropdown"
             disabled={disabled}
             onChange={(event) => jump(Number(event.currentTarget.value))}
+            onOpenChange={onOpenChange}
             placement="bottom start"
             popoverClassName="checkpoint-rail-dropdown-popover"
             value={String(selectedPage)}
@@ -205,6 +209,7 @@ export function CheckpointRail({
             </form>
           </details>
         )}
+        {pendingPage != null ? <span className="checkpoint-rail-loading">Loading batch {selectedPage}…</span> : null}
       </div>
     </div>
   );

@@ -28,6 +28,8 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
   const extent = useMemo(() => createCheckpointExtent(pageSize), [storageKey, pageSize]);
   const [spacing, setSpacing] = useState({ before: 0, after: 0 });
   const skippedScroll = useRef(null);
+  const navigationScroll = useRef(null);
+  const navigationRestoreFrame = useRef(null);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [viewportHeight, setViewportHeight] = useState(null);
   const [rowRevision, setRowRevision] = useState(0);
@@ -42,16 +44,17 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
     const phone = window.matchMedia("(max-width: 700px)").matches;
     const head = table.querySelector(".operational-collection-table-head, [data-checkpoint-header], thead");
     const headerHeight = head && getComputedStyle(head).display !== "none" ? head.getBoundingClientRect().height : 0;
+    const compactRail = phone ? table.closest(".checkpoint-collection")?.querySelector(":scope > .checkpoint-rail") : null;
     return {
       table, phone,
-      top: phone ? Math.max(0, table.getBoundingClientRect().top) : Math.max(0, table.getBoundingClientRect().top + headerHeight),
+      top: phone ? Math.max(0, table.getBoundingClientRect().top, compactRail?.getBoundingClientRect().bottom || 0) : Math.max(0, table.getBoundingClientRect().top + headerHeight),
       bottom: phone ? window.innerHeight : Math.min(window.innerHeight, table.getBoundingClientRect().bottom),
       scroll: phone ? window.scrollY : table.scrollTop,
     };
   }
 
   function rememberPosition(view = geometry()) {
-    if (!view || restoring.current) return;
+    if (!view || restoring.current || navigationScroll.current) return;
     const row = firstVisibleCheckpointRow(rowNodes.current, view.top);
     if (!row || row.getBoundingClientRect().top >= view.bottom) return;
     const page = Number(row.dataset.checkpointPage);
@@ -62,7 +65,7 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
 
   function loadAtEdge(direction, view = geometry()) {
     const state = callbacks.current;
-    if (restoring.current || revision.current !== state.jumpRevision) return;
+    if (navigationScroll.current || restoring.current || revision.current !== state.jumpRevision) return;
     if (!view || state.loading || state.loadingMore || state.error || !state.pages.length) return;
     const last = batchNodes.current.at(-1);
     const first = batchNodes.current[0];
@@ -84,6 +87,7 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
   }
 
   function processScroll(hint = 0) {
+    if (navigationScroll.current) return;
     const view = geometry();
     if (!view) return;
     fitViewport(view);
@@ -138,6 +142,9 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("resize", onResize);
       work.dispose();
+      if (navigationRestoreFrame.current !== null) cancelAnimationFrame(navigationRestoreFrame.current);
+      navigationRestoreFrame.current = null;
+      navigationScroll.current = null;
     };
   }, [work]);
 
@@ -217,6 +224,33 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
   // Fill a short viewport, then prefetch only at the trailing edge.
   useEffect(() => { loadAtEdge(0); }, [queue.pages, queue.loading, queue.loadingMore, spacing]);
 
+  function handleNavigationOpenChange(open) {
+    if (navigationRestoreFrame.current !== null) cancelAnimationFrame(navigationRestoreFrame.current);
+    navigationRestoreFrame.current = null;
+    if (open) {
+      const view = geometry();
+      // Focus may have already moved the document before Select opens. Keep
+      // the last measured list position, then suppress that focus-only scroll.
+      if (view) navigationScroll.current = { scroll: lastScroll.current, phone: view.phone, revision: callbacks.current.jumpRevision };
+      work.flush();
+      return;
+    }
+    const saved = navigationScroll.current;
+    if (!saved) return;
+    navigationRestoreFrame.current = requestAnimationFrame(() => {
+      navigationRestoreFrame.current = null;
+      navigationScroll.current = null;
+      const view = geometry();
+      // Restore after the popover releases its scroll lock. A completed jump
+      // owns its new viewport; cancellation/failure retains the previous one.
+      if (view && saved.phone === view.phone && saved.revision === callbacks.current.jumpRevision) {
+        if (view.phone) window.scrollTo({ top: saved.scroll, behavior: "instant" });
+        else view.table.scrollTop = saved.scroll;
+      }
+      work.schedule();
+    });
+  }
+
   function jump(page) {
     work.flush();
     restoring.current = false;
@@ -237,14 +271,16 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
     : renderedRows?.type === OperationalCollectionTable ? "is-collection-table-frame" : "";
   const reachedCount = Math.min(queue.total || 0, (queue.pages.at(-1)?.page || 0) * pageSize);
   return (
-    <div className={`checkpoint-queue-table checkpoint-collection is-footer-status${queue.pageCount > 1 ? "" : " is-single-batch"}`} style={viewportHeight ? { "--checkpoint-viewport-height": `${viewportHeight}px` } : undefined} onClickCapture={() => work.flush()} onWheelCapture={(event) => {
+    <div className={`checkpoint-queue-table checkpoint-collection is-footer-status${queue.pageCount > 1 ? "" : " is-single-batch"}`} style={viewportHeight ? { "--checkpoint-viewport-height": `${viewportHeight}px` } : undefined} onClickCapture={(event) => {
+      if (!event.target.closest(".checkpoint-rail")) work.flush();
+    }} onWheelCapture={(event) => {
       if (event.deltaY < 0) work.schedule(-1);
     }} onKeyDownCapture={(event) => {
       if (["ArrowUp", "PageUp"].includes(event.key)) work.schedule(-1);
-      else if (["Enter", " "].includes(event.key)) work.flush();
+      else if (["Enter", " "].includes(event.key) && !event.target.closest(".checkpoint-rail")) work.flush();
     }}>
       {queue.pageCount > 1 ? <CheckpointRail label={label} pageCount={queue.pageCount} currentPage={currentPage} total={queue.total} pageSize={pageSize} onJump={jump}
-        getPreview={getPreview} disabled={queue.loading} /> : null}
+        getPreview={getPreview} onOpenChange={handleNavigationOpenChange} pendingPage={queue.pendingPage} disabled={queue.loading && !hasItems} /> : null}
       {renderItems ? <div aria-label={ariaLabel} aria-busy={queue.loading || queue.loadingMore} className={`checkpoint-collection-viewport checkpoint-queue-scroll ${semanticFrameClass} ${className}`.trim()} ref={tableRef} onScroll={handleScroll}>
         {header}
         {!semanticTable ? <div className="checkpoint-queue-spacer" aria-hidden="true" style={{ height: spacing.before }} /> : null}
@@ -259,7 +295,7 @@ export function CheckpointCollection({ queue, columns, renderItem, renderItems, 
         {!hasItems && !queue.loading && !queue.error ? children : null}
       </OperationalCollectionTable>}
       <CollectionCountFooter label={`${ariaLabel || label} count`} error={queue.error} onRetry={() => queue.retry()}>
-        {queue.loading && !queue.pages.length ? `Loading ${label}…` : `${reachedCount.toLocaleString()} of ${Number(queue.total || 0).toLocaleString()}`}{queue.loadingMore ? " · Loading…" : ""}
+        {queue.loading && !queue.pages.length ? `Loading ${label}…` : `${reachedCount.toLocaleString()} of ${Number(queue.total || 0).toLocaleString()}`}{queue.pendingPage ? ` · Loading batch ${queue.pendingPage}…` : queue.loadingMore ? " · Loading…" : ""}
       </CollectionCountFooter>
     </div>
   );

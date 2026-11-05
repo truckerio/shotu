@@ -70,6 +70,7 @@ export function Dropdown({
   onBlur,
   onChange,
   onFocus,
+  onOpenChange,
   placement = "bottom start",
   popoverClassName = "",
   required = false,
@@ -100,6 +101,7 @@ export function Dropdown({
       name={name}
       onBlur={onBlur}
       onFocus={onFocus}
+      onOpenChange={onOpenChange}
       onSelectionChange={changeSelection}
       selectedKey={selectedKey}
     >
