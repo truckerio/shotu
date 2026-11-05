@@ -105,6 +105,79 @@ async function assertNoOverflow(page, label) {
   assert.ok(width.page <= width.viewport + 1, `${label} horizontal overflow: ${JSON.stringify(width)}`);
 }
 
+async function navigationPersistence(page, role) {
+  const rail = page.locator('.role-navigation-rail');
+  await rail.getByRole('button', { name: 'Collapse navigation', exact: true }).click();
+  await page.reload();
+  await rail.waitFor();
+  assert.equal(await rail.getAttribute('data-compact'), 'true', `${role}: collapsed navigation must survive reload`);
+  await rail.getByRole('button', { name: 'Workorders', exact: true }).click();
+  assert.equal(await rail.getAttribute('data-compact'), 'true', `${role}: navigation must preserve collapse`);
+  await page.setViewportSize({ width: 820, height: 900 });
+  await rail.getByRole('button', { name: 'Expand navigation', exact: true }).click();
+  await page.reload();
+  await rail.waitFor();
+  assert.equal(await rail.getAttribute('data-compact'), 'true', 'Tablet overlay expansion must not survive reload');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  assert.equal(await rail.getAttribute('data-compact'), 'true', 'Tablet expansion must not overwrite desktop preference');
+  await rail.getByRole('button', { name: 'Expand navigation', exact: true }).click();
+  await page.reload();
+  await rail.waitFor();
+  assert.equal(await rail.getAttribute('data-compact'), 'false', `${role}: expanded navigation must survive reload`);
+  if (role === 'admin') {
+    const blocked = await page.context().newPage();
+    try {
+      await blocked.addInitScript(() => Object.defineProperty(window, 'localStorage', {
+        get() { throw new DOMException('Storage blocked', 'SecurityError'); },
+      }));
+      await blocked.goto(page.url());
+      const blockedRail = blocked.locator('.role-navigation-rail');
+      await blockedRail.getByRole('button', { name: 'Collapse navigation', exact: true }).click();
+      assert.equal(await blockedRail.getAttribute('data-compact'), 'true', 'Blocked storage must not prevent toggling');
+      await blocked.reload();
+      await blockedRail.getByRole('button', { name: 'Collapse navigation', exact: true }).waitFor();
+    } finally { await blocked.close(); }
+  }
+  console.log(`PASS ${role}: navigation collapse/expand reload and tablet isolation`);
+}
+
+async function statusMenuGeometry(page) {
+  await page.goto(`${baseUrl}/?workorder=${workorders[0].id}&section=concern`);
+  const trigger = page.locator('button.dropdown-select-trigger[aria-label="Workorder status"]');
+  await trigger.waitFor();
+  await trigger.click();
+  await page.getByRole('option', { name: 'Active', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.dropdown-select-popover').waitFor({ state: 'detached' });
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await trigger.click();
+    await page.getByRole('option', { name: 'Waiting for office', exact: true }).waitFor();
+    await page.locator('.dropdown-select-popover:not([data-entering])').waitFor();
+    const geometry = await page.locator('.dropdown-select-popover').evaluate(popover => {
+      const box = popover.getBoundingClientRect();
+      return { left: box.left, right: box.right, viewport: innerWidth,
+        labels: [...popover.querySelectorAll('.dropdown-select-option-label')].map(label => {
+          const range = document.createRange(); range.selectNodeContents(label);
+          return { text: label.textContent, lines: range.getClientRects().length,
+            clipped: label.scrollWidth > label.clientWidth + 1 };
+        }) };
+    });
+    assert.ok(geometry.left >= 0 && geometry.right <= geometry.viewport, `${width}: status popover outside viewport: ${JSON.stringify(geometry)}`);
+    assert.ok(geometry.labels.every(label => label.lines === 1 && !label.clipped), `${width}: status labels must fit on one line: ${JSON.stringify(geometry)}`);
+    await page.screenshot({ path: join(artifacts, `workorder-status-${width}.png`) });
+    await page.keyboard.press('Escape');
+    await page.locator('.dropdown-select-popover').waitFor({ state: 'detached' });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await trigger.click();
+  await page.getByRole('option', { name: 'On hold', exact: true }).click();
+  await page.reload();
+  await trigger.waitFor();
+  assert.equal((await trigger.innerText()).trim(), 'On hold', 'Status selection must persist through API and reload');
+  console.log('PASS Workorder status: readable menu at 320/390/768/1440 and persisted selection');
+}
+
 const errors = [];
 const roleOptions = {
   admin: ["All", "Active"],
@@ -117,6 +190,11 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
+    for (const check of [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
+      try { await check(); } catch (error) { errors.push(`${account.role}: ${error.stack || error}`); }
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`${baseUrl}/?${account.role === 'admin' ? 'adminView=operations' : ''}`);
+    }
     try {
       const desktop = page.locator(account.role === "admin" ? ".role-desktop-filters" : ".workorder-queue-filter").first();
       await desktop.waitFor({ state: "visible" });

@@ -5,6 +5,13 @@ import { WorkspaceHeader } from "./WorkspaceHeader.jsx";
 import "./role-navigation-rail.css";
 
 function visible(items = []) { return items.filter((item) => item.visible !== false); }
+const desktopCollapsedStorageKey = "workorder.navigation.desktopCollapsed";
+
+function readDesktopCollapsed() {
+  try { return window.localStorage.getItem(desktopCollapsedStorageKey) === "true"; }
+  catch { return false; }
+}
+
 const tabletQuery = "(min-width: 701px) and (max-width: 1199px)";
 
 function NavigationItem({ item, active, compact, onNavigate }) {
@@ -73,7 +80,7 @@ function NavigationItem({ item, active, compact, onNavigate }) {
 export function RoleNavigationRail({ actor, locale = "en", ariaLabel = "Workspace", groups = [], items = [], activeId = "", onNavigate }) {
   const [openGroups, setOpenGroups] = useState(() => new Set(groups.map((group) => group.id)));
   const [tablet, setTablet] = useState(() => window.matchMedia(tabletQuery).matches);
-  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(readDesktopCollapsed);
   const [tabletExpanded, setTabletExpanded] = useState(false);
   const railRef = useRef(null);
   const toggleRef = useRef(null);
@@ -153,7 +160,12 @@ export function RoleNavigationRail({ actor, locale = "en", ariaLabel = "Workspac
         <Button ref={toggleRef} className="role-navigation-toggle" type="button" aria-label={compact ? "Expand navigation" : "Collapse navigation"} aria-expanded={!compact} aria-controls={navigationId} onPress={() => {
           resetListScroll();
           if (tablet) setTabletExpanded((current) => !current);
-          else setDesktopCollapsed((current) => !current);
+          else {
+            const next = !desktopCollapsed;
+            setDesktopCollapsed(next);
+            try { window.localStorage.setItem(desktopCollapsedStorageKey, String(next)); }
+            catch { /* Keep navigation usable when browser storage is unavailable. */ }
+          }
         }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m4-11 3 3-3 3" /></svg>
         </Button>
