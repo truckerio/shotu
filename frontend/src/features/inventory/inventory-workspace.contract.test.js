@@ -479,7 +479,7 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(workspace, /<SecondaryDetailSection title="Locations">/);
   assert.doesNotMatch(workspace, /Odoo reference/);
   assert.match(workspace, /Odoo · read-only/);
-  assert.match(workspace, /Selling · \{partHeaderPrice\.scopeKey === partHeaderPriceScopeKey/);
+  assert.match(workspace, /Selling · \{headerPriceLabel\}/);
   assert.doesNotMatch(workspace, /Our inventory available|Our inventory 0/);
   assert.match(workspace, /setSelectedLocationId/);
   assert.match(workspace, /aria-label="Part detail pages"/);
@@ -531,7 +531,7 @@ test("part header shows the effective selling price without a stock-status badge
   assert.match(workspace, /params\.set\("locationId", selectedLocation\.locationId\)/);
   assert.match(workspace, /effectiveSellingPrice\(commercial, Boolean\(selectedLocation\?\.locationId\), sellingPolicy\)/);
   assert.match(workspace, /selectedItem\.trackingMode === "no_stock"[\s\S]*?\/selling-policy/);
-  assert.match(workspace, /view\.label === "Unknown" \? "—" : view\.label/);
+  assert.match(workspace, /view\.label === "Unknown" \? "NA" : view\.label/);
   assert.match(workspace, /const scopeKey = partHeaderPriceScopeKey/);
   assert.match(workspace, /return \(\) => \{ active = false; \}/);
   assert.match(workspace, /className="inventory-part-header-price"/);

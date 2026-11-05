@@ -33,10 +33,14 @@ function batchPositionLabel(position) {
 }
 
 function sellingPolicySummary(policy) {
-  if (!policy) return "Not configured";
+  if (!policy) return "NA";
   if (policy.method === "markup_percent") return `${Number(policy.value)}% markup`;
   if (policy.method === "markup_amount") return `Add ${displayMoney(policy.value, policy.currency)}`;
   return displayMoney(policy.value, policy.currency);
+}
+
+function priceWithUnit(label, uomCode) {
+  return label === "Unknown" || label === "NA" ? "NA" : `${label} / ${uomCode || "unit"}`;
 }
 
 function PriceHistory({ prices, locationScoped }) {
@@ -52,9 +56,9 @@ function ConfiguredRates({ internal, sellingPolicy, locationScoped, canEdit, uom
   const fixedPriceRequired = noStock && sellingPolicy?.method !== "fixed";
   const sellingSource = sellingPolicy ? (locationScoped && sellingPolicy.locationId ? "location_override" : "company_default") : null;
   return <section className="inventory-configured-rates" aria-label="Configured rates">
-    <div><span>Internal price</span><strong>{configuredPriceView(internalState.effective).label} / {uomCode || "unit"}</strong><small>{missingInternal ? "Missing internal price" : rateSourceLabel(internalState.source, locationScoped)}</small></div>
-    <div><span>Selling price</span><strong>{sellingPolicySummary(fixedPriceRequired ? null : sellingPolicy)} / {uomCode || "unit"}</strong><small>{fixedPriceRequired ? "Fixed selling price required" : !sellingPolicy ? "Missing selling price" : rateSourceLabel(sellingSource, locationScoped)}</small></div>
-    {canEdit ? <Button type="button" onClick={onEdit}>Set rates</Button> : null}
+    <div><span>Internal price</span><strong>{priceWithUnit(configuredPriceView(internalState.effective).label, uomCode)}</strong><small>{missingInternal ? "Missing internal price" : rateSourceLabel(internalState.source, locationScoped)}</small></div>
+    <div><span>Selling price</span><strong>{priceWithUnit(sellingPolicySummary(fixedPriceRequired ? null : sellingPolicy), uomCode)}</strong><small>{fixedPriceRequired ? "Fixed selling price required" : !sellingPolicy ? "Missing selling price" : rateSourceLabel(sellingSource, locationScoped)}</small></div>
+    {canEdit ? <Button type="button" variant="primary" onClick={onEdit}>Set rates</Button> : null}
   </section>;
 }
 
@@ -109,7 +113,7 @@ function BatchRow({ batch, locationScoped, canEditBatchCost, isNextToUse, onEdit
       <div><span>Received</span><strong>{receivedOn}</strong></div>
     </div>
     {batch.placementStatus === "partial" ? <p className="inventory-batch-placement-warning">Some quantity is not assigned to a position.</p> : null}
-    <footer><div><span>Cost</span><strong>{batch.unitCost === null ? "Unknown" : displayMoney(batch.unitCost, batch.currency)} / {batch.uomCode}</strong>{batch.unitCost === null ? <small className="is-unresolved">Cost not recorded</small> : batch.costReason ? <small>Corrected · {batch.costReason}</small> : null}</div>{Number(batch.reservedQuantity || 0) ? <small>{batch.reservedQuantity} reserved</small> : null}{canEditBatchCost ? <Button type="button" onClick={() => onEdit(batch)}>{batch.unitCost === null ? "Add cost" : "Edit cost"}</Button> : null}</footer>
+    <footer><div><span>Cost</span><strong>{priceWithUnit(displayMoney(batch.unitCost, batch.currency), batch.uomCode)}</strong>{batch.unitCost === null ? <small className="is-unresolved">Cost not recorded</small> : batch.costReason ? <small>Corrected · {batch.costReason}</small> : null}</div>{Number(batch.reservedQuantity || 0) ? <small>{batch.reservedQuantity} reserved</small> : null}{canEditBatchCost ? <Button type="button" variant={batch.unitCost === null ? "primary" : "secondary"} onClick={() => onEdit(batch)}>{batch.unitCost === null ? "Add cost" : "Edit cost"}</Button> : null}</footer>
   </article>;
 }
 

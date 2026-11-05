@@ -261,6 +261,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const stockedLocations = selectedItem?.locations.filter(locationHasStock) || [];
   const otherLocations = selectedItem?.locations.filter((location) => !locationHasStock(location)) || [];
   const partHeaderPriceScopeKey = selectedItem?.catalogPartId ? `${selectedItem.catalogPartId}:${selectedLocation?.locationId || "company"}` : "";
+  const headerPriceLabel = partHeaderPrice.scopeKey === partHeaderPriceScopeKey ? partHeaderPrice.label || "—" : "…";
+  const partIssueSummary = stockIssueLabel({ ...selectedItem, issues: (selectedItem?.issues || []).filter((code) => !["missing_internal_price", "missing_selling_price"].includes(code)) });
 
   useEffect(() => {
     if (!selectedItem?.catalogPartId) {
@@ -282,7 +284,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         if (!active) return;
         const price = effectiveSellingPrice(commercial, Boolean(selectedLocation?.locationId), sellingPolicy);
         const view = configuredPriceView(price);
-        setPartHeaderPrice({ scopeKey, label: view.label === "Unknown" ? "—" : view.label });
+        setPartHeaderPrice({ scopeKey, label: view.label === "Unknown" ? "NA" : view.label });
       })
       .catch(() => {
         if (active) setPartHeaderPrice({ scopeKey, label: "—" });
@@ -702,7 +704,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         eyebrow={null}
         title={selectedItem?.partNumber || "Part"}
         description={selectedItem?.description || "No description"}
-        status={selectedItem ? <span className="inventory-part-header-status"><span className="inventory-part-header-price">Selling · {partHeaderPrice.scopeKey === partHeaderPriceScopeKey ? partHeaderPrice.label || "—" : "…"} / {selectedItem.uomCode || "unit"}</span>{selectedLocationReadOnly ? <span className="inventory-view-only-badge">View only</span> : null}</span> : null}
+        status={selectedItem ? <span className="inventory-part-header-status"><span className="inventory-part-header-price">Selling · {headerPriceLabel}{!["NA", "—", "…"].includes(headerPriceLabel) ? ` / ${selectedItem.uomCode || "unit"}` : ""}</span>{selectedLocationReadOnly ? <span className="inventory-view-only-badge">View only</span> : null}</span> : null}
         footer={null}
         dismissable={!partIdentityBusy && !partIdentityDirty}
         closeDisabled={partIdentityBusy || partIdentityDirty}
@@ -710,7 +712,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       >
         {selectedItem ? <>
           {partStockError ? <p className="ops-error" role="alert">{partStockError}</p> : null}
-          {stockIssueLabel(selectedItem) ? <p className="inventory-part-issue-summary" role="status">{stockIssueLabel(selectedItem)}</p> : null}
+          {partIssueSummary ? <p className="inventory-part-issue-summary" role="status">{partIssueSummary}</p> : null}
           <div className="inventory-part-detail-navigation">
             <nav className="inventory-part-detail-pages" aria-label="Part detail pages">
               {[{ id: "stock", label: "Stock" }, { id: "activity", label: "Activity" }, { id: "details", label: "Details" }].map((page) => <button key={page.id} type="button" aria-current={partDetailPage === page.id ? "page" : undefined} disabled={partIdentityDirty && page.id !== "details"} onClick={() => { setPartDetailPage(page.id); setShelvingOpen(false); }}>{page.label}</button>)}
