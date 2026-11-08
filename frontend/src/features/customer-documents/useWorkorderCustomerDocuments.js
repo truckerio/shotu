@@ -23,6 +23,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
   formDataRef.current = formData;
   const [projection, setProjection] = useState(null);
   const [previewType, setPreviewType] = useState("");
+  const [exportContentHash, setExportContentHash] = useState("");
   const [shareLink, setShareLink] = useState("");
   const [adjustments, setAdjustments] = useState(() => emptyCustomerDocumentAdjustments());
   const [busy, setBusy] = useState(false);
@@ -50,8 +51,8 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
     }
     setSummary(next);
     if (!preservePreview) {
-      setProjection(revisionProjection(next.documents?.invoice || next.documents?.estimate));
-      setPreviewType("");
+      setProjection(revisionProjection(next.documents?.estimate || next.documents?.invoice));
+      setPreviewType(""); setExportContentHash("");
     }
     return next;
   }, [companyId, locationId, workorderId]);
@@ -66,8 +67,8 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       setSummary(next);
       const nextAdjustments = detailDiscountIntentForSummary(formDataRef.current, next);
       setAdjustments(nextAdjustments);
-      setProjection(revisionProjection(next.documents?.invoice || next.documents?.estimate));
-      setPreviewType("");
+      setProjection(revisionProjection(next.documents?.estimate || next.documents?.invoice));
+      setPreviewType(""); setExportContentHash("");
       if (autoReview && !sourceDirty && !detailDiscountRevisionRequired(nextAdjustments, next) && shouldReviewInvoice(next)) {
         const result = await previewWorkorderCustomerDocument({ companyId, locationId, workorderId,
           expectedVersion: Number(next.workorderVersion || workorderVersion), documentType: "invoice",
@@ -145,7 +146,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       });
       if (scopeRef.current !== requestedScope || financialKeyRef.current !== requestedFinancialKey || sourceDirtyRef.current) return;
       setProjection(result.projection);
-      setPreviewType(documentType);
+      setPreviewType(documentType); setExportContentHash(result.contentHash || "");
       setSummary((current) => ({ ...current, reconciliation: result.reconciliation || current?.reconciliation }));
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = "";
     } catch (nextError) {
@@ -201,24 +202,31 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
       if (scopeRef.current !== requestedScope) return;
       const revisionId = issued?.revision?.id || issued?.id;
       if (!revisionId) throw new Error(`The issued ${previewType} did not include a revision identifier.`);
-      await grantForRevision(revisionId, previewType);
-      if (scopeRef.current !== requestedScope) return;
       const current = await readCustomerRevision(revisionId);
       if (scopeRef.current !== requestedScope) return;
       setProjection(current.projection);
-      setPreviewType("");
+      setPreviewType(""); setExportContentHash("");
       await loadSummary({ preservePreview: true });
     } catch (nextError) {
       if (scopeRef.current === requestedScope) setError(nextError.message || `The ${previewType} could not be issued.`, nextError.code);
     } finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
 
+  function selectIssuedDocument(documentType) {
+    if (busy || !["estimate", "invoice"].includes(documentType)) return;
+    const revision = summaryRef.current?.documents?.[documentType];
+    if (!revision) return;
+    setProjection(revisionProjection(revision)); setPreviewType(""); setExportContentHash(""); setShareLink(""); setError("");
+    issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = "";
+  }
+
   async function createReplacementGrant() {
     const requestedScope = scopeRef.current;
-    const revision = summary?.documents?.invoice || summary?.documents?.estimate;
+    const revision = [summary?.documents?.estimate, summary?.documents?.invoice].find((entry) => entry?.id === projection?.revisionId);
+    if (previewType) return;
     if (!revision?.id) return;
     setBusy(true); setError(""); grantKeyRef.current = ""; grantExpiresAtRef.current = "";
-    try { await grantForRevision(revision.id, revision.documentType); }
+    try { await grantForRevision(revision.id, projection.type); }
     catch (nextError) { if (scopeRef.current === requestedScope) setError(nextError.message || "A replacement customer link could not be created.", nextError.code); }
     finally { if (scopeRef.current === requestedScope) setBusy(false); }
   }
@@ -252,10 +260,11 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
     onAdjustmentsChange?.(next, estimate?.id || "");
     setError(""); setShareLink("");
     if (previewType) {
-      setProjection(null); setPreviewType("");
+      setProjection(null); setPreviewType(""); setExportContentHash("");
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = "";
     }
   }
 
-  return { summary, projection, previewType, shareLink, adjustments, busy, error, errorCode, setError, refresh, preview, issue, createReplacementGrant, updateAdjustments, effectiveStatus, estimate, invoice, reconciliation, canPreviewInvoice, canPreviewRevision, currentFinancialProjection, financialBusy, financialError, maximumOfficePercentage, discountRevisionRequired, canAdjustDiscount };
+  const exportRequest = previewType && exportContentHash ? { companyId, locationId, source: { kind: "workorder", id: workorderId, expectedVersion: Number(summary?.workorderVersion || workorderVersion) }, documentType: previewType, adjustments: previewType === "estimate" ? adjustments : emptyCustomerDocumentAdjustments(), expectedContentHash: exportContentHash } : null;
+  return { sourceDirty, exportRequest, selectIssuedDocument, summary, projection, previewType, shareLink, adjustments, busy, error, errorCode, setError, refresh, preview, issue, createReplacementGrant, updateAdjustments, effectiveStatus, estimate, invoice, reconciliation, canPreviewInvoice, canPreviewRevision, currentFinancialProjection, financialBusy, financialError, maximumOfficePercentage, discountRevisionRequired, canAdjustDiscount };
 }

@@ -57,7 +57,7 @@ test("saved Detail Unit is fixed while descriptive details remain editable", () 
 test("earlier notes remain available independently of Chat permission", () => {
   assert.match(detailPage, /const earlierNotes = isOfficeDetail && \(\(concernPolicy.canRead/);
   assert.match(detailPage, /diagnosisRepairPolicy.canRead && \(form.diagnosis \|\| form.workPerformed\)/);
-  assert.match(detailPage, /chatPolicy.canRead \|\| earlierNotes \? \[\{ id: "chat"/);
+  assert.match(detailPage, /canReadInternalChat \|\| canReadCustomerDocuments \? \[\{ id: "chat"/);
   assert.match(detailPage, /\{earlierNotes\}\{chatPolicy.canRead \?/);
   assert.doesNotMatch(detailPage, /id="workorder-inline-chat"/);
 });

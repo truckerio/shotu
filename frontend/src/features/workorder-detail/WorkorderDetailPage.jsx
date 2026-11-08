@@ -32,6 +32,7 @@ import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOd
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import { WorkorderCustomerDocumentsPanel } from "../customer-documents/WorkorderCustomerDocumentsPanel.jsx";
+import { WorkorderChatWorkspace } from "../customer-documents/WorkorderChatWorkspace.jsx";
 import { useWorkorderCustomerDocuments } from "../customer-documents/useWorkorderCustomerDocuments.js";
 import { CustomerDocumentDiscountEditor } from "../customer-documents/CustomerDocumentDiscountEditor.jsx";
 import { detailFinancialSourceDirty } from "../customer-documents/detail-financial-state.js";
@@ -188,8 +189,12 @@ export function WorkorderDetailPage({
     return () => clearTimeout(timer);
   }, [isOfficeDetail, activeWorkorder.workorder.id, officeDetailState, setOfficeDetailState]);
 
-  const [officeToolsOpen, setOfficeToolsOpen] = useState(false);
+  const [officeToolsOpen, setOfficeToolsOpen] = useState(() => (
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches
+  ));
   const [officeToolView, setOfficeToolView] = useState("chat");
+  const [chatAudience, setChatAudience] = useState("internal");
+  useEffect(() => setChatAudience("internal"), [activeWorkorder.workorder.id]);
   useEffect(() => {
     if (!onePageDetail) return;
     const requestedTool = requestedWorkorderTool(detailSection);
@@ -197,7 +202,7 @@ export function WorkorderDetailPage({
       setOfficeToolView(requestedTool);
       setOfficeToolsOpen(true);
     } else {
-      setOfficeToolsOpen(false);
+      setOfficeToolsOpen(window.matchMedia("(min-width: 1280px)").matches);
     }
   }, [activeWorkorder.workorder.id, detailSection, isMechanicDetail, onePageDetail]);
   const serializedRepairFlushRef = useRef(async () => true);
@@ -251,7 +256,7 @@ export function WorkorderDetailPage({
     workorderVersion: activeWorkorder.workorder.progressVersion || 1,
     workorderStatus: detailStatus,
     active: canReadCustomerDocuments,
-    autoReview: officeToolsOpen && officeToolView === "customer-documents",
+    autoReview: false,
     currentFinancials: true,
     canAdjustDiscount: concernPolicy.canWrite && activeWorkorder.allowedActions?.update === true && activeWorkorder.customerDocumentAccess?.canWrite === true,
     formData: form,
@@ -341,8 +346,10 @@ export function WorkorderDetailPage({
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;
     selectDetailSection(renderedDetailSection);
   }, [detailSection, renderedDetailSection, selectDetailSection, visibleDetailSections.length]);
+  const canReadInternalChat = chatPolicy.canRead || Boolean(isOfficeDetail && ((concernPolicy.canRead && form.officeNotes) || (diagnosisRepairPolicy.canRead && (form.diagnosis || form.workPerformed))));
+  const effectiveChatAudience = canReadCustomerDocuments && (chatAudience === "customer" || !canReadInternalChat) ? "customer" : "internal";
   useChatReceipts({
-    active: chatPolicy.canRead && (onePageDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && showEmbeddedPreview)),
+    active: chatPolicy.canRead && effectiveChatAudience === "internal" && (onePageDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && showEmbeddedPreview)),
     currentUserId: actor.id,
     messages: visibleConversationMessages,
     role: isOfficeDetail ? "office" : "mechanic",
@@ -458,15 +465,29 @@ export function WorkorderDetailPage({
             }}
           />);
   const officeToolViews = [
-    ...(chatPolicy.canRead || earlierNotes ? [{ id: "chat", label: chatPolicy.canRead ? (isMechanicDetail ? t("detail.helpFromOffice") : "Chat") : "Notes", content: <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
+    ...(canReadInternalChat || canReadCustomerDocuments ? [{ id: "chat", label: chatPolicy.canRead || canReadCustomerDocuments ? (isMechanicDetail ? t("detail.helpFromOffice") : "Chat") : "Notes", content: canReadCustomerDocuments
+      ? <WorkorderChatWorkspace
+          audience={effectiveChatAudience}
+          onAudienceChange={setChatAudience}
+          canReadInternal={canReadInternalChat}
+          canReadCustomer={canReadCustomerDocuments}
+          canSendCustomer={activeWorkorder.customerDocumentAccess?.canWrite === true}
+          internalContent={<>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</>}
+          companyId={activeWorkorder.workorder.companyId || ""}
+          locationId={activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
+          workorderId={activeWorkorder.workorder.id}
+          customerDocument={documentController.invoice || documentController.estimate}
+        />
+      : <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
     ...(canReadCustomerDocuments ? [{
       id: "customer-documents",
       label: "Documents",
       content: <WorkorderCustomerDocumentsPanel
         actorRole={actor.role}
+        canWrite={activeWorkorder.customerDocumentAccess?.canWrite === true}
         controller={documentController}
         active={officeToolsOpen && officeToolView === "customer-documents"}
-        autoReview
+        autoReview={false}
         companyId={activeWorkorder.workorder.companyId || ""}
         locationId={activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
         workorderId={activeWorkorder.workorder.id}

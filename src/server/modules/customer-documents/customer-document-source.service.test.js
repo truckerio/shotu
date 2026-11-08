@@ -145,3 +145,20 @@ test("primary admin cannot approve manual customer overrides in an office compan
     } },
   ), (error) => error.code === "CUSTOMER_DOCUMENT_PRICE_OVERRIDE_DENIED");
 });
+
+test("Office can read already-selected manual Workorder prices for summary without gaining override authority", async () => {
+  const source = { kind: "workorder", id: draftId, expectedVersion: 3 };
+  const adjustments = { lineDiscounts: [], documentDiscount: null, overrideReasons: [] };
+  const dependencies = {
+    client: { query() {} }, companyId, readOnlyFinancialSource: true,
+    readWorkorderFinancialSource: async () => ({
+      workorder: { id: draftId, companyId, progressVersion: 3, formData: { customerCompanyName: "Customer" }, asset: { unitNo: "G2026" } },
+      labor: { id: "price", productId: "labor", description: "Labor", hours: "3", uomCode: "hr", unitPrice: "100", totalPrice: "300", currency: "USD", selection: "selling_price", manualOverride: true },
+      parts: [], pricingFingerprint: "a".repeat(64),
+    }),
+  };
+  const value = await buildCustomerDocumentSource(context(), source, adjustments, profile, dependencies);
+  assert.equal(value.financial.lines[0].unitPrice, "100");
+  assert.equal(value.financial.lines[0].priceBasis, "customer_override");
+  await assert.rejects(buildCustomerDocumentSource(context(), source, adjustments, profile, { ...dependencies, readOnlyFinancialSource: false }), /reason is required/);
+});

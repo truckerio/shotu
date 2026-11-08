@@ -107,7 +107,9 @@ export function CreateWorkorderPage({
         ? t("create.backMyWork")
         : t("create.backOffice");
   const [activeSection, setActiveSection] = useState(() => defaultCreateWorkorderSection(actor.role));
-  const [customerPreviewOpen, setCustomerPreviewOpen] = useState(false);
+  const [customerPreviewOpen, setCustomerPreviewOpen] = useState(() => (
+    !isMechanicCreate && typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches
+  ));
   const [customerProjection, setCustomerProjection] = useState(null);
   const [customerRevisionId, setCustomerRevisionId] = useState("");
   const [customerLink, setCustomerLink] = useState("");
@@ -195,11 +197,11 @@ export function CreateWorkorderPage({
       recoveredDraftRef.current = "";
       customerEstimateWasPreviewedRef.current = false;
       refreshCustomerEstimateRef.current = false;
-      setCustomerRevisionId(""); setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(false);
+      setCustomerRevisionId(""); setCustomerProjection(null); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(false);
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = "";
     } else if (!customerRevisionId) {
       customerEstimateWasPreviewedRef.current = false;
-      setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
+      setCustomerProjection(null); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = "";
     }
   }, [customerEstimateKey, customerRevisionId, customerSourceReady, savedDraft?.id]);
@@ -274,7 +276,7 @@ export function CreateWorkorderPage({
     updateField("customerDocumentAdjustments", customerDocumentAdjustmentsFromForm(next));
     setCustomerDocumentError("");
     if (!customerRevisionId) {
-      setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
+      setCustomerProjection(null); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
       issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = "";
     }
   }

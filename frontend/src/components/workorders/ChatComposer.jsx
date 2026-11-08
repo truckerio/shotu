@@ -30,6 +30,7 @@ export function ChatComposer({
   cameraLabel = "Take or add photo",
   sendLabel = "Send message",
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
+  maxLength,
   compact = false,
   quickActions = [],
   allowAttachments = true,
@@ -206,6 +207,7 @@ export function ChatComposer({
           id={inputId}
           className="chat-composer-input"
           rows={1}
+          maxLength={maxLength}
           value={body}
           onChange={updateBody}
           onKeyDown={handleKeyDown}

@@ -37,4 +37,5 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
+      - run: npm run test:customer-repair:db
       - run: npm run test:role-filters:browser

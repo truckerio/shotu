@@ -370,3 +370,36 @@ test("accepted Estimate activation uses the named policy and exact draft pricing
   assert.equal(submitCommand.acceptedEstimateRevisionId, revisionId);
   assert.match(activationCommand.requestHash, /^[0-9a-f]{64}$/);
 });
+
+test("summary compares the latest issued pending Estimate independently from invoice acceptance", async () => {
+  const preview = await previewCustomerDocument(context(), {
+    companyId, locationId, source: { kind: "draft", id: draftId, expectedVersion: 1 }, adjustments: {},
+  }, { getProfile: async () => profile(), buildSource: async () => workorderProjection() });
+  const dependencies = {
+    getProfile: async () => profile(), buildSource: async () => workorderProjection(),
+    runIssueTransaction: async (work) => work({ query: async () => ({ rows: [{ status: "accepted", progress_version: 7, classification: "required_external_customer" }] }) }),
+    readSummary: async () => ({ estimate: { id: revisionId, snapshot: preview.projection }, invoice: null }),
+    readAcceptedEstimate: async () => null,
+  };
+  const result = await readCustomerDocumentWorkorderSummary(context(), workorderId, { companyId, locationId }, dependencies);
+  assert.equal(result.reconciliation.invoiceEligible, false);
+  assert.equal(result.reconciliation.requiresRevisedEstimate, true);
+  assert.equal(result.estimateChanges.state, "current");
+  assert.equal(result.estimateChanges.requiresUpdate, false);
+  dependencies.buildSource = async () => { const source = workorderProjection(); source.financial.lines[0].quantity = "3"; return source; };
+  const changed = await readCustomerDocumentWorkorderSummary(context(), workorderId, { companyId, locationId }, dependencies);
+  assert.equal(changed.estimateChanges.state, "changed");
+});
+
+test("summary explicitly exposes incomplete pricing instead of presenting a zero estimate", async () => {
+  const result = await readCustomerDocumentWorkorderSummary(context(), workorderId, { companyId, locationId }, {
+    getProfile: async () => profile(),
+    runIssueTransaction: async (work) => work({ query: async () => ({ rows: [{ status: "accepted", progress_version: 7 }] }) }),
+    readSummary: async () => ({ estimate: { id: revisionId, snapshot: { lines: [] } }, invoice: null }),
+    buildSource: async () => { const error = new Error("Missing price"); error.code = "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED"; throw error; },
+  });
+  assert.equal(result.approvalRequired, null, "Unknown authorization is not an approval exemption");
+  assert.equal(result.estimateChanges.state, "unavailable");
+  assert.equal(result.estimateChanges.blocker, "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+  assert.equal(result.reconciliation.invoiceEligible, false);
+});

@@ -109,7 +109,7 @@ export async function previewWorkorderCustomerDocument({ companyId, locationId, 
       adjustments: normalizedAdjustments(adjustments),
     }),
   });
-  return { projection: customerDocumentProjection(result.projection), reconciliation: result.reconciliation || null };
+  return { projection: customerDocumentProjection(result.projection), contentHash: result.contentHash || "", reconciliation: result.reconciliation || null };
 }
 
 export async function issueWorkorderCustomerDocument({ companyId, locationId, workorderId, expectedVersion, documentType, projection, reconciliation, adjustments, predecessor, recipient, idempotencyKey }) {
