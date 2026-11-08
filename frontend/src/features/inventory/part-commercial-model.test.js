@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { archiveCommand, archivePayload, configuredPriceView, displayMoney, effectiveSellingPrice, eligibleProfiles, locationPriceEditState, previewPayload, pricePayload, priceSourceLabel, profilePayload, purchaseCoverageLabel, readablePreviewBlockers, receiptCostBasisLabel, receiptDateBasisLabel } from "./part-commercial-model.js";
+import { archiveCommand, archivePayload, configuredPriceView, displayMoney, effectiveSellingPrice, eligibleProfiles, locationPriceEditState, previewPayload, pricePayload, priceSourceLabel, profilePayload, purchaseCoverageLabel, readablePreviewBlockers, receiptCostBasisLabel, receiptDateBasisLabel, sellingPolicyLabel, priceHistoryLabel } from "./part-commercial-model.js";
 
 test("configured prices distinguish explicit zero from Unknown", () => {
   assert.notEqual(configuredPriceView({ status: "known", amount: "0.0000", currency: "USD", version: 1 }).label, "Unknown");
@@ -96,4 +96,21 @@ test("archive retries reuse a command only while every command fact matches", ()
 test("an intentionally cleared draft is sent as unknown and blockers are readable", () => {
   assert.deepEqual(previewPayload({ priceKind: "selling", quantity: "1", discountPercent: "0", draft: { amount: "", currency: "", taxTreatment: "not_configured", taxProfileVersionId: "" } }).draft, { amount: null, currency: null, taxTreatment: "not_configured", taxProfileVersionId: null });
   assert.deepEqual(readablePreviewBlockers(["tax_profile_required", "unexpected_code"]), ["Select a tax profile for this taxable price.", "This price cannot be checked until its missing configuration is resolved."]);
+});
+
+test("selling policy labels preserve fixed zero and describe batch markup as a rule", () => {
+  assert.equal(sellingPolicyLabel({ method: "fixed", value: "0", currency: "USD" }), "$0.00");
+  assert.equal(sellingPolicyLabel({ method: null, value: null, currency: null }), "NA");
+  assert.equal(sellingPolicyLabel({ method: "markup_percent", value: "20" }), "20% markup");
+  assert.equal(sellingPolicyLabel({ method: "markup_amount", value: "5", currency: "USD" }), "Add $5.00 to batch cost");
+  assert.equal(sellingPolicyLabel({ method: "markup_percent", value: "20" }, "no_stock"), "NA");
+  const inherited = locationPriceEditState({ writeVersion: 4, usesCompanyDefault: true, override: { current: { amount: "9", version: 4 } }, effective: { amount: "0" } });
+  assert.equal(inherited.expectedVersion, 4);
+  assert.equal(inherited.draft.amount, "0");
+});
+
+test("history labels inherited resets independently of explicit missing and zero", () => {
+  assert.equal(priceHistoryLabel({ usesCompanyDefault: true, amount: null }), "Use company default");
+  assert.equal(priceHistoryLabel({ usesCompanyDefault: false, amount: null }), "Unknown");
+  assert.equal(priceHistoryLabel({ amount: "0", currency: "USD", version: 1 }), "$0.00");
 });

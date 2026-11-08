@@ -97,12 +97,16 @@ export async function readCreatePricing(input, transactionClient = null) {
       const part = input.formData.parts[partIndex];
       const catalog = catalogById.get(part.catalogPartId);
       const scope = [input.companyId, input.locationId, part.catalogPartId, part.uomCode || "ea"];
-      const policy = (await client.query(`select * from inventory_part_selling_policy_versions
+      const policy = (await client.query(`select candidate.* from inventory_part_selling_policy_versions candidate
         where company_id=$1 and catalog_part_id=$3 and (location_id is null or location_id=$2)
+        and not candidate.uses_company_default
+          and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
         order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
-      const configured = (await client.query(`select * from inventory_part_price_versions
+      const configured = (await client.query(`select candidate.* from inventory_part_price_versions candidate
         where company_id=$1 and catalog_part_id=$3 and price_kind='internal'
           and (location_id is null or location_id=$2)
+        and not candidate.uses_company_default
+          and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
         order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
       if (catalog?.tracking_mode === "no_stock") {
         const unitChanged = catalog.uom_code !== (part.uomCode || "ea");

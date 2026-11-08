@@ -15,7 +15,7 @@ export function purchaseCoverageLabel(purchaseCost) { const known = Number(purch
 export function priceSourceLabel(source) { return source === "location_override" ? "Location override" : source === "company_default" ? "Company default" : source === "odoo_catalog" ? "Odoo fallback" : "No saved price"; }
 export function receiptCostBasisLabel(entry) { if (entry?.basis === "source_invoice_line") return "Invoice line"; if (entry?.basis === "source_invoice_line_missing_cost") return "Invoice line · cost missing"; if (entry?.basis === "unpriced_receipt") return "Receipt · cost missing"; return "Receipt evidence"; }
 export function receiptDateBasisLabel(entry) { return entry?.dateBasis === "invoice_date" ? "Invoice date" : "Received"; }
-export function locationPriceEditState(projection) { const override = projection?.override?.current || null; const effective = projection?.effective || projection?.current || null; return { draft: override || effective, expectedVersion: Number(override?.version || 0), effective, override, companyDefault: projection?.companyDefault?.current || null, source: projection?.source || null }; }
+export function locationPriceEditState(projection) { const override = projection?.usesCompanyDefault ? null : projection?.override?.current || null; const effective = projection?.effective || projection?.current || null; return { draft: override || effective, expectedVersion: Number(projection?.writeVersion ?? override?.version ?? 0), effective, override, companyDefault: projection?.companyDefault?.current || null, source: projection?.source || null }; }
 export function effectiveSellingPrice(commercial, locationScoped = false, sellingPolicy = null) {
   if (commercial?.part?.trackingMode === "no_stock") {
     const policy = sellingPolicy?.policy || commercial?.sellingPolicy?.policy;
@@ -35,3 +35,12 @@ export function previewPayload({ priceKind, quantity, discountPercent, draft }) 
 export function readablePreviewBlockers(blockers) { const labels = { price_unknown: "Set a price before checking it.", tax_treatment_required: "Choose a tax treatment.", tax_profile_required: "Select a tax profile for this taxable price.", tax_profile_currency_mismatch: "The tax profile currency must match the price currency.", tax_profile_not_found: "The selected tax profile is no longer available." }; return (blockers || []).map((blocker) => labels[blocker] || "This price cannot be checked until its missing configuration is resolved."); }
 export function archiveCommand(previous, { profileId, expectedVersion, reason, idempotencyKey }) { if (previous?.profileId === profileId && previous.expectedVersion === expectedVersion && previous.reason === reason) return previous; return { profileId, expectedVersion, archived: true, reason, idempotencyKey }; }
 export function archivePayload({ expectedVersion, reason, idempotencyKey }) { return { expectedVersion, archived: true, reason, idempotencyKey }; }
+
+export function sellingPolicyLabel(policy, trackingMode) {
+  if (!policy?.method || (trackingMode === "no_stock" && policy.method !== "fixed")) return "NA";
+  if (policy.method === "markup_percent") return `${Number(policy.value)}% markup`;
+  if (policy.method === "markup_amount") return `Add ${displayMoney(policy.value, policy.currency)} to batch cost`;
+  return displayMoney(policy.value, policy.currency);
+}
+
+export function priceHistoryLabel(price) { return price?.usesCompanyDefault ? "Use company default" : configuredPriceView(price).label; }

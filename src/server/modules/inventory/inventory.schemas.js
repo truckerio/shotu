@@ -34,7 +34,7 @@ function validatePriceTaxShape(value, context) {
   if (value.taxTreatment !== undefined && !["exclusive", "inclusive"].includes(value.taxTreatment) && value.taxProfileVersionId) context.addIssue({ code: "custom", path: ["taxProfileVersionId"], message: "This tax treatment does not use a tax profile." });
 }
 
-export const updateInventoryPartPriceSchema = z.object({
+const inventoryPriceWriteSchema = z.object({
   expectedVersion: z.number().int().min(0),
   amount: inventoryPriceAmountSchema.nullable(),
   currency: inventoryCurrencySchema.nullable(),
@@ -43,6 +43,11 @@ export const updateInventoryPartPriceSchema = z.object({
   reason: z.string().trim().min(2).max(500),
   idempotencyKey: z.string().trim().min(8).max(120),
 }).strict().superRefine(validatePriceTaxShape);
+
+export const updateInventoryPartPriceSchema = z.union([inventoryPriceWriteSchema, z.object({
+  useCompanyDefault: z.literal(true), expectedVersion: z.number().int().min(0),
+  reason: z.string().trim().min(2).max(500), idempotencyKey: z.string().trim().min(8).max(120),
+}).strict()]);
 
 const inventoryTaxRateSchema = z.string().trim()
   .regex(/^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/, "Enter a rate from 0 to 100 with up to four decimal places.")

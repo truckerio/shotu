@@ -43,7 +43,8 @@ test("commercial repository scopes costs by location, includes costless confirme
   assert.match(source, /partition by price_kind, location_id order by version desc/i);
   assert.match(source, /latest: observations\[0\] \|\| null/);
   assert.match(source, /uomCode: part\.uom_code, displayUomCode:/);
-  assert.match(source, /source: locationOverride\.length \? "location_override" : companyDefault\.length \? "company_default"/);
+  assert.match(source, /const usesCompanyDefault = Boolean\(locationId && \(!locationOverride\.length \|\| locationOverride\[0\]\.usesCompanyDefault\)\)/);
+  assert.match(source, /source: locationId && !usesCompanyDefault \? "location_override" : companyDefault\.length \? "company_default"/);
   assert.match(source, /basis: "receipt_line_source_facts"/);
   assert.match(source, /from odoo_purchase_history_lines line/i);
   assert.match(source, /basis: "odoo_purchase_order_lines"/);

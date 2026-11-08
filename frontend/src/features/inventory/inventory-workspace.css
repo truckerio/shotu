@@ -459,3 +459,6 @@
 .inventory-part-number { min-width: 0; overflow-wrap: anywhere; }
 
 .inventory-part-issue-summary { margin: 0; color: #b42318; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.inventory-detail-location-rates { color: #667085; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.inventory-detail-location-rates b { color: #101828; font-weight: 600; }

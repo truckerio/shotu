@@ -42,11 +42,12 @@ async function writeInventoryPartPrice(catalogPartId, locationId, priceKind, raw
   catalogPartId = idSchema.parse(catalogPartId);
   const kind = priceKindSchema.parse(priceKind);
   const input = updateInventoryPartPriceSchema.parse(rawInput);
+  if (input.useCompanyDefault && !locationId) fail("INVENTORY_PART_PRICE_RESET_LOCATION_REQUIRED", "A location is required to restore the company default.", 422);
   const resolvedScope = locationId
     ? await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(context, idSchema.parse(locationId))
     : (dependencies.companyManageScope || inventoryCompanyManageScope)(context);
   const command = {
-    catalogPartId, ...(locationId ? { locationId } : {}), kind, expectedVersion: input.expectedVersion, amount: input.amount, currency: input.currency,
+    catalogPartId, ...(locationId ? { locationId } : {}), kind, expectedVersion: input.expectedVersion, ...(input.useCompanyDefault ? { useCompanyDefault: true } : { amount: input.amount, currency: input.currency }),
     ...(input.taxTreatment === undefined ? {} : { taxTreatment: input.taxTreatment }),
     ...(input.taxProfileVersionId === undefined ? {} : { taxProfileVersionId: input.taxProfileVersionId }),
     reason: input.reason,

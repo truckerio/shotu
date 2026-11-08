@@ -21,7 +21,7 @@ test("no-stock items cannot carry an inherited markup into a fixed-price save", 
 
 test("scope labels distinguish location overrides from company fallback", () => {
   assert.equal(rateSourceLabel("location_override", true), "Location override");
-  assert.equal(rateSourceLabel("company_default", true), "Company fallback");
+  assert.equal(rateSourceLabel("company_default", true), "Company default");
   assert.equal(rateSourceLabel("company_default", false), "Company default");
 });
 

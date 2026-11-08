@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const component = new URL("./PartCommercialDetails.jsx", import.meta.url);
 const styles = new URL("./part-commercial-details.css", import.meta.url);
 const ratesWrapper = new URL("../../components/pricing/PartRatesDialog.jsx", import.meta.url);
-test("commercial details keep batches visible and defer history while sharing one rates action", async () => { const source = await readFile(component, "utf8"); assert.doesNotMatch(source, /<h3>\{locationId \? "Prices" : "Company prices"\}<\/h3>/); assert.match(source, /Purchase history/); assert.match(source, /inventory-commercial-pricing-history/); assert.match(source, /Pricing history/); assert.doesNotMatch(source, /inventory-commercial-pricing-history" open/); assert.match(source, /sellingPolicySummary/); assert.match(source, /<ConfiguredRates/); assert.match(source, />Internal price</); assert.match(source, />Selling price</); assert.match(source, />Set rates</); assert.match(source, /<PartRatesDialog/); assert.doesNotMatch(source, /function SellingPolicyEditor/); assert.doesNotMatch(source, /function NoStockCostEditor/); assert.match(source, /prices\.override\?\.history/); assert.match(source, /prices\.companyDefault\?\.history/); assert.match(source, /Company price defaults/); assert.match(source, /costs\.truncated/); });
+test("commercial details keep batches visible and defer history while sharing one rates action", async () => { const source = await readFile(component, "utf8"); assert.doesNotMatch(source, /<h3>\{locationId \? "Prices" : "Company prices"\}<\/h3>/); assert.match(source, /Purchase history/); assert.match(source, /inventory-commercial-pricing-history/); assert.match(source, /Pricing history/); assert.doesNotMatch(source, /inventory-commercial-pricing-history" open/); assert.match(source, /sellingPolicyLabel/); assert.match(source, /<ConfiguredRates/); assert.match(source, />Internal price</); assert.match(source, />Selling price</); assert.match(source, /Set location rates/); assert.match(source, /<PartRatesDialog/); assert.doesNotMatch(source, /function SellingPolicyEditor/); assert.doesNotMatch(source, /function NoStockCostEditor/); assert.match(source, /prices\.override\?\.history/); assert.match(source, /prices\.companyDefault\?\.history/); assert.match(source, /Company price defaults/); assert.match(source, /costs\.truncated/); });
 
 test("commercial prices show read-only Odoo purchase-order evidence", async () => { const source = await readFile(component, "utf8"); assert.match(source, /details\.purchaseOrders/); assert.match(source, />Odoo purchase orders</); assert.match(source, /entry\.orderNumber/); assert.match(source, /entry\.vendorName/); assert.match(source, /entry\.receivedQuantity/); });
 
@@ -30,8 +30,8 @@ test("rate failures remain retryable while receipt evidence stays read only", as
 
 test("no-stock rates explain why an inherited markup still needs attention", async () => {
   const source = await readFile(new URL("./PartCommercialDetails.jsx", import.meta.url), "utf8");
-  assert.match(source, /fixedPriceRequired = noStock && sellingPolicy\?\.method !== "fixed"/);
-  assert.match(source, /sellingPolicySummary\(fixedPriceRequired \? null : sellingPolicy\)/);
+  assert.match(source, /fixedPriceRequired = noStock && Boolean\(sellingPolicy\) && sellingPolicy\.method !== "fixed"/);
+  assert.match(source, /sellingPolicyLabel\(fixedPriceRequired \? null : sellingPolicy\)/);
   assert.match(source, /Fixed selling price required/);
   assert.match(source, /<ConfiguredRates noStock internal=/);
 });

@@ -82,3 +82,22 @@ test("no-stock markup rejection is returned as a clear validation error", async 
     append: async () => ({ kind: "no_stock_fixed_required" }),
   }), (error) => error.code === "INVENTORY_NO_STOCK_FIXED_PRICE_REQUIRED" && error.statusCode === 422);
 });
+
+test("location reset records inheritance and cannot reset company policy", async () => {
+  let command;
+  const input = { useCompanyDefault: true, expectedVersion: 3, reason: "Restore company rate", idempotencyKey: "reset-policy-123" };
+  await writeSellingPolicy(partId, assignedLocationId, input, context, {
+    resolveLocationScope: async () => ({ companyIds: [companyId], locationIds: [assignedLocationId], isAdmin: false }),
+    append: async (received) => { command = received; return { kind: "saved", policy: { usesCompanyDefault: true }, replayed: false }; },
+  });
+  assert.equal(command.useCompanyDefault, true);
+  await assert.rejects(() => writeSellingPolicy(partId, null, input, context, { append: async () => assert.fail("company reset reached persistence") }));
+});
+
+
+test("selling inheritance reset cannot bypass location authorization", async () => {
+  await assert.rejects(() => writeSellingPolicy(partId, otherLocationId, { useCompanyDefault: true, expectedVersion: 0, reason: "Restore default", idempotencyKey: "reset-denied-policy" }, context, {
+    resolveLocationScope: async () => { const error = new Error("Not found"); error.code = "inventory_not_found"; throw error; },
+    append: async () => assert.fail("unauthorized reset reached persistence"),
+  }), (error) => error.code === "inventory_not_found");
+});

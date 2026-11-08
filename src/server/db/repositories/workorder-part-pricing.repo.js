@@ -178,12 +178,16 @@ export async function readWorkorderPartConfiguredSources(input, transactionClien
            where candidate.company_id=catalog.company_id and candidate.catalog_part_id=catalog.id
              and candidate.price_kind='internal'
              and (candidate.location_id is null or candidate.location_id=$3)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
            order by (candidate.location_id is not null) desc,candidate.version desc limit 1
          ) configured on true
          left join lateral (
            select candidate.* from inventory_part_selling_policy_versions candidate
            where candidate.company_id=catalog.company_id and candidate.catalog_part_id=catalog.id
              and (candidate.location_id is null or candidate.location_id=$3)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
            order by (candidate.location_id is not null) desc,candidate.version desc limit 1
          ) policy on true
         where catalog.company_id=$1 and catalog.id=$2`,
@@ -266,6 +270,8 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          where candidate.company_id=catalog.company_id
            and candidate.catalog_part_id=catalog.id
            and (candidate.location_id is null or candidate.location_id=workorder.location_id)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) policy on true
@@ -275,6 +281,8 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          where candidate.company_id=catalog.company_id
            and candidate.catalog_part_id=catalog.id and candidate.price_kind='internal'
            and (candidate.location_id is null or candidate.location_id=workorder.location_id)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) configured on true
@@ -301,6 +309,8 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          where candidate.company_id=usage.company_id
            and candidate.catalog_part_id=usage.catalog_part_id
            and (candidate.location_id is null or candidate.location_id=usage.location_id)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) policy on true
@@ -310,6 +320,8 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          where candidate.company_id=usage.company_id
            and candidate.catalog_part_id=usage.catalog_part_id and candidate.price_kind='internal'
            and (candidate.location_id is null or candidate.location_id=usage.location_id)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) configured on true

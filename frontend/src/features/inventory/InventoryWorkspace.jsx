@@ -48,7 +48,8 @@ import {
 } from "./inventory-workspace-model.js";
 import { useStockAutoRefresh } from "./useStockAutoRefresh.js";
 import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
-import { configuredPriceView, effectiveSellingPrice } from "./part-commercial-model.js";
+import { configuredPriceView, sellingPolicyLabel } from "./part-commercial-model.js";
+import { rateSourceLabel } from "../../components/pricing/set-rates-model.js";
 import "./inventory-workspace.css";
 
 let inventoryCountPanelPromise;
@@ -272,19 +273,13 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     let active = true;
     const scopeKey = partHeaderPriceScopeKey;
     setPartHeaderPrice({ scopeKey, label: "…" });
-    const params = new URLSearchParams({ limit: "1" });
-    if (selectedLocation?.locationId) params.set("locationId", selectedLocation.locationId);
     const partPath = `/api/office/inventory/parts/${encodeURIComponent(selectedItem.catalogPartId)}`;
-    const commercialRequest = api(`${partPath}/commercial?${params}`);
-    const policyRequest = selectedItem.trackingMode === "no_stock"
-      ? api(`${partPath}/selling-policy${selectedLocation?.locationId ? `?${new URLSearchParams({ locationId: selectedLocation.locationId })}` : ""}`)
-      : Promise.resolve(null);
-    Promise.all([commercialRequest, policyRequest])
-      .then(([commercial, sellingPolicy]) => {
+    const query = selectedLocation?.locationId ? `?${new URLSearchParams({ locationId: selectedLocation.locationId })}` : "";
+    api(`${partPath}/selling-policy${query}`)
+      .then((sellingPolicy) => {
         if (!active) return;
-        const price = effectiveSellingPrice(commercial, Boolean(selectedLocation?.locationId), sellingPolicy);
-        const view = configuredPriceView(price);
-        setPartHeaderPrice({ scopeKey, label: view.label === "Unknown" ? "NA" : view.label });
+        const label = sellingPolicyLabel(sellingPolicy?.policy, selectedItem.trackingMode);
+        setPartHeaderPrice({ scopeKey, label: !selectedLocation?.locationId && sellingPolicy?.hasLocationOverrides ? `${label} · Location rates may vary` : label, locationRates: sellingPolicy?.locationRates });
       })
       .catch(() => {
         if (active) setPartHeaderPrice({ scopeKey, label: "—" });
@@ -333,11 +328,20 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     closeSelectedPart();
   }
 
+  function locationRatesSummary(id) {
+    if (partHeaderPrice.scopeKey !== partHeaderPriceScopeKey || partHeaderPrice.label === "…") return <small>Loading rates…</small>;
+    const rates = partHeaderPrice.locationRates?.find((entry) => entry.locationId === id);
+    if (!rates) return <small>Rates unavailable</small>;
+    const internal = configuredPriceView(rates.internal).label;
+    const selling = sellingPolicyLabel(rates.selling, selectedItem.trackingMode);
+    return <small className="inventory-detail-location-rates">Internal <b>{internal === "Unknown" ? "NA" : internal}</b> · {rateSourceLabel(rates.internal?.source, true)} <span aria-hidden="true">|</span> Selling <b>{selling}</b> · {rateSourceLabel(rates.selling?.source, true)}</small>;
+  }
+
   function partLocationRow(location) {
     const canManage = manageableLocationIds.has(location.locationId);
     return <div className="inventory-detail-location-row" key={location.locationId}>
       <button type="button" onClick={() => setSelectedLocationId(location.locationId)}>
-        <div><span className="inventory-detail-location-name"><strong>{location.locationName}</strong>{!canManage ? <span className="inventory-view-only-badge">View only</span> : null}</span><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available{Number(location.odooQuantityOnHand || 0) > 0 ? <> · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</> : null}</small></div>
+        <div><span className="inventory-detail-location-name"><span>{location.locationName}</span>{!canManage ? <span className="inventory-view-only-badge">View only</span> : null}</span><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available{Number(location.odooQuantityOnHand || 0) > 0 ? <> · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</> : null}</small>{locationRatesSummary(location.locationId)}</div>
         <ChevronRight aria-hidden="true" />
       </button>
       {canManage ? <PartLocationSettings part={selectedItem} location={location} onOpenShelves={() => { setSelectedLocationId(location.locationId); setShelvingOpen(true); }} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} /> : null}
@@ -704,7 +708,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         eyebrow={null}
         title={selectedItem?.partNumber || "Part"}
         description={selectedItem?.description || "No description"}
-        status={selectedItem ? <span className="inventory-part-header-status"><span className="inventory-part-header-price">Selling · {headerPriceLabel}{!["NA", "—", "…"].includes(headerPriceLabel) ? ` / ${selectedItem.uomCode || "unit"}` : ""}</span>{selectedLocationReadOnly ? <span className="inventory-view-only-badge">View only</span> : null}</span> : null}
+        status={selectedItem ? <span className="inventory-part-header-status"><span className="inventory-part-header-price">{selectedLocation ? "Selling" : "Company default selling"} · {headerPriceLabel}</span>{selectedLocationReadOnly ? <span className="inventory-view-only-badge">View only</span> : null}</span> : null}
         footer={null}
         dismissable={!partIdentityBusy && !partIdentityDirty}
         closeDisabled={partIdentityBusy || partIdentityDirty}
@@ -765,15 +769,15 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               </div>
               {Number(selectedItem.odooQuantityOnHand || 0) > 0 ? <p className="inventory-detail-provider-stock">Odoo · read-only · {quantity(selectedItem.odooQuantityOnHand)} {selectedItem.uomCode}</p> : null}
             </section>}
+            <PartCommercialDetails key={`${selectedItem.catalogPartId}:company-defaults`} part={selectedItem} readOnly={!selectedCompanyCanManage} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
             {selectedItem.trackingMode === "no_stock" && noStockLocations.length ? <details className="inventory-no-stock-locations">
-              <summary>Location prices</summary>
-              <div className="inventory-detail-locations">{noStockLocations.map((location) => <div className="inventory-detail-location-row" key={location.id}><button type="button" onClick={() => setSelectedLocationId(location.id)}><span className="inventory-detail-location-name"><span>{location.name}</span>{location.canManage === false ? <span className="inventory-view-only-badge">View only</span> : null}</span></button></div>)}</div>
+              <summary>Locations</summary>
+              <div className="inventory-detail-locations">{noStockLocations.map((location) => <div className="inventory-detail-location-row" key={location.id}><button type="button" onClick={() => setSelectedLocationId(location.id)}><div><span className="inventory-detail-location-name"><span>{location.name}</span>{location.canManage === false ? <span className="inventory-view-only-badge">View only</span> : null}</span>{locationRatesSummary(location.id)}</div></button></div>)}</div>
             </details> : null}
             {selectedItem.trackingMode !== "no_stock" ? <SecondaryDetailSection title="Locations">
               {stockedLocations.length ? <div className="inventory-detail-locations">{stockedLocations.map(partLocationRow)}</div> : <p className="inventory-detail-empty">No stock at any location.</p>}
               {otherLocations.length ? <details className="inventory-detail-other-locations"><summary>Other locations <span>{otherLocations.length}</span></summary><div className="inventory-detail-locations">{otherLocations.map(partLocationRow)}</div></details> : null}
             </SecondaryDetailSection> : null}
-            <PartCommercialDetails key={`${selectedItem.catalogPartId}:company-defaults`} part={selectedItem} readOnly={!selectedCompanyCanManage} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
           </> : null}
 
           {partDetailPage === "activity" ? <section className="inventory-stock-activity-page" aria-labelledby="inventory-audit-log-heading">

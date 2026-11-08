@@ -95,8 +95,8 @@ function App(){const[serial,setSerial]=useState(false),[measured,setMeasured]=us
   const page = await context.newPage(); page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => console.error(`Client error: ${error.message}`));
   await page.goto(`${uiUrl.origin}/.shared-rates-live.html`);
-  await page.getByRole("button", { name: "Set rates", exact: true }).click();
-  const rates = page.getByRole("dialog", { name: "Set rates", exact: true });
+  await page.getByRole("button", { name: "Set location rates", exact: true }).click();
+  const rates = page.getByRole("dialog", { name: "Set location rates", exact: true });
   await rates.getByLabel("Amount", { exact: true }).fill("95");
   await rates.getByLabel("Reason", { exact: true }).fill("Browser verified selling rate");
   await rates.getByRole("button", { name: "Save", exact: true }).click();
@@ -121,7 +121,7 @@ function App(){const[serial,setSerial]=useState(false),[measured,setMeasured]=us
   assert.equal(await savedOption.locator(".dropdown-select-check").count(), 0);
   assert.equal(await savedOption.getAttribute("data-selected"), "true");
   await page.getByRole("option", { name: "Set rates…", exact: true }).click();
-  const savedRates = page.getByRole("dialog", { name: "Set rates", exact: true });
+  const savedRates = page.getByRole("dialog", { name: "Set location rates", exact: true });
   await savedRates.getByLabel("Amount", { exact: true }).fill("100");
   await savedRates.getByLabel("Reason", { exact: true }).fill("Update configured rate without repricing saved work");
   await savedRates.getByRole("button", { name: "Save", exact: true }).click();
@@ -156,6 +156,28 @@ function App(){const[serial,setSerial]=useState(false),[measured,setMeasured]=us
   const aggregateSnapshot = (await pool.query("select selection,configured_price_version_id from workorder_part_price_snapshots where workorder_id=$1 and aggregate_usage_id is not null", [workorder.id])).rows[0];
   assert.equal(aggregateSnapshot.selection, "internal_cost"); assert.ok(aggregateSnapshot.configured_price_version_id);
   console.log("PASS real quantity allocation preview -> internal source -> atomic price snapshot");
+  const beforeReset = (await pool.query("select id,unit_price,selection from workorder_part_price_snapshots where workorder_id=$1 order by created_at,id", [workorder.id])).rows;
+  const priceBase = `/api/office/inventory/parts/${fixture.serializedPartId}`;
+  const companyPolicy = await client.request(`${priceBase}/selling-policy`);
+  await client.request(`${priceBase}/selling-policy`, {method:"PUT",body:{expectedVersion:companyPolicy.body.writeVersion,method:"fixed",value:"80",currency:"USD",reason:"Company default after saved work",idempotencyKey:randomUUID()}});
+  const scopedPolicy = await client.request(`${priceBase}/selling-policy?locationId=${fixture.locationId}`);
+  await client.request(`${priceBase}/selling-policy?locationId=${fixture.locationId}`, {method:"PUT",body:{useCompanyDefault:true,expectedVersion:scopedPolicy.body.writeVersion,reason:"Restore company selling default",idempotencyKey:randomUUID()}});
+  const scopedCommercial = await client.request(`${priceBase}/commercial?locationId=${fixture.locationId}`);
+  const internalPath = `${priceBase}/locations/${fixture.locationId}/prices/internal`;
+  await client.request(internalPath,{method:"PUT",body:{amount:"99",currency:"USD",taxTreatment:"not_configured",expectedVersion:scopedCommercial.body.prices.internal.writeVersion,reason:"Temporary local internal rate",idempotencyKey:randomUUID()}});
+  const localInternal = await client.request(`${priceBase}/commercial?locationId=${fixture.locationId}`);
+  await client.request(internalPath,{method:"PUT",body:{useCompanyDefault:true,expectedVersion:localInternal.body.prices.internal.writeVersion,reason:"Restore company internal default",idempotencyKey:randomUUID()}});
+  const inherited = await client.request(`${priceBase}/commercial?locationId=${fixture.locationId}`);
+  assert.equal(inherited.body.prices.internal.source,"company_default");
+  const usageId = await page.evaluate(()=>window.addedUsage?.id);
+  // Reload cleared the harness window value; the saved serial usage remains in the DB.
+  const serialUsage = usageId || (await pool.query("select serialized_usage_id from workorder_part_price_snapshots where workorder_id=$1 and serialized_usage_id is not null limit 1",[workorder.id])).rows[0].serialized_usage_id;
+  const nextPreview = await client.request(`/api/workorders/${workorder.id}/modules/parts/actions/record`, {method:"POST",body:{operation:"partPricingPreview",usageKind:"serialized",usageId:serialUsage}});
+  const preview = nextPreview.body.result || nextPreview.body;
+  assert.equal(Number(preview.options.selling_price.price.unitPrice),80,"future Workorder preview uses restored company selling default");
+  assert.equal(Number(preview.options.internal_cost.price.unitPrice),Number(inherited.body.prices.internal.effective.amount),"future preview uses restored company internal default");
+  assert.deepEqual((await pool.query("select id,unit_price,selection from workorder_part_price_snapshots where workorder_id=$1 order by created_at,id",[workorder.id])).rows,beforeReset,"rate resets cannot rewrite saved Workorder snapshots");
+  console.log("PASS company-default resets update future Workorder previews and preserve all saved price snapshots");
   await page.screenshot({ path: `${output}/completed.png` });
   console.log(`Live browser/API gate passed; evidence ${output}`);
 } finally {
