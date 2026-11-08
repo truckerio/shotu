@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { seedWorkorderDocumentsFixture } from './workorder-documents-fixture.js';
+import { seedMaintenanceFixture } from './inspection-maintenance-fixture.js';
+import { getPool,closePool } from '../../src/server/db/pool.js';
+import { readCustomerDocumentWorkorderSummary } from '../../src/server/modules/customer-documents/customer-documents.service.js';
+import { permissionsForRole } from '../../src/server/auth/permissions.js';
+const enabled=process.env.RUN_INSPECTION_MAINTENANCE_INTEGRATION==='1';
+test('Documents browser fixture requires the disposable test database',async()=>{const original=process.env.RUN_INSPECTION_MAINTENANCE_INTEGRATION;delete process.env.RUN_INSPECTION_MAINTENANCE_INTEGRATION;try{await assert.rejects(seedWorkorderDocumentsFixture(null,{}),/disposable|DATABASE_URL/);}finally{if(original===undefined)delete process.env.RUN_INSPECTION_MAINTENANCE_INTEGRATION;else process.env.RUN_INSPECTION_MAINTENANCE_INTEGRATION=original;}});
+test('real Documents fixture issues a scoped Estimate readable by the app',{skip:!enabled},async()=>{const pool=getPool();try {const f=await seedMaintenanceFixture(pool);await pool.query("update user_company_memberships set company_id=$2,role='admin' where user_id=$1",[f.otherOfficeId,f.companyId]);const result=await seedWorkorderDocumentsFixture(pool,f);const context={actor:{id:f.otherOfficeId,role:'admin'},companyIds:new Set([f.companyId]),companyRoles:new Map([[f.companyId,'admin']]),locationIds:new Set([f.locationId]),permissions:permissionsForRole('admin')};const summary=await readCustomerDocumentWorkorderSummary(context,result.workorderId,{companyId:f.companyId,locationId:f.locationId});assert.equal(summary.documents.estimate.id,result.revisionId);assert.equal(Number(summary.documents.estimate.totalAmount),100);assert.equal(summary.documents.invoice,null);}finally{await closePool();}});

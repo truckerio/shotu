@@ -12,6 +12,13 @@ export function permissionForRequest(method, pathname) {
   if (pathname === "/api/customer-portal/document" && method === "GET") return null;
   if (pathname === "/api/customer-portal/responses" && method === "POST") return null;
   if (pathname === "/api/customer-portal/chat" && ["GET", "POST"].includes(method)) return null;
+  if (pathname === "/api/customer-repair/portal" && method === "GET") return null;
+  if (pathname === "/api/customer-repair/portal/responses" && method === "POST") return null;
+  if (pathname === "/api/customer-repair/portal/chat" && ["GET", "POST"].includes(method)) return null;
+  if (pathname === "/api/customer-repair/export" && method === "GET") return null;
+  if (pathname === "/api/customer-portal/export" && method === "GET") return null;
+  if (pathname === "/api/customer-documents/export" && method === "POST") return PERMISSION.CUSTOMER_DOCUMENT_READ;
+  if (pathname.startsWith("/api/customer-repair/")) return PERMISSION.CUSTOMER_DOCUMENT_WRITE;
   if (pathname.startsWith("/api/integrations/odoo/v1/")) return null;
   if (pathname.startsWith("/api/integrations/")) return PERMISSION.INTEGRATION_ADMIN;
   if (pathname.startsWith("/api/admin/")) return PERMISSION.ADMIN_MANAGE;

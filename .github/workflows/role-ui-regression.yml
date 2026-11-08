@@ -37,6 +37,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
+      - run: npm run test:customer-repair:db
       - run: node scripts/qa/inventory-price-presentation.browser.js
       - run: npm run test:role-filters:browser
       - run: node scripts/qa/run-inspection-maintenance-integration.js --browser-script scripts/qa/batch-navigation.browser.js

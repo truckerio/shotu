@@ -55,6 +55,9 @@ import { handleProductModulesApi } from "./src/server/routes/product-modules.rou
 import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
 import { handleLaborProductsApi } from "./src/server/routes/labor-products.routes.js";
 import { handleActivityApi } from "./src/server/routes/activity.routes.js";
+import { handleCustomerDocumentExportApi } from "./src/server/routes/customer-document-export.routes.js";
+import { handleCustomerRepairPortalApi } from "./src/server/routes/customer-repair-portal.routes.js";
+import { readCustomerRepairPortal } from "./src/server/modules/customer-repair-portal/customer-repair-portal.service.js";
 import { handleCustomerDocumentsApi } from "./src/server/routes/customer-documents.routes.js";
 import { handleCustomerDirectoryApi } from "./src/server/routes/customer-directory.routes.js";
 import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
@@ -769,6 +772,8 @@ async function handleApi(req, res) {
   if (await handleInspectionTemplatesApi(req, res, url, helpers)) return;
   if (await handleKioskApi(req, res, url, helpers)) return;
   if (await handleConfigApi(req, res, url, helpers)) return;
+  if (await handleCustomerDocumentExportApi(req, res, url, helpers, { renderHtmlToPdf, tempDir, readRepairPortal: readCustomerRepairPortal })) return;
+  if (await handleCustomerRepairPortalApi(req, res, url, helpers)) return;
   if (await handleCustomerDocumentsApi(req, res, url, helpers)) return;
   if (await handleCustomerDirectoryApi(req, res, url, helpers)) return;
   if (await handleVehiclesApi(req, res, url, helpers)) return;

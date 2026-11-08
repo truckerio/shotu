@@ -1,4 +1,5 @@
 export function customerDocumentMoney(value, currency = "USD") {
+  if (value === null || value === undefined || value === "") return "—";
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(amount);
@@ -29,6 +30,7 @@ export function customerDocumentProjection(value = {}) {
   const lines = Array.isArray(value.lines) ? value.lines.map((line, index) => ({
     id: line.id || `line-${index + 1}`,
     description: String(line.description || "Repair item"),
+    ...(line.kind || line.lineType || line.type ? { kind: line.kind || line.lineType || line.type } : {}),
     quantity: line.quantity ?? "",
     unit: line.unit || "",
     unitPrice: line.unitPrice ?? null,
@@ -53,8 +55,9 @@ export function customerDocumentProjection(value = {}) {
     subtotal: totals.subtotal ?? null, discount: totals.discountTotal ?? totals.discount ?? null, tax: totals.tax ?? null,
     total: totals.total ?? null, terms: String(value.terms || ""),
     authorizationText: String(value.authorizationText || ""),
+    warrantyText: String(value.warrantyText || ""), footer: String(value.footer || ""),
     financialFingerprint: String(value.financialFingerprint || ""),
-    documentId: String(document.id || ""),
+    documentId: String(document.id || document.documentId || ""),
     revisionId: String(document.revisionId || ""),
     response: value.response && typeof value.response === "object" ? {
       status: String(value.response.status || "pending"),

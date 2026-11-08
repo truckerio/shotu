@@ -1,4 +1,10 @@
+import { resolveAuthCookiePrefix } from "../../auth/config.js";
+
 export const KIOSK_DEVICE_COOKIE = "workorder.kiosk_device";
+
+function deviceCookieName(environment) {
+  return `${resolveAuthCookiePrefix(environment)}.kiosk_device`;
+}
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 function cookieValue(header, name) {
@@ -17,14 +23,14 @@ function cookieValue(header, name) {
   return "";
 }
 
-export function kioskDeviceTokenFromCookie(header) {
-  const token = cookieValue(header, KIOSK_DEVICE_COOKIE);
+export function kioskDeviceTokenFromCookie(header, environment = process.env) {
+  const token = cookieValue(header, deviceCookieName(environment));
   return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : "";
 }
 
 export function kioskDeviceCookie(token, environment = process.env) {
   const attributes = [
-    `${KIOSK_DEVICE_COOKIE}=${encodeURIComponent(token)}`,
+    `${deviceCookieName(environment)}=${encodeURIComponent(token)}`,
     "Path=/",
     `Max-Age=${ONE_YEAR_SECONDS}`,
     "HttpOnly",
@@ -36,7 +42,7 @@ export function kioskDeviceCookie(token, environment = process.env) {
 
 export function expiredKioskDeviceCookie(environment = process.env) {
   const attributes = [
-    `${KIOSK_DEVICE_COOKIE}=`,
+    `${deviceCookieName(environment)}=`,
     "Path=/",
     "Max-Age=0",
     "HttpOnly",

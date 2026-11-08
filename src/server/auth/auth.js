@@ -78,7 +78,7 @@ export const auth = betterAuth({
     },
   },
   advanced: {
-    cookiePrefix: "workorder",
+    cookiePrefix: config.cookiePrefix,
     useSecureCookies: config.secureCookies,
     ...(config.ipAddressHeaders.length ? {
       ipAddress: { ipAddressHeaders: config.ipAddressHeaders },

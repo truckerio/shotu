@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { loadStaffRepairChat, sendStaffRepairChat } from "../customer-portal/customer-repair-api.js";
+import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
+import { ChatThread } from "../../components/workorders/ChatThread.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import {
   customerDocumentCommandKey,
@@ -6,28 +9,12 @@ import {
   sendWorkorderCustomerChat,
 } from "./customer-estimate-api.js";
 
-function senderLabel(message) {
-  if (message.senderName) return message.senderName;
-  return (message.senderType || message.senderRole) === "customer" ? "Customer" : "Shop team";
-}
-
-function senderClass(message) {
-  return (message.senderType || message.senderRole) === "customer" ? "is-customer" : "is-staff";
-}
-
-function messageTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
-}
-
-export function WorkorderCustomerChat({ companyId, locationId, workorderId, document }) {
+export function WorkorderCustomerChat({ companyId, locationId, workorderId, document, canSend = false, repairScope = false }) {
   const [messages, setMessages] = useState([]);
-  const [body, setBody] = useState("");
   const [state, setState] = useState({ loading: true, sending: false, error: "" });
   const messageKey = useRef(customerDocumentCommandKey("staff-customer-chat"));
-  const documentId = document?.documentId;
-  const revisionId = document?.id;
+  const documentId = repairScope ? "repair" : document?.documentId;
+  const revisionId = repairScope ? "repair" : document?.id;
   const scopeKey = `${companyId || ""}:${locationId || ""}:${workorderId || ""}:${documentId || ""}:${revisionId || ""}`;
   const scopeKeyRef = useRef(scopeKey);
   scopeKeyRef.current = scopeKey;
@@ -37,7 +24,7 @@ export function WorkorderCustomerChat({ companyId, locationId, workorderId, docu
     const requestedScope = scopeKey;
     setState((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const result = await readWorkorderCustomerChat({ companyId, locationId, workorderId, documentId, revisionId });
+      const result = await (repairScope ? loadStaffRepairChat({ companyId, locationId, workorderId }) : readWorkorderCustomerChat({ companyId, locationId, workorderId, documentId, revisionId }));
       if (scopeKeyRef.current !== requestedScope) return;
       setMessages(result.messages || []);
       setState((current) => ({ ...current, loading: false }));
@@ -45,10 +32,11 @@ export function WorkorderCustomerChat({ companyId, locationId, workorderId, docu
       if (scopeKeyRef.current !== requestedScope) return;
       setState((current) => ({ ...current, loading: false, error: error.message || "Customer messages could not be loaded." }));
     }
-  }, [companyId, locationId, workorderId, documentId, revisionId, scopeKey]);
+  }, [companyId, locationId, workorderId, documentId, revisionId, scopeKey, repairScope]);
 
   useEffect(() => {
     let active = true;
+    messageKey.current = customerDocumentCommandKey("staff-customer-chat");
     if (!documentId || !revisionId) {
       setMessages([]);
       setState({ loading: false, sending: false, error: "" });
@@ -56,7 +44,7 @@ export function WorkorderCustomerChat({ companyId, locationId, workorderId, docu
     }
     setMessages([]);
     setState({ loading: true, sending: false, error: "" });
-    readWorkorderCustomerChat({ companyId, locationId, workorderId, documentId, revisionId }).then((result) => {
+    (repairScope ? loadStaffRepairChat({ companyId, locationId, workorderId }) : readWorkorderCustomerChat({ companyId, locationId, workorderId, documentId, revisionId })).then((result) => {
       if (active) {
         setMessages(result.messages || []);
         setState({ loading: false, sending: false, error: "" });
@@ -65,57 +53,64 @@ export function WorkorderCustomerChat({ companyId, locationId, workorderId, docu
       if (active) setState({ loading: false, sending: false, error: error.message || "Customer messages could not be loaded." });
     });
     return () => { active = false; };
-  }, [companyId, locationId, workorderId, documentId, revisionId]);
+  }, [companyId, locationId, workorderId, documentId, revisionId, repairScope]);
 
-  async function send(event) {
-    event.preventDefault();
+  async function send({ body, clientMessageId }) {
     const trimmedBody = body.trim();
-    if (!trimmedBody || state.sending || !documentId || !revisionId) return;
+    if (!canSend || !trimmedBody || state.sending || state.loading || !documentId || !revisionId) return false;
     const requestedScope = scopeKey;
     setState((current) => ({ ...current, sending: true, error: "" }));
     try {
-      const result = await sendWorkorderCustomerChat({
-        companyId, locationId, workorderId, documentId, revisionId,
+      const result = await (repairScope ? sendStaffRepairChat : sendWorkorderCustomerChat)({
+        companyId, locationId, workorderId, ...(repairScope ? {} : { documentId, revisionId }),
         body: trimmedBody,
-        idempotencyKey: messageKey.current,
+        idempotencyKey: clientMessageId || messageKey.current,
       });
-      if (scopeKeyRef.current !== requestedScope) return;
+      if (scopeKeyRef.current !== requestedScope) return false;
       messageKey.current = customerDocumentCommandKey("staff-customer-chat");
-      setBody("");
       setMessages((current) => result.message ? [...current.filter((message) => message.id !== result.message.id), result.message] : current);
       setState((current) => ({ ...current, sending: false }));
+      return true;
     } catch (error) {
-      if (scopeKeyRef.current !== requestedScope) return;
+      if (scopeKeyRef.current !== requestedScope) return false;
       setState((current) => ({ ...current, sending: false, error: error.message || "The customer message was not sent." }));
+      return false;
     }
   }
 
-  if (!documentId || !revisionId) return null;
-  return <section className="workorder-customer-chat" aria-labelledby="workorder-customer-chat-title">
+  if (!documentId || !revisionId || (repairScope && !document?.id)) return <section className="workorder-customer-chat" aria-label="Customer chat">
+    <p className="workorder-customer-chat-audience">Visible to customer</p>
+    <p className="workorder-customer-chat-empty">No issued customer document yet.</p>
+  </section>;
+  return <section className="workorder-customer-chat" aria-label="Customer chat">
     <header>
-      <div>
-        <p className="workorder-customer-chat-audience">Customer audience</p>
-        <h3 id="workorder-customer-chat-title">Customer messages</h3>
-        <p>Visible to the customer through their secure document link. This is separate from internal Workorder chat and does not approve or change the document response.</p>
-      </div>
-      <Button variant="secondary" type="button" onClick={load} disabled={state.loading || state.sending}>Refresh messages</Button>
+      <p className="workorder-customer-chat-audience">Visible to customer</p>
+      <Button variant="secondary" type="button" onClick={load} disabled={state.loading || state.sending}>Refresh</Button>
     </header>
-    {state.loading ? <p role="status">Loading customer messages…</p> : null}
-    {!state.loading && messages.length === 0 ? <p className="workorder-customer-chat-empty">No customer-audience messages yet.</p> : null}
-    {messages.length ? <ol className="workorder-customer-chat-list" aria-label="Customer-audience message history">
-      {messages.map((message) => {
-        const time = messageTime(message.createdAt);
-        return <li key={message.id} className={senderClass(message)}>
-          <div><strong>{senderLabel(message)}</strong>{time ? <time dateTime={message.createdAt}>{time}</time> : null}</div>
-          <p>{message.body}</p>
-        </li>;
-      })}
-    </ol> : null}
     {state.error ? <p role="alert" className="workorder-customer-document-error">{state.error}</p> : null}
-    <form className="workorder-customer-chat-form" onSubmit={send}>
-      <label htmlFor="workorder-customer-chat-message">Message to customer</label>
-      <textarea id="workorder-customer-chat-message" value={body} onChange={(event) => setBody(event.target.value)} rows="3" maxLength="5000" required disabled={state.sending} />
-      <div><span>{body.length}/5000</span><Button variant="primary" type="submit" disabled={state.sending || !body.trim()}>{state.sending ? "Sending…" : "Send to customer"}</Button></div>
-    </form>
+    <div className="chat-content">
+      <ChatThread
+        messages={messages.map((message) => ({
+          id: message.id,
+          body: message.body,
+          createdAt: message.createdAt,
+          senderName: message.senderName || ((message.senderType || message.senderRole) === "customer" ? "Customer" : "Shop team"),
+          senderRole: (message.senderType || message.senderRole) === "customer" ? "customer" : "staff",
+        }))}
+        currentRole="shop-viewer"
+        empty={state.loading ? "Loading customer messages…" : "No customer messages yet."}
+      />
+      {canSend ? <ChatComposer
+        key={scopeKey}
+        onSend={send}
+        disabled={state.loading}
+        sending={state.sending}
+        textareaLabel="Message to customer"
+        placeholder="Write a message..."
+        sendLabel="Send to customer"
+        maxLength={5000}
+        allowAttachments={false}
+      /> : null}
+    </div>
   </section>;
 }

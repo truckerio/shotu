@@ -1,0 +1,14 @@
+.workorder-chat-workspace{display:grid;gap:12px;min-width:0}
+.workorder-chat-workspace [hidden]{display:none!important}
+.workorder-chat-audiences{display:flex;gap:4px;padding:3px;border-radius:8px;background:#f2f4f7}
+.workorder-chat-audiences button{flex:1;min-height:34px;border:0;border-radius:6px;background:transparent;color:#52606d;font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.workorder-chat-audiences button[aria-selected="true"]{background:#fff;color:#17212f;box-shadow:0 1px 3px rgba(16,24,40,.12)}
+.workorder-chat-audiences button:focus-visible{outline:2px solid #175cd3;outline-offset:2px}
+.workorder-chat-workspace .workorder-customer-chat{padding:0;border:0;background:transparent;gap:10px}
+.workorder-chat-workspace .workorder-customer-chat>header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.workorder-chat-workspace .workorder-customer-chat-audience{background:#e8f3ff;color:#175cd3}
+.workorder-chat-workspace .workorder-customer-chat-empty{padding:8px 10px}
+@media(max-width:700px){.workorder-chat-workspace .workorder-customer-chat>header{display:flex}.workorder-chat-workspace .workorder-customer-chat>header .button{width:auto;min-height:34px}}
+
+.workorder-chat-workspace .chat-content{display:grid;min-width:0;gap:12px}
+.workorder-chat-workspace .chat-content>.chat-thread-surface>.chat-thread{height:clamp(120px,30vh,320px);min-height:120px;max-height:320px}

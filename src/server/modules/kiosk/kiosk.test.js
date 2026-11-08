@@ -122,3 +122,19 @@ test("admin routes expose exact scoped registration, revocation, and PIN contrac
   assert.match(source, /sendJson\(res, 201, \{ device: registered\.device \}\)/);
   assert.doesNotMatch(source, /sendJson\([^)]*registered\.token/);
 });
+
+test("alternate local kiosk registration and expiry cannot replace the primary device cookie", () => {
+  const primary = { NODE_ENV: "test", BETTER_AUTH_URL: "http://localhost:4173" };
+  const alternate = { NODE_ENV: "test", BETTER_AUTH_URL: "http://localhost:4192" };
+  const primaryToken = createKioskDeviceToken();
+  const alternateToken = createKioskDeviceToken();
+  const primaryCookie = kioskDeviceCookie(primaryToken, primary).split(";")[0];
+  const alternateCookie = kioskDeviceCookie(alternateToken, alternate).split(";")[0];
+  assert.notEqual(primaryCookie.split("=")[0], alternateCookie.split("=")[0]);
+  const sharedCookies = `${primaryCookie}; ${alternateCookie}`;
+  assert.equal(kioskDeviceTokenFromCookie(sharedCookies, primary), primaryToken);
+  assert.equal(kioskDeviceTokenFromCookie(sharedCookies, alternate), alternateToken);
+  assert.equal(kioskDeviceTokenFromCookie(primaryCookie, alternate), "");
+  assert.equal(expiredKioskDeviceCookie(alternate).split("=")[0], alternateCookie.split("=")[0]);
+  assert.equal(expiredKioskDeviceCookie(primary).split("=")[0], "workorder.kiosk_device");
+});

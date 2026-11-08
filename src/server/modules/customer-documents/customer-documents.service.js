@@ -8,7 +8,7 @@ import { readCreatePricing } from "../../db/repositories/workorder-create-pricin
 import * as repository from "../../db/repositories/customer-documents.repo.js";
 import { buildCustomerDocumentProjection } from "./customer-document-projection.js";
 import { buildCustomerDocumentSource } from "./customer-document-source.service.js";
-import { reconcileWorkorderEstimate } from "./customer-document-reconciliation.js";
+import { compareLatestIssuedEstimate, reconcileWorkorderEstimate } from "./customer-document-reconciliation.js";
 import { submitWorkorderDraftInTransaction } from "../../db/repositories/workorder-drafts.repo.js";
 import { prepareUserWorkorderDraftSubmission } from "../workorders/workorder-drafts.service.js";
 import { WORKORDER_ACTIVATION_POLICY } from "../../../../shared/customer-document-contract.js";
@@ -580,17 +580,21 @@ export async function readCustomerDocumentWorkorderSummary(context, rawWorkorder
     const read = dependencies.readSummary || repository.getCustomerDocumentSummaryByWorkorder;
     const documents = await read({ ...input, workorderId }, { query: client.query.bind(client) });
     let reconciliation;
+    let estimateChanges;
     try {
       const sourceInput = await (dependencies.buildSource || buildCustomerDocumentSource)(
-        context, source, { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile, txDependencies,
+        context, source, { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile, { ...txDependencies, readOnlyFinancialSource: true },
       );
-      const actual = buildCustomerDocumentProjection(trustedProjectionInput(sourceInput, profile, "draft_projection")).projection;
+      const trustedSource = trustedProjectionInput(sourceInput, profile, "draft_projection");
+      const actual = buildCustomerDocumentProjection(trustedSource).projection;
+      estimateChanges = compareLatestIssuedEstimate({ sourceInput: trustedSource, latestEstimate: documents.estimate });
       const accepted = await (dependencies.readAcceptedEstimate || repository.getCurrentAcceptedEstimateForWorkorder)(
         { ...input, workorderId }, { client },
       );
       reconciliation = reconcileWorkorderEstimate({ actualSource: actual, acceptedEstimate: accepted });
     } catch (error) {
       if (!["CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", "CUSTOMER_DOCUMENT_EMPTY_ESTIMATE"].includes(error?.code)) throw error;
+      estimateChanges = { state: "unavailable", requiresUpdate: false, changedFields: [], latestEstimateRevisionId: documents.estimate?.id || null, blocker: error.code };
       reconciliation = {
         status: "financial_source_incomplete",
         invoiceEligible: false,
@@ -605,9 +609,10 @@ export async function readCustomerDocumentWorkorderSummary(context, rawWorkorder
       status: locked.status,
       workorderVersion: locked.progressVersion,
       authorizationClassification: workorder.classification || null,
-      approvalRequired: workorder.classification === "required_external_customer",
+      approvalRequired: workorder.classification ? workorder.classification === "required_external_customer" : null,
       documents,
       reconciliation,
+      estimateChanges,
     };
   }, dependencies);
 }

@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
+import { seedWorkorderDocumentsFixture } from "./workorder-documents-fixture.js";
+import { checkRepairLinkControls, checkCustomerRepairPortal, issueEstimateRevisionForCheck, checkDocumentMenuInDialog } from "./customer-repair-workspace.browser-checks.js";
+import { checkWorkorderDocumentsWorkspace } from "./workorder-documents-workspace.browser-checks.js";
+import { checkCommercialProfileCompact, checkCommercialProfileLayout } from "./commercial-profile-layout.browser-checks.js";
+import { checkWorkorderPanelDefaults } from "./workorder-panel-defaults.browser-checks.js";
 
 const database = new URL(process.env.DATABASE_URL || "");
 if (!["localhost", "127.0.0.1", "[::1]"].includes(database.hostname)
@@ -43,6 +48,8 @@ for (const [role, profileId] of [["admin", fixture.otherOfficeId], ["office", fi
   await pool.query("update user_profiles set auth_user_id=$2,contact_email=$3 where id=$1", [profileId, result.user.id, email]);
   accounts.push({ role, username });
 }
+
+const documentsFixture = await seedWorkorderDocumentsFixture(pool, fixture);
 
 const workorders = [
   { id: randomUUID(), serial: "WO-ROLE-MECHANIC-ONE", mechanicId: fixture.mechanicId, unit: "ROLE-ONE" },
@@ -143,6 +150,9 @@ async function navigationPersistence(page, role) {
 
 async function statusMenuGeometry(page) {
   await page.goto(`${baseUrl}/?workorder=${workorders[0].id}&section=concern`);
+  const toolsToggle = page.locator('.detail-context-actions button[aria-controls="workorder-preview-panel"]');
+  await toolsToggle.waitFor({ state: 'visible' });
+  if (await toolsToggle.getAttribute('aria-expanded') === 'true') await toolsToggle.click();
   const trigger = page.locator('button.dropdown-select-trigger[aria-label="Workorder status"]');
   await trigger.waitFor();
   await trigger.click();
@@ -190,12 +200,18 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
-    for (const check of [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
+    for (const check of process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY === "true" ? [] : [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
       try { await check(); } catch (error) { errors.push(`${account.role}: ${error.stack || error}`); }
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`${baseUrl}/?${account.role === 'admin' ? 'adminView=operations' : ''}`);
     }
     try {
+      if (["office", "admin", "mechanic"].includes(account.role)) {
+        await checkWorkorderPanelDefaults({ page, baseUrl, workorderId: workorders[0].id, role: account.role });
+        console.log(`PASS ${account.role}: expanded desktop panels, close/reopen, reload and closed mobile drawers`);
+        await page.goto(`${baseUrl}/?${account.role === "admin" ? "adminView=operations" : ""}`);
+      }
+      if (process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY === "true") continue;
       const desktop = page.locator(account.role === "admin" ? ".role-desktop-filters" : ".workorder-queue-filter").first();
       await desktop.waitFor({ state: "visible" });
       const queue = desktop.locator('button.dropdown-select-trigger[aria-label="Queue"]');
@@ -268,6 +284,35 @@ try {
       await assertNoOverflow(page, `${account.role}/390`);
       await page.screenshot({ path: join(artifacts, `${account.role}-phone.png`), fullPage: true });
       console.log(`PASS ${account.role}: desktop Queue options, selection, and phone controls`);
+      if (account.role === "admin") {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto(`${baseUrl}/?adminView=settings&settingsTab=commercial`);
+        await checkCommercialProfileLayout({ playwright: page });
+        for (const width of [768, 390]) {
+          await page.setViewportSize({ width, height: 900 });
+          await checkCommercialProfileCompact({ playwright: page });
+        }
+        console.log("PASS commercial profile: viewport containment, advanced disclosure, retained edits, internal keyboard scrolling");
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto(`${baseUrl}/?workorder=${documentsFixture.workorderId}&section=concern`);
+        await page.locator('.detail-context-actions button[aria-controls="workorder-preview-panel"]').waitFor({ state: "visible" });
+        await checkWorkorderDocumentsWorkspace({ playwright: page });
+        console.log("PASS Documents/Chat: minimal preview, no empty Invoice, separate retained audience drafts");
+        const repair = await checkRepairLinkControls({ playwright: page });
+        const customerContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        try {
+          const customerPage = await customerContext.newPage();
+          await customerPage.goto(repair.href);
+          await checkCustomerRepairPortal({ playwright: customerPage });
+          await customerPage.setViewportSize({ width: 390, height: 844 });
+          await checkCustomerRepairPortal({ playwright: customerPage });
+        } finally { await customerContext.close(); }
+        await page.setViewportSize({ width: 390, height: 844 });
+        await checkDocumentMenuInDialog({ playwright: page });
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await issueEstimateRevisionForCheck({ playwright: page });
+        console.log("PASS Customer repair: scoped link, document card, export controls, anonymous portal, retained draft and revision editor closes after issue");
+      }
     } catch (error) {
       errors.push(`${account.role}: ${error.stack || error}`);
       await page.screenshot({ path: join(artifacts, `${account.role}-failure.png`), fullPage: true }).catch(() => {});

@@ -5,6 +5,7 @@ import test from "node:test";
 const api = readFileSync(new URL("./customer-estimate-api.js", import.meta.url), "utf8");
 const chat = readFileSync(new URL("./WorkorderCustomerChat.jsx", import.meta.url), "utf8");
 const panel = readFileSync(new URL("./WorkorderCustomerDocumentsPanel.jsx", import.meta.url), "utf8");
+const detail = readFileSync(new URL("../workorder-detail/WorkorderDetailPage.jsx", import.meta.url), "utf8");
 
 test("staff chat uses the Workorder customer-chat contract with exact document scope", () => {
   assert.match(api, /workorders\/\$\{encodeURIComponent\(workorderId\)\}\/customer-chat\?\$\{params\}/);
@@ -14,19 +15,21 @@ test("staff chat uses the Workorder customer-chat contract with exact document s
 });
 
 test("customer-audience discussion is explicit, accessible, compact, and text-only", () => {
-  assert.match(chat, />Customer audience</);
-  assert.match(chat, /separate from internal Workorder chat/);
-  assert.match(chat, /does not approve or change the document response/);
-  assert.match(chat, /aria-labelledby="workorder-customer-chat-title"/);
-  assert.match(chat, /aria-label="Customer-audience message history"/);
-  assert.match(chat, /<label htmlFor="workorder-customer-chat-message">Message to customer<\/label>/);
-  assert.match(chat, /maxLength="5000"/);
+  assert.match(chat, />Visible to customer</);
+  assert.doesNotMatch(chat, />Customer messages<|separate from internal Workorder chat|does not approve or change the document response/);
+  assert.match(chat, /aria-label="Customer chat"/);
+  assert.match(chat, /<ChatThread/);
+  assert.match(chat, /textareaLabel="Message to customer"/);
+  assert.match(chat, /maxLength=\{5000\}/);
+  assert.match(chat, /allowAttachments=\{false\}/);
   assert.match(chat, /Send to customer/);
-  assert.doesNotMatch(chat, /type="file"|attachment|upload/i);
+  assert.doesNotMatch(chat, /type="file"|upload/i);
 });
 
 test("chat follows the latest issued customer document without changing response state", () => {
-  assert.match(panel, /document=\{invoice \|\| estimate\}/);
+  assert.match(detail, /customerDocument=\{documentController\.invoice \|\| documentController\.estimate\}/);
+  assert.doesNotMatch(panel, /<WorkorderCustomerChat/);
+  assert.match(detail, /chatPolicy\.canRead && effectiveChatAudience === "internal"/);
   assert.match(chat, /readWorkorderCustomerChat/);
   assert.match(chat, /sendWorkorderCustomerChat/);
   assert.doesNotMatch(chat, /respondToCustomerDocument|responseType|currentResponse/);

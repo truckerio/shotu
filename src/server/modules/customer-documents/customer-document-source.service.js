@@ -36,7 +36,7 @@ function percentageWithinOfficePolicy(discount, policy) {
   return Number(discount.value) <= Number(policy.maxOfficePercentage || 0);
 }
 
-function applyAdjustments(lines, adjustments, context, profile, companyId) {
+function applyAdjustments(lines, adjustments, context, profile, companyId, readOnlyFinancialSource = false) {
   const role = effectiveCompanyRole(context, companyId);
   if (!role || !["office", "admin"].includes(role)) throw resourceNotFound("Customer document source");
   const { discounts, overrides } = adjustmentMaps(adjustments);
@@ -53,10 +53,10 @@ function applyAdjustments(lines, adjustments, context, profile, companyId) {
   }
   const adjusted = lines.map((line) => {
     const overrideReason = overrides.get(line.id) || null;
-    if (line.manualOverride && !overrideReason) {
+    if (line.manualOverride && !readOnlyFinancialSource && !overrideReason) {
       throw invalidRequest(`A reason is required for the customer price override on ${line.description}.`);
     }
-    if (line.manualOverride && role !== "admin") {
+    if (line.manualOverride && !readOnlyFinancialSource && role !== "admin") {
       throw new AuthError(403, "CUSTOMER_DOCUMENT_PRICE_OVERRIDE_DENIED", "Customer price overrides require Admin approval.");
     }
     if (!line.manualOverride && overrideReason) throw invalidRequest(`Line ${line.id} is not a customer price override.`);
@@ -247,7 +247,9 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
     });
   }
   if (!lines.length) conflict("CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", "Add priced labor or parts before previewing an Estimate.");
-  const adjusted = applyAdjustments(lines, adjustments, context, profile, dependencies.companyId || workorder.companyId);
+  // Only the staff summary sets this internal flag to inspect immutable selected
+  // prices. Preview and issue still authorize every newly proposed override.
+  const adjusted = applyAdjustments(lines, adjustments, context, profile, dependencies.companyId || workorder.companyId, dependencies.readOnlyFinancialSource === true);
   const formData = workorder.formData || {};
   return sourceProjection({
     source: { kind: "workorder", id: workorder.id, version: workorder.progressVersion, assetId: workorder.assetId },

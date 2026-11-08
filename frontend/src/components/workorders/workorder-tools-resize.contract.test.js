@@ -25,7 +25,7 @@ test("compact tools preserve desktop sizing and Chat lives only in the tools pan
   assert.match(layout, /if \(tools && window.innerWidth < 1280\) return/);
   assert.match(css, /\.has-tools-layout > \.detail-pane-resizer \{ display: none; \}/);
   assert.match(page, /previewOpen=\{onePageDetail \? officeToolsOpen/);
-  assert.match(page, /id: "chat", label: chatPolicy.canRead \? \(isMechanicDetail \? t\("detail.helpFromOffice"\) : "Chat"\) : "Notes"/);
+  assert.match(page, /id: "chat", label: chatPolicy.canRead \|\| canReadCustomerDocuments \? \(isMechanicDetail \? t\("detail.helpFromOffice"\) : "Chat"\) : "Notes"/);
   assert.match(page, /onePageDetail \? officeToolsOpen && officeToolView === "chat"/);
   assert.doesNotMatch(page, /workorder-inline-chat/);
 });
