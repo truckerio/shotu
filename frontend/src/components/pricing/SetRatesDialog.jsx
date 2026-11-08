@@ -14,6 +14,8 @@ export function SetRatesDialog({
   subjectLabel,
   uomCode,
   scopeLabel,
+  title = "Set rates",
+  onUseCompanyDefault,
   initialKind = "selling_price",
   rates,
   allowedKinds,
@@ -82,11 +84,25 @@ export function SetRatesDialog({
     }
   }
 
+  async function inheritDefault() {
+    if (!onUseCompanyDefault || reason.trim().length < 2 || busy || disabled || loading || loadError) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onUseCompanyDefault({ kind, reason: reason.trim() });
+      onClose?.();
+    } catch (failure) {
+      setError(failure.message || "Company default could not be applied.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const current = rates?.[kind];
   return <ModalOverlay className="set-rates-overlay" isOpen={open} isDismissable={!busy} onOpenChange={(isOpen) => { if (!isOpen && !busy) onClose?.(); }}>
     <Modal className="set-rates-modal">
-      <Dialog className="set-rates-dialog" aria-label="Set rates">
-        <Heading slot="title">Set rates</Heading>
+      <Dialog className="set-rates-dialog" aria-label={title}>
+        <Heading slot="title">{title}</Heading>
         <p className="set-rates-subject">{subjectLabel || "Item"}{uomCode ? ` · per ${uomCode}` : ""}</p>
         {scopeLabel ? <p className="set-rates-scope">{scopeLabel}</p> : null}
         {loading ? <p role="status">Loading rates…</p> : null}
@@ -100,6 +116,7 @@ export function SetRatesDialog({
           {needsCurrency ? <label><span>Currency</span><CurrencySelector value={currency} onChange={(event) => setCurrency(event.target.value)} disabled={busy || disabled} /></label> : <p className="set-rates-help">Uses each batch currency.</p>}
           <label className="set-rates-reason"><span>Reason</span><input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="Why is this rate changing?" disabled={busy || disabled} /></label>
           {error ? <p className="set-rates-error" role="alert">{error}</p> : null}
+          {onUseCompanyDefault ? <Button type="button" onClick={inheritDefault} disabled={reason.trim().length < 2 || busy || disabled}>Use company default</Button> : null}
           <footer><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" variant="primary" disabled={!valid || busy || disabled}>{busy ? "Saving…" : "Save"}</Button></footer>
         </form> : null}
       </Dialog>

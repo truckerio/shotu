@@ -145,3 +145,9 @@
   .inventory-batch-row footer > small { margin-left: 0; }
   .inventory-batch-row footer .button { width: 100%; justify-content: center; }
 }
+
+.inventory-configured-rates > h3 { grid-column: 1 / -1; margin: 0; font-size: 14px; font-weight: 400; }
+.inventory-configured-rates strong { font-weight: 600; }
+.inventory-no-stock-pricing .inventory-configured-rates strong { font-weight: 600; }
+
+.inventory-commercial-history-group h6 { font-weight: 400; }

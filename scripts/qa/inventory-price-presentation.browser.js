@@ -57,21 +57,29 @@ try {
       await panel.getByRole('region',{name:'Configured rates',exact:true}).waitFor();
       return panel;
     }
+    async function openLocation(panel) {
+      await panel.getByRole('button',{name:/^Chino shop/}).click();
+      await panel.getByRole('region',{name:'Configured rates',exact:true}).getByText('Effective rates',{exact:true}).waitFor();
+      return panel;
+    }
     let panel = await openPart();
+    assert.equal(await panel.locator('.inventory-batch-row').count(),0,'company overview keeps batches inside locations');
+    await panel.getByRole('button',{name:'Set company rates',exact:true}).waitFor();
+    await openLocation(panel);
     const mismatches=[];
     const check=fn=>{try {fn();} catch(error) {mismatches.push(error.message);}};
     const banners=await panel.locator('.inventory-part-issue-summary').count();
     check(()=>assert.equal(banners,0,'price warnings must not repeat in top banner'));
     const rates = panel.getByRole('region',{name:'Configured rates',exact:true});
-    assert.equal(await rates.getByText('Missing internal price',{exact:true}).count(),1);
-    assert.equal(await rates.getByText('Missing selling price',{exact:true}).count(),1);
+    assert.equal(await rates.getByText(/^Missing internal price/).count(),1);
+    assert.equal(await rates.getByText(/^Missing selling price/).count(),1);
     const values=await rates.locator('strong').allTextContents();
     check(()=>assert.deepEqual(values,['NA','NA'],'missing rates display only NA'));
     const cost=await panel.locator('.inventory-batch-row footer strong').innerText();
     check(()=>assert.equal(cost,'NA','missing batch cost displays only NA'));
     const header=await panel.locator('.inventory-part-header-price').innerText();
     check(()=>assert.equal(header,'Selling · NA'));
-    for (const label of ['Add cost','Set rates']) {
+    for (const label of ['Add cost','Set location rates']) {
       const button = panel.getByRole('button',{name:label,exact:true});
       const style = await button.evaluate(node => { const s=getComputedStyle(node), text=getComputedStyle(node.querySelector('span')), box=node.getBoundingClientRect(); return {background:s.backgroundColor,color:text.color,weight:Number(text.fontWeight),height:box.height}; });
       check(()=>assert.equal(style.background,'rgb(21, 112, 239)',`${label} has emphasized blue fill`));
@@ -84,8 +92,8 @@ try {
     await panel.getByLabel('Unit cost',{exact:true}).waitFor();
     assert.equal(await panel.getByRole('button',{name:'Save cost',exact:true}).isDisabled(),true);
     await panel.getByRole('button',{name:'Cancel',exact:true}).click();
-    await panel.getByRole('button',{name:'Set rates',exact:true}).click();
-    const dialog = page.getByRole('dialog',{name:'Set rates',exact:true});
+    await panel.getByRole('button',{name:'Set location rates',exact:true}).click();
+    const dialog = page.getByRole('dialog',{name:'Set location rates',exact:true});
     await dialog.waitFor();
     await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
     await page.screenshot({path:join(artifacts,`missing-${width}.png`)});
@@ -93,18 +101,21 @@ try {
     assert.ok(geometry.left>=-1&&geometry.right<=width+1&&geometry.scroll<=geometry.client+1,`panel fits ${width}: ${JSON.stringify(geometry)}`);
     known = true;
     panel = await openPart();
+    await openLocation(panel);
     assert.match(await panel.locator('.inventory-configured-rates').innerText(),/\$0\.00 \/ ea/,'explicit zero stays a real price');
-    assert.match(await panel.locator('.inventory-configured-rates').innerText(),/25% markup \/ ea/);
+    assert.match(await panel.locator('.inventory-configured-rates').innerText(),/25% markup/);
     assert.match(await panel.locator('.inventory-batch-row footer strong').innerText(),/\$0\.00 \/ ea/);
     noStock = true; known = false;
     panel = await openPart();
     assert.deepEqual(await panel.locator('.inventory-configured-rates strong').allTextContents(),['NA','NA']);
-    const noStockAction = panel.getByRole('button',{name:'Set rates',exact:true});
+    const noStockAction = panel.getByRole('button',{name:'Set company rates',exact:true});
     assert.equal(await noStockAction.evaluate(node=>getComputedStyle(node.querySelector('span')).color),'rgb(255, 255, 255)');
     assert.ok(await noStockAction.evaluate(node=>Number(getComputedStyle(node).fontWeight))>=600);
     readOnly = true; noStock = false; otherIssue = true;
     panel = await openPart();
-    assert.equal(await panel.getByRole('button',{name:'Set rates',exact:true}).count(),0);
+    assert.equal(await panel.getByRole('button',{name:/^Set (company|location) rates$/}).count(),0);
+    await openLocation(panel);
+    assert.equal(await panel.getByRole('button',{name:/^Set (company|location) rates$/}).count(),0);
     assert.equal(await panel.getByRole('button',{name:'Add cost',exact:true}).count(),0);
     assert.equal(await panel.locator('.inventory-part-issue-summary').innerText(),'Part needs attention','retain non-price issue notice');
     assert.deepEqual(writes,[],'opening/cancelling editors must not write prices');

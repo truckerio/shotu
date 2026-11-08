@@ -100,6 +100,15 @@ export function PartRatesDialog({ open, onClose, catalogPartId, locationId, part
     await notifyRateSaved(onSaved);
   }
 
+  async function useCompanyDefault({ kind, reason }) {
+    if (!locationId || (kind === "internal_cost" ? !canEditInternal : !canEditSelling)) throw new Error("You do not have permission to change this rate in this scope.");
+    const paths = partRatePaths(catalogPartId, locationId);
+    const payload = { useCompanyDefault: true, expectedVersion: kind === "internal_cost" ? internalState.expectedVersion : Number(state.selling?.writeVersion || 0), reason };
+    await api(kind === "internal_cost" ? paths.internal : paths.selling, { method: "PUT", body: JSON.stringify({ ...payload, idempotencyKey: stableKey(kind, payload) }) });
+    retries.current.delete(kind);
+    await notifyRateSaved(onSaved);
+  }
+
   const scopeName = locationId
     ? state.commercial?.scope?.locationName || "Location rates"
     : "Company default rates";
@@ -109,6 +118,8 @@ export function PartRatesDialog({ open, onClose, catalogPartId, locationId, part
     subjectLabel={partLabel}
     uomCode={uomCode || state.commercial?.part?.uomCode}
     scopeLabel={scopeName}
+    title={locationId ? "Set location rates" : "Set company rates"}
+    onUseCompanyDefault={locationId ? useCompanyDefault : undefined}
     initialKind={initialKind}
     rates={rates}
     allowedKinds={allowedKinds}

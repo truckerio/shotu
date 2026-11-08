@@ -11,7 +11,7 @@ import { isSupportedInventoryCurrency } from "./inventory-pricing.js";
 import { canManageInventoryCompanyScope, inventoryCompanyManageScope, inventoryCompanyReadScope, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
 
 const id = z.string().uuid();
-const inputSchema = z.object({
+const overrideInputSchema = z.object({
   expectedVersion: z.number().int().min(0),
   method: z.enum(["fixed", "markup_percent", "markup_amount"]),
   value: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,4})?$/),
@@ -30,6 +30,10 @@ const inputSchema = z.object({
     context.addIssue({ code: "custom", path: ["currency"], message: "Select a supported ISO currency." });
   }
 });
+const inputSchema = z.union([overrideInputSchema, z.object({
+  useCompanyDefault: z.literal(true), expectedVersion: z.number().int().min(0),
+  reason: z.string().trim().min(2).max(500), idempotencyKey: z.string().trim().min(8).max(120),
+}).strict()]);
 
 function fail(code, message, statusCode = 409) {
   throw new InventoryError(message, { code, statusCode });
@@ -61,6 +65,9 @@ export async function readSellingPolicy(catalogPartId, locationId, context, depe
   return {
     policy: result.policy,
     writeVersion: result.writeVersion,
+    usesCompanyDefault: result.usesCompanyDefault,
+    hasLocationOverrides: result.hasLocationOverrides,
+    locationRates: result.locationRates || [],
     availableBatches: result.availableBatches || [],
     capabilities: {
       canEdit: context.permissions?.has(PERMISSION.INVENTORY_PRICE_WRITE) === true
@@ -76,14 +83,13 @@ export async function writeSellingPolicy(catalogPartId, locationId, raw, context
   const parsedPartId = id.parse(catalogPartId);
   const parsedLocationId = locationId ? id.parse(locationId) : null;
   const input = inputSchema.parse(raw);
+  if (input.useCompanyDefault && !parsedLocationId) fail("INVENTORY_SELLING_POLICY_RESET_LOCATION_REQUIRED", "A location is required to restore the company default.", 422);
   const resolved = await effectiveScope(context, parsedLocationId, dependencies);
   const command = {
     catalogPartId: parsedPartId,
     locationId: parsedLocationId,
     expectedVersion: input.expectedVersion,
-    method: input.method,
-    value: input.value,
-    currency: input.currency,
+    ...(input.useCompanyDefault ? { useCompanyDefault: true } : { method: input.method, value: input.value, currency: input.currency }),
     reason: input.reason,
   };
   const result = await (dependencies.append || appendInventorySellingPolicy)({

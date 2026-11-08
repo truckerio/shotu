@@ -1012,6 +1012,8 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
          where price.company_id = catalog.company_id and price.catalog_part_id = catalog.id
            and price.price_kind = 'internal'
            and (price.location_id is null or price.location_id = catalog_location.id)
+           and not price.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=price.company_id and newer.catalog_part_id=price.catalog_part_id and newer.price_kind=price.price_kind and newer.location_id is not distinct from price.location_id and newer.version>price.version)
          order by (price.location_id is not null) desc, price.version desc limit 1
        ) internal_price on true
        left join lateral (
@@ -1019,6 +1021,8 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
          from inventory_part_selling_policy_versions policy
          where policy.company_id = catalog.company_id and policy.catalog_part_id = catalog.id
            and (policy.location_id is null or policy.location_id = catalog_location.id)
+           and not policy.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=policy.company_id and newer.catalog_part_id=policy.catalog_part_id and newer.location_id is not distinct from policy.location_id and newer.version>policy.version)
          order by (policy.location_id is not null) desc, policy.version desc limit 1
        ) selling_policy on true
        where catalog.company_id = any($1::uuid[])
@@ -1125,12 +1129,16 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
          where price.company_id = catalog.company_id and price.catalog_part_id = catalog.id
            and price.price_kind = 'internal'
            and (price.location_id is null or price.location_id = catalog_location.id)
+           and not price.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=price.company_id and newer.catalog_part_id=price.catalog_part_id and newer.price_kind=price.price_kind and newer.location_id is not distinct from price.location_id and newer.version>price.version)
          order by (price.location_id is not null) desc, price.version desc limit 1
        ) internal_price on true
        left join lateral (
          select policy.id, policy.method from inventory_part_selling_policy_versions policy
          where policy.company_id = catalog.company_id and policy.catalog_part_id = catalog.id
            and (policy.location_id is null or policy.location_id = catalog_location.id)
+           and not policy.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=policy.company_id and newer.catalog_part_id=policy.catalog_part_id and newer.location_id is not distinct from policy.location_id and newer.version>policy.version)
          order by (policy.location_id is not null) desc, policy.version desc limit 1
        ) selling_policy on true
        where catalog.company_id = paged.company_id and catalog.id = paged.catalog_part_id

@@ -6,8 +6,9 @@ function publicPolicy(row) {
     locationId: row.location_id || null,
     catalogPartId: row.catalog_part_id,
     version: Number(row.version),
+    usesCompanyDefault: row.uses_company_default === true,
     method: row.method,
-    value: String(row.value),
+    value: row.value === null ? null : String(row.value),
     currency: row.currency || null,
     reason: row.reason,
     effectiveAt: row.effective_at,
@@ -24,6 +25,13 @@ export async function getInventorySellingPolicy({
 }) {
   const result = await query(
     `select catalog.company_id catalog_company_id, policy.*, actor.display_name created_by_name,
+            exists (select 1 from inventory_part_selling_policy_versions v
+              where v.company_id=catalog.company_id and v.catalog_part_id=catalog.id and v.location_id is not null
+                and ($5::boolean or v.location_id=any($4::uuid[])) and not v.uses_company_default
+                and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=v.company_id and newer.catalog_part_id=v.catalog_part_id and newer.location_id=v.location_id and newer.version>v.version)) has_location_overrides,
+            coalesce((select scoped.uses_company_default from inventory_part_selling_policy_versions scoped
+              where scoped.company_id=catalog.company_id and scoped.catalog_part_id=catalog.id
+                and scoped.location_id=$3 order by scoped.version desc limit 1), true) uses_company_default_scope,
             coalesce((
               select max(scoped.version)
               from inventory_part_selling_policy_versions scoped
@@ -40,6 +48,8 @@ export async function getInventorySellingPolicy({
        where candidate.company_id=catalog.company_id
          and candidate.catalog_part_id=catalog.id
          and (candidate.location_id is null or candidate.location_id=$3)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
        order by (candidate.location_id is not null) desc,candidate.version desc
        limit 1
      ) policy on true
@@ -52,7 +62,7 @@ export async function getInventorySellingPolicy({
   );
   if (!result.rows[0]) return null;
   const companyId = result.rows[0].catalog_company_id;
-  const batches = await query(
+  const batches = locationId ? await query(
     `with recursive position_tree as (
        select position.id,position.company_id,position.location_id,position.parent_id,
               position.code,position.name,position.usage,position.system_key,position.name::text path
@@ -113,11 +123,50 @@ export async function getInventorySellingPolicy({
        and ($4::boolean or layer.location_id=any($5::uuid[]))
      order by layer.received_at,layer.id limit 50`,
     [companyId, catalogPartId, locationId, isAdmin, locationIds],
+  ) : { rows: [] };
+  const locationRates = locationId ? { rows: [] } : await query(
+    `select location.id location_id,
+            internal_price.amount internal_amount, internal_price.currency internal_currency,
+            internal_price.location_id internal_location_id, internal_price.id internal_id,
+            selling_policy.method selling_method, selling_policy.value selling_value, selling_policy.currency selling_currency,
+            selling_policy.location_id selling_location_id, selling_policy.id selling_id
+     from locations location
+     left join lateral (
+       select candidate.* from inventory_part_price_versions candidate
+       where candidate.company_id=location.company_id and candidate.catalog_part_id=$2
+         and candidate.price_kind='internal' and (candidate.location_id is null or candidate.location_id=location.id)
+         and not candidate.uses_company_default
+         and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id
+           and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind
+           and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
+       order by (candidate.location_id is not null) desc,candidate.version desc limit 1
+     ) internal_price on true
+     left join lateral (
+       select candidate.* from inventory_part_selling_policy_versions candidate
+       where candidate.company_id=location.company_id and candidate.catalog_part_id=$2
+         and (candidate.location_id is null or candidate.location_id=location.id)
+         and not candidate.uses_company_default
+         and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=candidate.company_id
+           and newer.catalog_part_id=candidate.catalog_part_id and newer.location_id is not distinct from candidate.location_id
+           and newer.version>candidate.version)
+       order by (candidate.location_id is not null) desc,candidate.version desc limit 1
+     ) selling_policy on true
+     where location.company_id=$1 and location.active and ($3::boolean or location.id=any($4::uuid[]))
+     order by location.name,location.id`, [companyId, catalogPartId, isAdmin, locationIds],
   );
   return {
     companyId,
+    locationRates: locationRates.rows.map((row) => ({
+      locationId: row.location_id,
+      internal: { amount: row.internal_amount === null ? null : String(row.internal_amount), currency: row.internal_currency || null,
+        source: row.internal_id ? (row.internal_location_id ? "location_override" : "company_default") : null },
+      selling: { method: row.selling_method || null, value: row.selling_value === null ? null : String(row.selling_value), currency: row.selling_currency || null,
+        source: row.selling_id ? (row.selling_location_id ? "location_override" : "company_default") : null },
+    })),
     policy: publicPolicy(result.rows[0].id ? result.rows[0] : null),
     writeVersion: Number(result.rows[0].write_version),
+    usesCompanyDefault: Boolean(locationId && result.rows[0].uses_company_default_scope),
+    hasLocationOverrides: result.rows[0].has_location_overrides === true,
     availableBatches: batches.rows.map((row) => ({
       costLayerId: row.id,
       locationId: row.location_id,
@@ -179,7 +228,7 @@ export async function appendInventorySellingPolicy(input) {
         ? { kind: "saved", policy: publicPolicy(replay.rows[0]), replayed: true }
         : { kind: "idempotency_conflict" };
     }
-    if (part.rows[0].tracking_mode === "no_stock" && input.method !== "fixed") {
+    if (part.rows[0].tracking_mode === "no_stock" && !input.useCompanyDefault && input.method !== "fixed") {
       await client.query("rollback");
       return { kind: "no_stock_fixed_required" };
     }
@@ -199,19 +248,20 @@ export async function appendInventorySellingPolicy(input) {
     const saved = await client.query(
       `insert into inventory_part_selling_policy_versions(
          company_id,location_id,catalog_part_id,version,method,value,currency,
-         previous_version_id,reason,created_by,idempotency_key,request_hash
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         previous_version_id,reason,created_by,idempotency_key,request_hash,uses_company_default
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        returning *`,
       [
-        companyId, input.locationId, input.catalogPartId, version + 1, input.method,
-        input.value, input.currency, current.rows[0]?.id || null, input.reason,
-        input.actorId, input.idempotencyKey, input.requestHash,
+        companyId, input.locationId, input.catalogPartId, version + 1, input.method ?? null,
+        input.value ?? null, input.currency ?? null, current.rows[0]?.id || null, input.reason,
+        input.actorId, input.idempotencyKey, input.requestHash, input.useCompanyDefault === true,
       ],
     );
     await client.query("commit");
     return { kind: "saved", policy: publicPolicy(saved.rows[0]), replayed: false };
   } catch (error) {
     await client.query("rollback").catch(() => {});
+    if (error?.code === "23505") return { kind: "idempotency_conflict" };
     throw error;
   } finally {
     client.release();

@@ -31,7 +31,9 @@ export async function readEffectiveLaborPriceSources({ companyId, locationId, pr
       select policy.*, catalog.labor_product_id, catalog.uom_code as product_uom_code
       from matched_catalog catalog join inventory_part_selling_policy_versions policy
         on policy.company_id=$1 and policy.catalog_part_id=catalog.id
-      where policy.location_id is null or policy.location_id=$2
+      where (policy.location_id is null or policy.location_id=$2)
+        and not policy.uses_company_default
+        and not exists (select 1 from inventory_part_selling_policy_versions newer where newer.company_id=policy.company_id and newer.catalog_part_id=policy.catalog_part_id and newer.location_id is not distinct from policy.location_id and newer.version>policy.version)
       order by (policy.location_id is not null) desc,policy.version desc limit 1
     ), current_internal as (
       select price.*, catalog.labor_product_id, catalog.uom_code as product_uom_code
@@ -39,6 +41,8 @@ export async function readEffectiveLaborPriceSources({ companyId, locationId, pr
         on price.company_id=$1 and price.catalog_part_id=catalog.id and price.price_kind='internal'
       where catalog.tracking_mode='no_stock'
         and (price.location_id is null or price.location_id=$2)
+           and not price.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=price.company_id and newer.catalog_part_id=price.catalog_part_id and newer.price_kind=price.price_kind and newer.location_id is not distinct from price.location_id and newer.version>price.version)
       order by (price.location_id is not null) desc,price.version desc limit 1
     )
     select id,labor_product_id,price_kind,version,location_id,amount,currency,created_at,

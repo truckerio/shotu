@@ -36,7 +36,7 @@ export function rateDraftIsValid({ kind, amount, currency, reason, method }) {
 
 export function rateSourceLabel(source, locationScoped) {
   if (source === "location_override") return "Location override";
-  if (source === "company_default" && locationScoped) return "Company fallback";
+  if (source === "company_default" && locationScoped) return "Company default";
   if (source === "company_default") return "Company default";
   return "Not configured";
 }

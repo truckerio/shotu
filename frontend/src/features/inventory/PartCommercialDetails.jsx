@@ -6,7 +6,7 @@ import { rateSourceLabel } from "../../components/pricing/set-rates-model.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from "../../components/ui/OperationalDataTable.jsx";
 import { api } from "../../lib/api.js";
-import { configuredPriceView, displayMoney, locationPriceEditState, receiptCostBasisLabel, receiptDateBasisLabel } from "./part-commercial-model.js";
+import { configuredPriceView, displayMoney, locationPriceEditState, receiptCostBasisLabel, receiptDateBasisLabel, sellingPolicyLabel, priceHistoryLabel } from "./part-commercial-model.js";
 import "./part-commercial-details.css";
 
 const newKey = (type) => `${type}-${crypto.randomUUID()}`;
@@ -32,12 +32,6 @@ function batchPositionLabel(position) {
     ? `${code} · ${name}` : code || name || position.path || "Position";
 }
 
-function sellingPolicySummary(policy) {
-  if (!policy) return "NA";
-  if (policy.method === "markup_percent") return `${Number(policy.value)}% markup`;
-  if (policy.method === "markup_amount") return `Add ${displayMoney(policy.value, policy.currency)}`;
-  return displayMoney(policy.value, policy.currency);
-}
 
 function priceWithUnit(label, uomCode) {
   return label === "Unknown" || label === "NA" ? "NA" : `${label} / ${uomCode || "unit"}`;
@@ -47,18 +41,19 @@ function PriceHistory({ prices, locationScoped }) {
   const groups = locationScoped
     ? [["Location override", prices.override?.history || []], ["Company default", prices.companyDefault?.history || []]]
     : [["Company default", prices.history || []]];
-  return groups.map(([label, history]) => <div className="inventory-commercial-history-group" key={label}><h6>{label}</h6>{history.length ? <ul>{history.map((price) => <li key={price.id}><strong>{configuredPriceView(price).label}</strong><span>Version {price.version} · {new Date(price.effectiveAt).toLocaleString()}</span><small>{price.reason}{price.createdBy?.name ? ` · ${price.createdBy.name}` : ""}</small></li>)}</ul> : <p>No saved history.</p>}</div>);
+  return groups.map(([label, history]) => <div className="inventory-commercial-history-group" key={label}><h6>{label}</h6>{history.length ? <ul>{history.map((price) => <li key={price.id}><span>{priceHistoryLabel(price)}</span><span>Version {price.version} · {new Date(price.effectiveAt).toLocaleString()}</span><small>{price.reason}{price.createdBy?.name ? ` · ${price.createdBy.name}` : ""}</small></li>)}</ul> : <p>No saved history.</p>}</div>);
 }
 
 function ConfiguredRates({ internal, sellingPolicy, locationScoped, canEdit, uomCode, onEdit, noStock = false }) {
   const internalState = locationScoped ? locationPriceEditState(internal) : { effective: internal?.current || null, source: internal?.current ? "company_default" : null };
   const missingInternal = !internalState.effective || internalState.effective.amount === null;
-  const fixedPriceRequired = noStock && sellingPolicy?.method !== "fixed";
+  const fixedPriceRequired = noStock && Boolean(sellingPolicy) && sellingPolicy.method !== "fixed";
   const sellingSource = sellingPolicy ? (locationScoped && sellingPolicy.locationId ? "location_override" : "company_default") : null;
   return <section className="inventory-configured-rates" aria-label="Configured rates">
-    <div><span>Internal price</span><strong>{priceWithUnit(configuredPriceView(internalState.effective).label, uomCode)}</strong><small>{missingInternal ? "Missing internal price" : rateSourceLabel(internalState.source, locationScoped)}</small></div>
-    <div><span>Selling price</span><strong>{priceWithUnit(sellingPolicySummary(fixedPriceRequired ? null : sellingPolicy), uomCode)}</strong><small>{fixedPriceRequired ? "Fixed selling price required" : !sellingPolicy ? "Missing selling price" : rateSourceLabel(sellingSource, locationScoped)}</small></div>
-    {canEdit ? <Button type="button" variant="primary" onClick={onEdit}>Set rates</Button> : null}
+    <h3>{locationScoped ? "Effective rates" : "Company default rates"}</h3>
+    <div><span>Internal price</span><strong>{priceWithUnit(configuredPriceView(internalState.effective).label, uomCode)}</strong><small>{missingInternal ? `Missing internal price · ${rateSourceLabel(internalState.source, locationScoped)}` : rateSourceLabel(internalState.source, locationScoped)}</small></div>
+    <div><span>Selling price</span><strong>{sellingPolicy?.method === "fixed" ? priceWithUnit(sellingPolicyLabel(fixedPriceRequired ? null : sellingPolicy), uomCode) : sellingPolicyLabel(fixedPriceRequired ? null : sellingPolicy)}</strong><small>{fixedPriceRequired ? "Fixed selling price required" : !sellingPolicy ? "Missing selling price · Not configured" : rateSourceLabel(sellingSource, locationScoped)}</small></div>
+    {canEdit ? <Button type="button" variant="primary" onClick={onEdit}>{locationScoped ? "Set location rates" : "Set company rates"}</Button> : null}
   </section>;
 }
 
@@ -187,12 +182,12 @@ export function PartCommercialDetails({ part, location = null, secondary = false
       {ratesDialog}
     </section>;
   }
-  const contents = <section className="inventory-commercial-details" aria-label={locationId ? `Batches at ${details.scope?.locationName || location?.locationName || "location"}` : "Batch costs and selling policy"}>
+  const contents = <section className="inventory-commercial-details" aria-label={locationId ? `Pricing at ${details.scope?.locationName || location?.locationName || "location"}` : "Company pricing"}>
     {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
-    {availableBatches.length ? <section className="inventory-batch-list" aria-label={`Batches (${availableBatches.length})`}><header><h3>Batches <span>{availableBatches.length}</span></h3></header>{availableBatches.map((batch, index) => <BatchRow key={batch.costLayerId} batch={batch} locationScoped={Boolean(locationId)} canEditBatchCost={canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(batch.locationId))} isNextToUse={index === 0} onEdit={setEditingBatch} />)}{editingBatch && canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(editingBatch.locationId)) ? <BatchCostEditor key={`${editingBatch.costLayerId}:${editingBatch.costVersion}`} batch={editingBatch} onCancel={() => setEditingBatch(null)} onSaved={saveBatchCost} /> : null}</section> : <p className="inventory-commercial-empty">No available batches for this {locationId ? "location" : "part"}.</p>}
     <ConfiguredRates internal={details.prices?.internal} sellingPolicy={details.sellingPolicy?.policy} locationScoped={Boolean(locationId)} canEdit={canEditConfiguredRates} uomCode={part.uomCode} onEdit={() => setRatesKind(canEditSellingPolicy ? "selling_price" : "internal_cost")} />
+    {locationId ? (availableBatches.length ? <section className="inventory-batch-list" aria-label={`Batches (${availableBatches.length})`}><header><h3>Batches <span>{availableBatches.length}</span></h3></header>{availableBatches.map((batch, index) => <BatchRow key={batch.costLayerId} batch={batch} locationScoped={Boolean(locationId)} canEditBatchCost={canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(batch.locationId))} isNextToUse={index === 0} onEdit={setEditingBatch} />)}{editingBatch && canEditBatchCost && (!manageableLocationIds || manageableLocationIds.has(editingBatch.locationId)) ? <BatchCostEditor key={`${editingBatch.costLayerId}:${editingBatch.costVersion}`} batch={editingBatch} onCancel={() => setEditingBatch(null)} onSaved={saveBatchCost} /> : null}</section> : <p className="inventory-commercial-empty">No available batches for this location.</p>) : null}
     <details className="inventory-commercial-policy inventory-commercial-pricing-history">
-      <summary><strong>Pricing history</strong></summary>
+      <summary>Pricing history</summary>
       {purchaseOrders.observations?.length ? <details className="inventory-commercial-history"><summary>Odoo purchase orders</summary><OperationalDataTable ariaLabel="Odoo purchase orders" columns={purchaseOrderColumns} className="inventory-commercial-history-table">{purchaseOrders.observations.map((entry) => <OperationalDataRow id={entry.lineId} key={entry.lineId}><OperationalDataCell label="Date"><span>{entry.approvedAt || entry.orderedAt ? new Date(entry.approvedAt || entry.orderedAt).toLocaleDateString() : "Unknown"}</span><small>{entry.status || "Purchased"}</small></OperationalDataCell><OperationalDataCell label="Purchase order"><strong>{entry.orderNumber || "Odoo PO"}</strong><small>{entry.vendorName || "Vendor not recorded"}</small></OperationalDataCell><OperationalDataCell label="Ordered / received"><span>{entry.quantity ?? "—"} {entry.uomCode}</span><small>{entry.receivedQuantity ?? "—"} received</small></OperationalDataCell><OperationalDataCell label="Unit price"><strong>{displayMoney(entry.unitCost, entry.currency)}</strong><small>{entry.currency || "Currency unavailable"}</small></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>{purchaseOrders.truncated ? <p>Showing the 50 most recent Odoo purchase lines.</p> : null}</details> : null}
       {costs.observations?.length ? <details className="inventory-commercial-history"><summary>Purchase history</summary><OperationalDataTable ariaLabel="Purchase history" columns={purchaseHistoryColumns} className="inventory-commercial-history-table">{costs.observations.map((entry) => { const href = invoiceHref(entry), sourceName = entry.invoice?.invoiceNumber || entry.source?.invoiceNumber || entry.invoice?.vendorName || entry.source?.vendorName || String(entry.source?.type || "receipt").replaceAll("_", " "); return <OperationalDataRow id={entry.receiptLineId} key={entry.receiptLineId}><OperationalDataCell label="Date"><span>{entry.occurredOn ? new Date(entry.occurredOn).toLocaleDateString() : "Unknown"}</span><small>{receiptDateBasisLabel(entry)}</small></OperationalDataCell><OperationalDataCell label="Source"><span>{href ? <a href={href}>{sourceName}</a> : sourceName}</span><small>{receiptCostBasisLabel(entry)}</small></OperationalDataCell><OperationalDataCell label="Quantity">{entry.quantity} {entry.uomCode}</OperationalDataCell><OperationalDataCell label="Unit cost"><strong>{displayMoney(entry.unitCost, entry.currency)}</strong><small>{entry.status === "known" ? "Known cost" : "Unknown cost"}</small></OperationalDataCell></OperationalDataRow>; })}</OperationalDataTable>{costs.truncated ? <p>Showing the 50 most recent receipt lines.</p> : null}</details> : <p className="inventory-commercial-empty">No purchase cost recorded for this {locationId ? "location" : "part"}.</p>}
       <details className="inventory-commercial-configured-history"><summary>Legacy price history</summary><section><h5>Selling price</h5><PriceHistory prices={details.prices.selling} locationScoped={Boolean(locationId)} /></section></details>

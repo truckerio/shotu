@@ -103,7 +103,7 @@ async function choose(page, select, optionName) {
 
 async function openRatesFromDropdown(page, section) {
   await choose(page, section.getByRole("button", { name: /price source/i }), "Set rates…");
-  const dialog = page.getByRole("dialog", { name: "Set rates" });
+  const dialog = page.getByRole("dialog", { name: /^Set (?:location )?rates$/ });
   await dialog.waitFor();
   return dialog;
 }
@@ -193,8 +193,8 @@ async function main() {
     await page.keyboard.press("Escape");
 
     const stock = page.getByTestId("stock");
-    await stock.getByRole("button", { name: "Set rates", exact: true }).click();
-    let dialog = page.getByRole("dialog", { name: "Set rates" });
+    await stock.getByRole("button", { name: "Set location rates", exact: true }).click();
+    let dialog = page.getByRole("dialog", { name: "Set location rates", exact: true });
     await dialog.waitFor();
     assert.match(await dialog.locator(".set-rates-source").innerText(), /Location override/);
     assert.equal(await dialog.getByRole("button", { name: "Rate type" }).getAttribute("aria-label"), "Rate type");

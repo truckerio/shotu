@@ -479,7 +479,7 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(workspace, /<SecondaryDetailSection title="Locations">/);
   assert.doesNotMatch(workspace, /Odoo reference/);
   assert.match(workspace, /Odoo · read-only/);
-  assert.match(workspace, /Selling · \{headerPriceLabel\}/);
+  assert.match(workspace, /Company default selling/);
   assert.doesNotMatch(workspace, /Our inventory available|Our inventory 0/);
   assert.match(workspace, /setSelectedLocationId/);
   assert.match(workspace, /aria-label="Part detail pages"/);
@@ -527,11 +527,9 @@ test("part header shows the effective selling price without a stock-status badge
     readFile(new URL("./part-commercial-model.js", import.meta.url), "utf8"),
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /\/commercial\?\$\{params\}/);
-  assert.match(workspace, /params\.set\("locationId", selectedLocation\.locationId\)/);
-  assert.match(workspace, /effectiveSellingPrice\(commercial, Boolean\(selectedLocation\?\.locationId\), sellingPolicy\)/);
-  assert.match(workspace, /selectedItem\.trackingMode === "no_stock"[\s\S]*?\/selling-policy/);
-  assert.match(workspace, /view\.label === "Unknown" \? "NA" : view\.label/);
+  assert.match(workspace, /sellingPolicyLabel\(sellingPolicy\?\.policy, selectedItem\.trackingMode\)/);
+  assert.match(workspace, /\/selling-policy\$\{query\}/);
+  assert.match(workspace, /Company default selling/);
   assert.match(workspace, /const scopeKey = partHeaderPriceScopeKey/);
   assert.match(workspace, /return \(\) => \{ active = false; \}/);
   assert.match(workspace, /className="inventory-part-header-price"/);

@@ -132,3 +132,23 @@ test("saved preview uses its immutable archived profile while draft requires cur
   assert.equal(saved.priceVersion, 2);
   await assert.rejects(() => previewInventoryPartPrice(partId, { priceKind: "selling", quantity: "1.25", discountPercent: "0", draft: { amount: "11", currency: "USD", taxTreatment: "inclusive", taxProfileVersionId: profile.id } }, context, { readPricingSource, readTaxProfileVersion: async () => null }), (error) => error.code === "INVENTORY_PART_PRICE_TAX_PROFILE_INVALID");
 });
+
+test("location reset records an explicit inheritance command and rejects company reset", async () => {
+  let command;
+  const input = { useCompanyDefault: true, expectedVersion: 2, reason: "Restore company rate", idempotencyKey: "reset-price-123" };
+  await updateInventoryLocationPartPrice(partId, locationId, "internal", input, context, {
+    resolveLocationScope: async () => ({ companyIds: [companyId], locationIds: [locationId], isAdmin: false }),
+    append: async (received) => { command = received; return { kind: "saved", price: { usesCompanyDefault: true }, replayed: false }; },
+  });
+  assert.equal(command.useCompanyDefault, true);
+  assert.equal(command.expectedVersion, 2);
+  await assert.rejects(() => setInventoryPartPrice(partId, "internal", input, adminContext, { append: async () => assert.fail("company reset reached persistence") }));
+});
+
+
+test("location inheritance reset cannot bypass location authorization", async () => {
+  await assert.rejects(() => updateInventoryLocationPartPrice(partId, locationId, "internal", { useCompanyDefault: true, expectedVersion: 0, reason: "Restore default", idempotencyKey: "reset-denied-price" }, context, {
+    resolveLocationScope: async () => { const error = new Error("Not found"); error.code = "inventory_not_found"; throw error; },
+    append: async () => assert.fail("unauthorized reset reached persistence"),
+  }), (error) => error.code === "inventory_not_found");
+});

@@ -6,6 +6,7 @@ function publicPrice(row) {
     id: row.id,
     locationId: row.location_id || null,
     kind: row.price_kind,
+    usesCompanyDefault: row.uses_company_default === true,
     version: Number(row.version),
     status: row.amount === null ? "unknown" : "known",
     amount: row.amount === null ? null : String(row.amount),
@@ -103,7 +104,15 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
   const partResult = await query(
     `select catalog.id, catalog.company_id, catalog.part_number, catalog.description, catalog.uom_code,
             catalog.inventory_display_uom_code, catalog.tracking_mode,
-            scoped_location.id as scope_location_id, scoped_location.name as scope_location_name
+            scoped_location.id as scope_location_id, scoped_location.name as scope_location_name,
+            exists (select 1 from inventory_part_price_versions v
+              where v.company_id=catalog.company_id and v.catalog_part_id=catalog.id and v.price_kind='internal'
+                and v.location_id is not null and ($5::boolean or v.location_id=any($4::uuid[])) and not v.uses_company_default
+                and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=v.company_id and newer.catalog_part_id=v.catalog_part_id and newer.price_kind=v.price_kind and newer.location_id=v.location_id and newer.version>v.version)) internal_has_location_overrides,
+            exists (select 1 from inventory_part_price_versions v
+              where v.company_id=catalog.company_id and v.catalog_part_id=catalog.id and v.price_kind='selling'
+                and v.location_id is not null and ($5::boolean or v.location_id=any($4::uuid[])) and not v.uses_company_default
+                and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=v.company_id and newer.catalog_part_id=v.catalog_part_id and newer.price_kind=v.price_kind and newer.location_id=v.location_id and newer.version>v.version)) selling_has_location_overrides
      from parts_catalog catalog
      left join locations scoped_location
        on scoped_location.company_id=catalog.company_id and scoped_location.id=$3 and scoped_location.active=true
@@ -207,12 +216,16 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
   const priceProjection = (kind) => {
     const companyDefault = histories[kind].companyDefault;
     const locationOverride = histories[kind].locationOverride;
-    const effectiveHistory = locationOverride.length ? locationOverride : companyDefault;
+    const usesCompanyDefault = Boolean(locationId && (!locationOverride.length || locationOverride[0].usesCompanyDefault));
+    const effectiveHistory = locationId && !usesCompanyDefault ? locationOverride : companyDefault;
     return {
       current: effectiveHistory[0] || null,
       history: effectiveHistory,
       effective: effectiveHistory[0] || null,
-      source: locationOverride.length ? "location_override" : companyDefault.length ? "company_default" : null,
+      source: locationId && !usesCompanyDefault ? "location_override" : companyDefault.length ? "company_default" : null,
+      writeVersion: locationId ? (locationOverride[0]?.version || 0) : (companyDefault[0]?.version || 0),
+      usesCompanyDefault,
+      hasLocationOverrides: Boolean(part[`${kind}_has_location_overrides`]),
       override: { current: locationOverride[0] || null, history: locationOverride },
       companyDefault: { current: companyDefault[0] || null, history: companyDefault },
     };
@@ -251,7 +264,7 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
   };
 }
 
-export async function appendInventoryPartPrice({ catalogPartId, companyIds, locationIds = [], isAdmin = false, locationId = null, actorId, kind, expectedVersion, amount, currency, taxTreatment, taxProfileVersionId, reason, idempotencyKey, requestHash }) {
+export async function appendInventoryPartPrice({ catalogPartId, companyIds, locationIds = [], isAdmin = false, locationId = null, actorId, kind, expectedVersion, amount, currency, taxTreatment, taxProfileVersionId, reason, idempotencyKey, requestHash, useCompanyDefault = false }) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -295,6 +308,7 @@ export async function appendInventoryPartPrice({ catalogPartId, companyIds, loca
     if (currentVersion !== expectedVersion) { await client.query("rollback"); return { kind: "stale", currentVersion }; }
     let resolvedTreatment = taxTreatment;
     let resolvedProfileVersionId = taxProfileVersionId ?? null;
+    if (useCompanyDefault) { amount = null; currency = null; resolvedTreatment = "not_configured"; resolvedProfileVersionId = null; }
     if (resolvedTreatment === undefined) {
       if (current.rows[0] && !["legacy_unknown", "not_configured"].includes(current.rows[0].tax_treatment)) {
         await client.query("rollback"); return { kind: "tax_required" };
@@ -317,10 +331,10 @@ export async function appendInventoryPartPrice({ catalogPartId, companyIds, loca
     }
     const inserted = await client.query(
       `insert into inventory_part_price_versions
-         (company_id,location_id,catalog_part_id,price_kind,version,amount,currency,tax_treatment,tax_profile_version_id,previous_version_id,reason,created_by,idempotency_key,request_hash)
-       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         (company_id,location_id,catalog_part_id,price_kind,version,amount,currency,tax_treatment,tax_profile_version_id,previous_version_id,reason,created_by,idempotency_key,request_hash,uses_company_default)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        returning id`,
-      [companyId, locationId, catalogPartId, kind, currentVersion + 1, amount, currency, resolvedTreatment, resolvedProfileVersionId, current.rows[0]?.id || null, reason, actorId, idempotencyKey, requestHash],
+      [companyId, locationId, catalogPartId, kind, currentVersion + 1, amount, currency, resolvedTreatment, resolvedProfileVersionId, current.rows[0]?.id || null, reason, actorId, idempotencyKey, requestHash, useCompanyDefault],
     );
     const saved = await client.query(`select price.*, actor.display_name as created_by_name, ${TAX_PROFILE_JSON}
       from inventory_part_price_versions price
@@ -351,6 +365,8 @@ export async function getInventoryPartPricingSource({ catalogPartId, companyIds,
       select candidate.* from inventory_part_price_versions candidate
       where candidate.company_id=catalog.company_id and candidate.catalog_part_id=catalog.id and candidate.price_kind=$3
         and (candidate.location_id is null or candidate.location_id=$4)
+           and not candidate.uses_company_default
+           and not exists (select 1 from inventory_part_price_versions newer where newer.company_id=candidate.company_id and newer.catalog_part_id=candidate.catalog_part_id and newer.price_kind=candidate.price_kind and newer.location_id is not distinct from candidate.location_id and newer.version>candidate.version)
       order by (candidate.location_id is not null) desc, candidate.version desc limit 1
     ) price on true
     left join lateral (
