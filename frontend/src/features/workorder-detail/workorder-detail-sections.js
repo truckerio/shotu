@@ -1,4 +1,5 @@
 import { interfaceText, localizedUnitType } from "../../i18n/index.js";
+import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import {
   orderWorkorderModules,
   resolveWorkorderModuleNavigation,
@@ -98,6 +99,7 @@ export function buildWorkorderDetailSections({
       label: isMechanicDetail ? mechanicLabel("detail.work") : workorderModuleLabel(WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR),
     },
     [WORKORDER_MODULE_IDS.ODOO]: {
+      label: "Odoo handoff",
       attention: activeWorkorder?.workorder?.odooStatus === "missing_info"
         || (activeWorkorder?.workorder?.attentionReasons || []).includes("missing_info"),
     },
@@ -134,6 +136,7 @@ export function buildWorkorderDetailSections({
   };
   const sections = workorderModuleDescriptors(WORKORDER_SURFACES.DETAIL)
     .filter((descriptor) => ![WORKORDER_MODULE_IDS.PREVIEW, WORKORDER_MODULE_IDS.PHOTOS].includes(descriptor.id))
+    .filter((descriptor) => descriptor.id !== WORKORDER_MODULE_IDS.ODOO || isWorkorderOdooEligible(detailStatus))
     .map((descriptor) => {
       const sectionMetadata = metadata[descriptor.id] || {};
       return {

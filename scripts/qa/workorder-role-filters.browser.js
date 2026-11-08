@@ -11,6 +11,7 @@ import { checkRepairLinkControls, checkCustomerRepairPortal, issueEstimateRevisi
 import { checkWorkorderDocumentsWorkspace } from "./workorder-documents-workspace.browser-checks.js";
 import { checkCommercialProfileCompact, checkCommercialProfileLayout } from "./commercial-profile-layout.browser-checks.js";
 import { checkWorkorderPanelDefaults } from "./workorder-panel-defaults.browser-checks.js";
+import { checkWorkorderOdooHandoff } from "./workorder-odoo-handoff.browser-checks.js";
 
 const database = new URL(process.env.DATABASE_URL || "");
 if (!["localhost", "127.0.0.1", "[::1]"].includes(database.hostname)
@@ -200,12 +201,21 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
-    for (const check of process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY === "true" ? [] : [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
+    for (const check of process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY === "true" || process.env.QA_WORKORDER_ODOO_HANDOFF_ONLY === "true" ? [] : [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
       try { await check(); } catch (error) { errors.push(`${account.role}: ${error.stack || error}`); }
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`${baseUrl}/?${account.role === 'admin' ? 'adminView=operations' : ''}`);
     }
     try {
+      if (["office", "admin", "mechanic"].includes(account.role) && process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY !== "true") {
+        await checkWorkorderOdooHandoff({
+          page, baseUrl, workorderId: workorders[0].id, role: account.role,
+          setStatus: (status) => pool.query("update operational_workorders set status=$2 where id=$1", [workorders[0].id, status]),
+        });
+        console.log(`PASS ${account.role}: Odoo handoff lifecycle, module access and direct links`);
+        await page.goto(`${baseUrl}/?${account.role === "admin" ? "adminView=operations" : ""}`);
+      }
+      if (process.env.QA_WORKORDER_ODOO_HANDOFF_ONLY === "true") continue;
       if (["office", "admin", "mechanic"].includes(account.role)) {
         await checkWorkorderPanelDefaults({ page, baseUrl, workorderId: workorders[0].id, role: account.role });
         console.log(`PASS ${account.role}: expanded desktop panels, close/reopen, reload and closed mobile drawers`);

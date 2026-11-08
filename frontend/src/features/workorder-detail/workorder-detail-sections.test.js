@@ -112,10 +112,27 @@ test("Odoo read access remains visible while a named-user hidden override remove
   assert.equal(allowedDetailSection({ requestedSection: "odoo", sections: hiddenSections }), "unit");
 });
 
-test("Admin keeps Odoo visible before lifecycle eligibility while role defaults can hide it", () => {
+test("Odoo handoff stays hidden until Office approval even with module access", () => {
+  for (const role of ["admin", "office", "mechanic", "surveillance"]) {
+    for (const status of ["open", "accepted", "in_progress", "waiting_office", "parts_requested", "mechanic_done", "on_hold", "cancelled", undefined]) {
+      const sections = buildWorkorderDetailSections({
+        activeWorkorder: { workorder: { id: "wo-1", status } },
+        detailStatus: status,
+        role,
+        isOfficeDetail: ["admin", "office"].includes(role),
+        isMechanicDetail: role === "mechanic",
+        policyOverrides: { moduleAccess: { [role]: { detail: { odoo: "write" } } } },
+      });
+      assert.equal(sections.some(({ id }) => id === "odoo"), false, `${role} ${status}`);
+      assert.notEqual(allowedDetailSection({ requestedSection: "odoo", sections }), "odoo");
+    }
+  }
+});
+
+test("approved Odoo handoff keeps role defaults and read-only or hidden overrides", () => {
   const base = {
-    activeWorkorder: { workorder: { id: "wo-1" } },
-    detailStatus: "in_progress",
+    activeWorkorder: { workorder: { id: "wo-1", status: "closed" } },
+    detailStatus: "closed",
   };
   const adminSections = buildWorkorderDetailSections({
     ...base,
@@ -125,6 +142,18 @@ test("Admin keeps Odoo visible before lifecycle eligibility while role defaults 
   });
   assert.equal(adminSections.some(({ id }) => id === "odoo"), true);
   assert.equal(adminSections.find(({ id }) => id === "odoo")?.access, "write");
+  assert.equal(adminSections.find(({ id }) => id === "odoo")?.label, "Odoo handoff");
+
+  for (const status of ["closed", "odoo_entered"]) {
+    for (const role of ["admin", "office", "surveillance"]) {
+      const sections = buildWorkorderDetailSections({
+        ...base, role, detailStatus: status,
+        policyOverrides: { moduleAccess: { [role]: { detail: { odoo: "read" } } } },
+      });
+      assert.equal(sections.find(({ id }) => id === "odoo")?.access, "read");
+      assert.equal(sections.find(({ id }) => id === "odoo")?.label, "Odoo handoff");
+    }
+  }
 
   for (const role of ["office", "mechanic"]) {
     assert.equal(buildWorkorderDetailSections({
@@ -235,7 +264,7 @@ test("surveillance detail uses the same canonical registry modules", () => {
 
   assert.deepEqual(sections.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "location", "activity", "odoo"]);
   assert.equal(sections.find(({ id }) => id === "odoo").access, "write");
-  assert.equal(sections.find(({ id }) => id === "odoo").label, "Odoo");
+  assert.equal(sections.find(({ id }) => id === "odoo").label, "Odoo handoff");
   assert.equal(sections.find(({ id }) => id === "odoo").attention, true);
 });
 

@@ -20,7 +20,7 @@ export function WorkorderOdooModule({
   return (
     <ProgressiveWorkorderSection
       id="odoo"
-      title="Odoo"
+      title="Odoo handoff"
       summary={activeWorkorder.workorder.odooServiceOrderNo
         ? `Draft ${activeWorkorder.workorder.odooServiceOrderNo}`
         : activeWorkorder.workorder.odooStatus === "missing_info"

@@ -504,7 +504,7 @@ export function WorkorderDetailPage({
     }] : []),
     ...["activity", "completion", "odoo"].flatMap((id) => {
       const section = visibleDetailSections.find((entry) => entry.id === id);
-      return section ? [{ id, label: isMechanicDetail ? section.label : id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
+      return section ? [{ id, label: isMechanicDetail ? section.label : id === "activity" ? "Activity" : id === "completion" ? "Review" : section.label, content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
     }),
   ];
 
