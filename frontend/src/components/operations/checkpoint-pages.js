@@ -49,6 +49,7 @@ export function createEmptyCheckpointPagesSnapshot({ loading = false, jumpRevisi
     pageCount: 0,
     loading,
     loadingMore: false,
+    pendingPage: null,
     error: null,
     failedDirection: null,
     jumpRevision,
@@ -82,6 +83,7 @@ export function createCheckpointPagesController({
     pageCount: 0,
     loading: false,
     loadingMore: false,
+    pendingPage: null,
     error: null,
     failedDirection: null,
     jumpRevision: asCount(initialJumpRevision),
@@ -100,6 +102,7 @@ export function createCheckpointPagesController({
       pageCount: state.pageCount,
       loading: state.loading,
       loadingMore: state.loadingMore,
+      pendingPage: state.pendingPage,
       error: state.error,
       failedDirection: state.failedDirection,
       jumpRevision: state.jumpRevision,
@@ -206,6 +209,7 @@ export function createCheckpointPagesController({
   const setFailure = (error, direction, retry) => {
     state.loading = false;
     state.loadingMore = false;
+    state.pendingPage = null;
     state.error = error instanceof Error ? error : new Error(String(error));
     state.failedDirection = direction;
     lastFailedAction = retry;
@@ -218,8 +222,12 @@ export function createCheckpointPagesController({
     const clampedPage = state.pageCount > 0 ? Math.min(requestedPage, state.pageCount) : requestedPage;
     const retry = () => loadTarget(requestedPage, { direction, replace, jump });
 
+    // Repeated activation of the same in-flight target must not abort and
+    // restart its read. A different target still supersedes it immediately.
+    if (jump && state.pendingPage === clampedPage) return false;
     if (jump) {
       beginGeneration();
+      state.pendingPage = clampedPage;
       state.loading = false;
       state.loadingMore = false;
     }
@@ -234,7 +242,10 @@ export function createCheckpointPagesController({
       trimVisible(direction);
       state.loading = false;
       state.loadingMore = false;
-      if (jump) state.jumpRevision += 1;
+      if (jump) {
+        state.pendingPage = null;
+        state.jumpRevision += 1;
+      }
       publish();
       return true;
     }
@@ -256,7 +267,10 @@ export function createCheckpointPagesController({
       pruneCache();
       state.loading = false;
       state.loadingMore = false;
-      if (jump) state.jumpRevision += 1;
+      if (jump) {
+        state.pendingPage = null;
+        state.jumpRevision += 1;
+      }
       publish();
       return true;
     } catch (error) {

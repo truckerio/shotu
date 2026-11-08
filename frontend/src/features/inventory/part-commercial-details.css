@@ -68,9 +68,9 @@
 .inventory-commercial-pricing-history h4 { margin: 0; color: #344054; font-size: 13px; }
 .inventory-configured-rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: center; gap: 12px; padding: 12px 0; min-width: 0; }
 .inventory-configured-rates > div { display: grid; gap: 2px; min-width: 0; }
-.inventory-configured-rates span, .inventory-configured-rates small { color: #667085; font-size: 12px; font-weight: 400; }
+.inventory-configured-rates > div > span, .inventory-configured-rates small { color: #667085; font-size: 12px; font-weight: 400; }
 .inventory-configured-rates strong { overflow-wrap: anywhere; color: #101828; font-size: 14px; font-weight: 400; }
-.inventory-configured-rates > .button { min-height: 44px; white-space: nowrap; }
+.inventory-configured-rates > .button { min-height: 44px; white-space: nowrap; font-weight: 600; }
 .inventory-batch-list { display: grid; gap: 0; min-width: 0; }
 .inventory-batch-list > header { display: flex; align-items: center; min-height: 44px; }
 .inventory-batch-list h3 { margin: 0; color: #101828; font-size: 15px; }
@@ -81,13 +81,13 @@
 .inventory-batch-row-heading > strong { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .inventory-batch-row-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .inventory-batch-next { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 7px; border-radius: 999px; color: #175cd3 !important; background: #eff8ff; font-size: 11px !important; font-weight: 700; white-space: nowrap; }
-.inventory-batch-row small, .inventory-batch-row span { color: #667085; font-size: 12px; }
+.inventory-batch-row small, .inventory-batch-row-title, .inventory-batch-row-meta > div > span, .inventory-batch-row footer > div > span { color: #667085; font-size: 12px; }
 .inventory-batch-row-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .5fr); gap: 12px; }
 .inventory-batch-row-meta > div { display: grid; gap: 3px; min-width: 0; }
 .inventory-batch-row-meta > div > strong { display: grid; gap: 1px; overflow-wrap: anywhere; }
 .inventory-batch-row footer { align-items: center; }
 .inventory-batch-row footer > small { margin-left: auto; white-space: nowrap; }
-.inventory-batch-row footer .button { flex: 0 0 auto; }
+.inventory-batch-row footer .button { flex: 0 0 auto; font-weight: 600; }
 .inventory-commercial-price-fields { display: grid; grid-template-columns: minmax(120px, 1fr) 140px auto auto; align-items: end; gap: 10px; min-width: 0; max-width: 100%; }
 .inventory-commercial-price-fields label { display: grid; gap: 4px; min-width: 0; color: #344054; font-size: 12px; font-weight: 700; }
 .inventory-commercial-price-fields input { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; color: #101828; background: #fff; font: inherit; }
@@ -123,7 +123,7 @@
 .inventory-no-stock-price-summary { display: grid; gap: 8px; }
 .inventory-no-stock-price-summary > div { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
 .inventory-no-stock-price-summary span { overflow-wrap: anywhere; }
-.inventory-no-stock-pricing label, .inventory-no-stock-pricing strong, .inventory-no-stock-pricing summary, .inventory-no-stock-pricing .button, .inventory-no-stock-pricing .dropdown-select-trigger { font-weight: 400; }
+.inventory-no-stock-pricing label, .inventory-no-stock-pricing strong, .inventory-no-stock-pricing summary, .inventory-no-stock-pricing .dropdown-select-trigger { font-weight: 400; }
 .inventory-no-stock-locations { padding-block: 10px; }
 .inventory-no-stock-locations > summary { cursor: pointer; color: var(--text-secondary, #59636e); font-size: 13px; font-weight: 400; }
 .inventory-no-stock-cost-editor p { color: #b42318; }

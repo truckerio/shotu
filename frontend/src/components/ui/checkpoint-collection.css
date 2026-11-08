@@ -70,3 +70,12 @@
 @media (min-width: 701px) and (max-width: 960px) {
   .checkpoint-collection.is-footer-status:not(.is-single-batch) { grid-template-rows: auto minmax(0, 1fr) auto; }
 }
+
+@media (max-width: 700px) {
+  /* Keep batch choices reachable without scrolling through virtual empty space. */
+  .checkpoint-collection > .checkpoint-rail {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+  }
+}

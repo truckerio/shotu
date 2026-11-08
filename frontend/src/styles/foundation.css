@@ -101,3 +101,13 @@ small {
   font-size: var(--text-secondary);
   line-height: var(--leading-body);
 }
+
+@media (max-width: 700px) {
+  /* Clip horizontal overflow without trapping shared batch navigation in a
+     non-scrolling ancestor of the document's vertical scroll container. */
+  body:has(.checkpoint-collection),
+  #root:has(.checkpoint-collection) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+}

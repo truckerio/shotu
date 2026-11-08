@@ -983,17 +983,6 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
        select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
               catalog.normalized_part_number, catalog.description, catalog.manufacturer, catalog.category,
               catalog.barcode, catalog.uom_code, catalog.inventory_display_uom_code, catalog.tracking_mode, catalog.uom_locked_at, catalog.version,
-              coalesce((select mapping.display_name from odoo_product_mappings mapping
-                where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id
-                order by mapping.active desc, mapping.updated_at desc, mapping.external_id limit 1), '') as odoo_name,
-              coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id)
-                from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id), '[]'::jsonb) as reference_numbers,
-              case when exists (
-                select 1 from odoo_product_mappings provider
-                where provider.company_id = catalog.company_id
-                  and provider.catalog_part_id = catalog.id and provider.active = true
-              ) then 'odoo' else catalog.source_provider end as source_provider,
-              exists (select 1 from odoo_product_mappings ownership where ownership.company_id=catalog.company_id and ownership.catalog_part_id=catalog.id) as provider_managed,
               exists (select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.catalog_part_id=catalog.id and alert.resolved_at is null) as low_stock,
               array_remove(array[
                 case when bool_or(internal_price.amount is null) then 'missing_internal_price' end,
@@ -1007,26 +996,7 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
                 where balance.quantity_on_hand > 0
                    or balance.odoo_quantity_on_hand > 0
               )::integer as location_count,
-              coalesce(max(balance.updated_at), catalog.updated_at) as updated_at,
-              coalesce(jsonb_agg(jsonb_build_object(
-                'locationId', catalog_location.id,
-                'locationName', catalog_location.name,
-                'issues', array_remove(array[
-                  case when internal_price.amount is null then 'missing_internal_price' end,
-                  case when selling_policy.id is null or (catalog.tracking_mode = 'no_stock' and selling_policy.method <> 'fixed') then 'missing_selling_price' end
-                ], null),
-                'binLocation', coalesce(balance.bin_location, ''),
-                'quantityOnHand', coalesce(balance.quantity_on_hand, 0),
-                'quantityReserved', coalesce(balance.quantity_reserved, 0),
-                'quantityAvailable', coalesce(balance.quantity_available, 0),
-                'odooQuantityOnHand', coalesce(balance.odoo_quantity_on_hand, 0),
-                'minimumAvailable', (select policy.minimum_available from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
-                'targetQuantity', (select policy.target_quantity from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
-                'alertEnabled', coalesce((select policy.alert_enabled from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id), false),
-                'policyVersion', (select policy.version from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
-                'lowStock', exists(select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.location_id=catalog_location.id and alert.catalog_part_id=catalog.id and alert.resolved_at is null),
-                'updatedAt', coalesce(balance.updated_at, catalog.updated_at)
-              ) order by catalog_location.name, catalog_location.id), '[]'::jsonb) as locations
+              coalesce(max(balance.updated_at), catalog.updated_at) as updated_at
        from parts_catalog catalog
        join locations catalog_location
          on catalog_location.company_id = catalog.company_id and catalog_location.active = true
@@ -1087,6 +1057,9 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
           or ($9 = 'reserved' and quantity_on_hand > 0 and quantity_available = 0)
           or ($9 = 'out' and quantity_on_hand = 0)
      )
+     -- Issue ranking and counts must cover the complete filtered catalog;
+     -- location and provider display details are built only for this page.
+     , paged as materialized (
      select filtered.*,
             count(*) over() as total_count,
             (select count(*) from stock) as all_count,
@@ -1103,7 +1076,77 @@ export async function listLocalInventoryStock({ companyIds, catalogPartId = null
        case when $10 = 'locations_desc' then location_count end desc,
        case when $10 in ('available_desc', 'low_stock_first', 'reserved_desc', 'locations_desc') then quantity_available end desc,
        lower(part_number), catalog_part_id
-     limit $6 offset $7`,
+     limit $6 offset $7
+     )
+     select paged.*, details.odoo_name, details.reference_numbers, details.source_provider,
+            details.provider_managed, details.locations
+     from paged
+     cross join lateral (
+       select
+              coalesce((select mapping.display_name from odoo_product_mappings mapping
+                where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id
+                order by mapping.active desc, mapping.updated_at desc, mapping.external_id limit 1), '') as odoo_name,
+              coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id)
+                from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id), '[]'::jsonb) as reference_numbers,
+              case when exists (
+                select 1 from odoo_product_mappings provider
+                where provider.company_id = catalog.company_id
+                  and provider.catalog_part_id = catalog.id and provider.active = true
+              ) then 'odoo' else catalog.source_provider end as source_provider,
+              exists (select 1 from odoo_product_mappings ownership where ownership.company_id=catalog.company_id and ownership.catalog_part_id=catalog.id) as provider_managed,
+              coalesce(jsonb_agg(jsonb_build_object(
+                'locationId', catalog_location.id,
+                'locationName', catalog_location.name,
+                'issues', array_remove(array[
+                  case when internal_price.amount is null then 'missing_internal_price' end,
+                  case when selling_policy.id is null or (catalog.tracking_mode = 'no_stock' and selling_policy.method <> 'fixed') then 'missing_selling_price' end
+                ], null),
+                'binLocation', coalesce(balance.bin_location, ''),
+                'quantityOnHand', coalesce(balance.quantity_on_hand, 0),
+                'quantityReserved', coalesce(balance.quantity_reserved, 0),
+                'quantityAvailable', coalesce(balance.quantity_available, 0),
+                'odooQuantityOnHand', coalesce(balance.odoo_quantity_on_hand, 0),
+                'minimumAvailable', (select policy.minimum_available from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'targetQuantity', (select policy.target_quantity from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'alertEnabled', coalesce((select policy.alert_enabled from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id), false),
+                'policyVersion', (select policy.version from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'lowStock', exists(select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.location_id=catalog_location.id and alert.catalog_part_id=catalog.id and alert.resolved_at is null),
+                'updatedAt', coalesce(balance.updated_at, catalog.updated_at)
+              ) order by catalog_location.name, catalog_location.id), '[]'::jsonb) as locations
+       from parts_catalog catalog
+       join locations catalog_location
+         on catalog_location.company_id = catalog.company_id and catalog_location.active = true
+       left join balances balance
+         on balance.company_id = catalog.company_id
+        and balance.catalog_part_id = catalog.id
+        and balance.location_id = catalog_location.id
+       left join lateral (
+         select price.amount from inventory_part_price_versions price
+         where price.company_id = catalog.company_id and price.catalog_part_id = catalog.id
+           and price.price_kind = 'internal'
+           and (price.location_id is null or price.location_id = catalog_location.id)
+         order by (price.location_id is not null) desc, price.version desc limit 1
+       ) internal_price on true
+       left join lateral (
+         select policy.id, policy.method from inventory_part_selling_policy_versions policy
+         where policy.company_id = catalog.company_id and policy.catalog_part_id = catalog.id
+           and (policy.location_id is null or policy.location_id = catalog_location.id)
+         order by (policy.location_id is not null) desc, policy.version desc limit 1
+       ) selling_policy on true
+       where catalog.company_id = paged.company_id and catalog.id = paged.catalog_part_id
+         and ($3::boolean or catalog_location.id = any($2::uuid[]))
+         and ($4::uuid is null or catalog_location.id = $4)
+       group by catalog.company_id, catalog.id
+     ) details
+     order by
+       (cardinality(paged.issues) > 0) desc,
+       case when $10 = 'low_stock_first' then paged.low_stock end desc,
+       case when $10 = 'low_stock_first' and paged.low_stock then paged.quantity_available end asc,
+       case when $10 = 'available_desc' then paged.quantity_available end desc,
+       case when $10 = 'reserved_desc' then paged.quantity_reserved end desc,
+       case when $10 = 'locations_desc' then paged.location_count end desc,
+       case when $10 in ('available_desc', 'low_stock_first', 'reserved_desc', 'locations_desc') then paged.quantity_available end desc,
+       lower(paged.part_number), paged.catalog_part_id`,
     [companyIds, locationIds, isAdmin, locationId, search, limit, offset, scope, availability, sort, normalizedReferencePrefix, catalogPartId],
   );
   const items = result.rows.map((row) => ({

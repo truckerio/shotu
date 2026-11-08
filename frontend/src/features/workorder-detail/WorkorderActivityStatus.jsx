@@ -12,7 +12,7 @@ export function WorkorderActivityStatus({ controller, lifecycleStatus = "", life
     return <span className="workorder-activity-status is-loading" role="status">Status…</span>;
   }
   if (!view) return <div className="workorder-activity-status">
-    <Dropdown aria-label="Workorder status" value={terminal ? terminalValue : "unavailable"} disabled><option value={terminal ? terminalValue : "unavailable"}>{terminal ? terminalText : "Unavailable"}</option></Dropdown>
+    <Dropdown aria-label="Workorder status" popoverClassName="workorder-status-popover" value={terminal ? terminalValue : "unavailable"} disabled><option value={terminal ? terminalValue : "unavailable"}>{terminal ? terminalText : "Unavailable"}</option></Dropdown>
     <button type="button" className="workorder-status-retry" onClick={controller.refresh} disabled={controller.busy}>Retry</button>
     <span className="workorder-status-error" role="alert">{controller.error || "Workorder status is unavailable."}</span>
   </div>;
@@ -21,7 +21,7 @@ export function WorkorderActivityStatus({ controller, lifecycleStatus = "", life
   return (
     <div className="workorder-activity-status">
       <Dropdown
-        aria-label="Workorder status"
+        aria-label="Workorder status" popoverClassName="workorder-status-popover"
         value={displayedStatus}
         disabled={terminal || !view.canChangeStatus || controller.busy}
         onChange={(event) => { void controller.changeStatus(event.target.value).catch(() => {}); }}

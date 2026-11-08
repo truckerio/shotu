@@ -1,3 +1,9 @@
+.dropdown-select-popover.workorder-status-popover {
+  width: max-content;
+  min-width: min(var(--trigger-width), calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+.workorder-status-popover .dropdown-select-option-label { overflow-wrap: normal; }
 .workorder-activity-status { align-items: center; display: inline-flex; gap: 6px; min-width: 0; }
 .workorder-activity-status .dropdown-select-trigger { min-height: 40px; white-space: nowrap; }
 .workorder-activity-status.is-loading { color: #667085; font-size: 14px; min-height: 40px; padding-inline: 10px; }
