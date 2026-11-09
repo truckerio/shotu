@@ -14,6 +14,7 @@ import { checkWorkorderPanelDefaults } from "./workorder-panel-defaults.browser-
 import { checkWorkorderOdooHandoff } from "./workorder-odoo-handoff.browser-checks.js";
 import { checkWorkorderChatLayout } from "./workorder-chat-layout.browser-checks.js";
 import { seedNormalCustomerFlowWorkorder } from "./customer-normal-flow-fixture.js";
+import { checkCommercialProfileSetup } from "./commercial-profile-setup.browser-checks.js";
 import { checkNormalCustomerFlow } from "./customer-normal-flow.browser-checks.js";
 
 const database = new URL(process.env.DATABASE_URL || "");
@@ -168,7 +169,9 @@ async function statusMenuGeometry(page) {
     await page.setViewportSize({ width, height: 900 });
     await trigger.click();
     await page.getByRole('option', { name: 'Waiting for office', exact: true }).waitFor();
-    await page.locator('.dropdown-select-popover:not([data-entering])').waitFor();
+    const popover = page.locator('.dropdown-select-popover');
+    await popover.waitFor({ state: 'visible' });
+    await popover.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))));
     const geometry = await page.locator('.dropdown-select-popover').evaluate(popover => {
       const box = popover.getBoundingClientRect();
       return { left: box.left, right: box.right, viewport: innerWidth,
@@ -205,6 +208,20 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
+    if (process.env.QA_COMMERCIAL_PROFILE_SETUP_ONLY === "true" || (account.role === "admin" && !Object.entries(process.env).some(([key,value]) => key.startsWith("QA_") && key.endsWith("_ONLY") && value === "true"))) {
+      try {
+        if (account.role === "admin") {
+          await checkCommercialProfileSetup({ page, baseUrl, fixture, pool, artifacts });
+          console.log("PASS commercial profile setup: select/create tax, validate rates, publish and reload");
+          await page.goto(baseUrl);
+        }
+      } catch (error) {
+        errors.push(`${account.role}: ${error.stack || error}`);
+        console.error(await page.locator('.commercial-profile-settings').ariaSnapshot().catch(() => 'Profile snapshot unavailable'));
+        await page.screenshot({ path: join(artifacts, `${account.role}-profile-setup-failure.png`), fullPage: true }).catch(() => {});
+      }
+      if (process.env.QA_COMMERCIAL_PROFILE_SETUP_ONLY === "true") { await context.close(); continue; }
+    }
     if ((account.role === "office" && !["QA_WORKORDER_PANEL_DEFAULTS_ONLY", "QA_WORKORDER_ODOO_HANDOFF_ONLY", "QA_WORKORDER_CHAT_LAYOUT_ONLY"].some(key => process.env[key] === "true")) || process.env.QA_CUSTOMER_NORMAL_FLOW_ONLY === "true") {
       try {
         if (account.role === "office") {

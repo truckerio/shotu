@@ -3,6 +3,8 @@ import { permissionsForRole } from "../../src/server/auth/permissions.js";
 import { createInventoryTaxProfile } from "../../src/server/modules/inventory/inventory-tax-profiles.service.js";
 import { publishCustomerDocumentProfile } from "../../src/server/modules/customer-documents/customer-documents.service.js";
 import { buildCustomerDocumentProjection } from "../../src/server/modules/customer-documents/customer-document-projection.js";
+import { reviseWorkorderLaborRate, selectWorkorderLaborPrice } from "../../src/server/modules/workorders/workorder-labor-pricing.service.js";
+import { readLockedWorkorderFinancialSource } from "../../src/server/db/repositories/customer-document-workorder-source.repo.js";
 import { issueCustomerDocumentRevision } from "../../src/server/db/repositories/customer-documents.repo.js";
 
 function hash(value) {
@@ -58,6 +60,39 @@ export async function seedWorkorderDocumentsFixture(pool, fixture) {
     locationIds: new Set([locationId]),
     permissions: permissionsForRole("admin"),
   };
+  const productId = randomUUID();
+  await pool.query(
+    "insert into local_labor_products(id,company_id,name,normalized_name,code,normalized_code,created_by_user_id) values($1,$2,'QA document labor',$3,$4,$3,$5)",
+    [productId, companyId, `document-labor-${productId}`, `DOC-${productId}`, officeId],
+  );
+  await pool.query(
+    "update operational_workorders set form_data=coalesce(form_data,'{}'::jsonb) || $4::jsonb where id=$1 and company_id=$2 and location_id=$3",
+    [workorderId, companyId, locationId, JSON.stringify({ laborHours: "1", laborProduct: { productId, name: "QA document labor", uomCode: "hr" } })],
+  );
+  const officeContext = {
+    actor: { id: officeId, role: "office" }, companyIds: new Set([companyId]),
+    companyRoles: new Map([[companyId, "office"]]), locationIds: new Set([locationId]),
+    permissions: permissionsForRole("office"),
+  };
+  await reviseWorkorderLaborRate(workorderId, {
+    productId, locationId, priceKind: "selling_price", expectedVersion: 0, amount: "100", currency: "USD",
+    reason: "Disposable document fixture selling rate", idempotencyKey: randomUUID(),
+  }, officeContext, { companyId, locationId, workorder: { status: "accepted" } });
+  const selected = await selectWorkorderLaborPrice(workorderId, {
+    selection: "selling_price", reason: "Disposable document fixture selected selling rate", idempotencyKey: randomUUID(),
+  }, officeContext);
+  if (selected.kind !== "saved" || Number(selected.laborPrice.totalPrice) !== 100) throw new Error("Document fixture labor selection was not saved at $100.");
+  const client = await pool.connect();
+  let source;
+  try {
+    await client.query("begin");
+    source = await readLockedWorkorderFinancialSource({ companyId, locationId, workorderId }, client);
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally { client.release(); }
+
   const tax = await createInventoryTaxProfile({
     companyId,
     name: "QA Workorder tax",
@@ -95,7 +130,7 @@ export async function seedWorkorderDocumentsFixture(pool, fixture) {
       formData: { unitNo: "QA-MAINT-1", mechanicConcern: "QA document chat", customerCompanyName: "QA Customer" },
     })],
   );
-  const pricingFingerprint = hash({ workorderId, version: workorder.progress_version, labor: "100.00" });
+  const pricingFingerprint = source.pricingFingerprint;
   const { projection, contentHash } = buildCustomerDocumentProjection({
     document: { type: "estimate", state: "draft_projection" },
     shop: { legalName: "Maintenance QA Shop" },
@@ -120,7 +155,7 @@ export async function seedWorkorderDocumentsFixture(pool, fixture) {
       lines: [{
         id: "qa-labor", type: "labor", description: "Diagnostic labor", quantity: "1", unit: "hr",
         unitPrice: "100", priceBasis: "selling_price", taxCategory: "labor", taxTreatment: "exempt",
-        taxComponents: [], discountEligible: true, source: { kind: "labor_snapshot", id: workorderId },
+        taxComponents: [], discountEligible: true, source: { kind: "labor_snapshot", id: source.labor.id },
       }],
     },
   });

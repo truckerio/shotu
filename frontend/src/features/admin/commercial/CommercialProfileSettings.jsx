@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DotsVertical } from "@untitledui/icons";
 import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
@@ -9,6 +9,8 @@ import { CustomerDocumentRenderer } from "../../customer-documents/CustomerDocum
 import { customerDocumentProjection } from "../../customer-documents/customer-document-model.js";
 import { CustomerDocumentReports } from "./CustomerDocumentReports.jsx";
 import { commercialProfileInitialScope } from "../../customer-documents/commercial-profile-navigation.js";
+import { TaxProfileSetup } from "./TaxProfileSetup.jsx";
+import { profileForScope, taxRequestKey } from "./tax-setup-model.js";
 import "./commercial-profile.css";
 
 function commandKey() { return globalThis.crypto?.randomUUID?.() || `commercial-${Date.now()}-${Math.random()}`; }
@@ -25,6 +27,10 @@ function ProfileSection({ title, summary, required = false, initiallyOpen = fals
 }
 
 export function CommercialProfileSettings({ locations = [] }) {
+  const pendingPublish = useRef(null);
+  const [taxSaving, setTaxSaving] = useState(false);
+  const [taxAvailability, setTaxAvailability] = useState({ scope: "", available: false });
+  const [loadedScope, setLoadedScope] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [compactView, setCompactView] = useState("form");
@@ -37,17 +43,21 @@ export function CommercialProfileSettings({ locations = [] }) {
       setLocationId(initialScope.locationId);
     }
   }, [companyId, initialScope.companyId, initialScope.locationId]);
-  useEffect(() => { if (!companyId) { setState("blocked"); return; } let active = true; setState("loading"); setError(""); const params = new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) }); api(`/api/customer-documents/profile?${params}`).then(({ profile }) => { if (active) { setDraft(fromProfile(profile)); setState("ready"); } }).catch((reason) => { if (!active) return; if (reason.status === 404) { setDraft(blank()); setState("ready"); } else { setError(reason.message || "Commercial profile could not be loaded."); setState("error"); } }); return () => { active = false; }; }, [companyId, locationId]);
+  useEffect(() => { if (!companyId) { setState("blocked"); return; } let active = true; setState("loading"); setError(""); const params = new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) }); api(`/api/customer-documents/profile?${params}`).then(({ profile }) => { if (active) { setDraft(fromProfile(profileForScope(profile, locationId))); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } }).catch((reason) => { if (!active) return; if (reason.status === 404) { setDraft(blank()); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } else { setError(reason.message || "Commercial profile could not be loaded."); setState("error"); } }); return () => { active = false; }; }, [companyId, locationId]);
+  const taxScope = `${companyId}:${draft.currency}`;
+  const updateTaxAvailability = useCallback((available, id) => setTaxAvailability({ scope: taxScope, available, id }), [taxScope]);
+  const taxAvailable = taxAvailability.scope === taxScope && taxAvailability.id === draft.taxProfileVersionId && taxAvailability.available;
+  const scopeReady = loadedScope === `${companyId}:${locationId}` && state === "ready";
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
   const validDiscount = /^(?:0|[1-9]\d?|100)(?:\.\d{1,4})?$/.test(draft.maxOfficePercentage.trim());
   const validDigits = (value) => /^([4-9]|1[0-2])$/.test(value);
   const validValidityDays = !draft.estimateValidityDays || /^(?:[1-9]|[1-9]\d|[12]\d{2}|3[0-5]\d|36[0-5])$/.test(draft.estimateValidityDays);
-  const missing = !companyId || !draft.legalName.trim() || !draft.authorizationText.trim() || !draft.taxProfileVersionId.trim() || !validDiscount || !draft.estimatePrefix.trim() || !draft.invoicePrefix.trim() || !validDigits(draft.estimateDigits) || !validDigits(draft.invoiceDigits) || !validValidityDays || TAX_TYPES.some(([key]) => !draft.lineTaxPolicy[key]);
-  async function publish(event) { event.preventDefault(); if (missing) return; setState("saving"); setError(""); try { const result = await api("/api/admin/customer-document-profiles", { method: "POST", body: JSON.stringify({ companyId, locationId: locationId || null, profileId: draft.profileId, expectedVersion: draft.expectedVersion, shopIdentity: { legalName: draft.legalName.trim(), tradeName: draft.tradeName.trim() || null, address: draft.address.trim() || null, phone: draft.phone.trim() || null, email: draft.email.trim() || null, registrationIdentifiers: draft.registrationIdentifiers, logoUrl: draft.logoUrl.trim() || null, accentColor: draft.accentColor.trim() || null }, documentTerms: { estimate: draft.estimateTerms, invoice: draft.invoiceTerms, warranty: draft.warrantyTerms, footer: draft.footerTerms }, authorizationText: draft.authorizationText.trim(), discountPolicy: { maxOfficePercentage: draft.maxOfficePercentage.trim(), reasonRequired: true }, lineTaxPolicy: draft.lineTaxPolicy, documentNumbering: { estimate: { prefix: draft.estimatePrefix.trim(), digits: Number(draft.estimateDigits) }, invoice: { prefix: draft.invoicePrefix.trim(), digits: Number(draft.invoiceDigits) } }, estimateValidityDays: draft.estimateValidityDays ? Number(draft.estimateValidityDays) : null, defaultCurrency: draft.currency, taxProfileVersionId: draft.taxProfileVersionId.trim(), idempotencyKey: commandKey() }) }); setDraft(fromProfile(result.profileVersion || result.profile)); setState("ready"); setMessage("Commercial profile published. Existing documents keep their original version."); } catch (reason) { setState("error"); setError(reason.message || "Commercial profile could not be published."); } }
+  const missing = taxSaving || !scopeReady || !taxAvailable || !companyId || !draft.legalName.trim() || !draft.authorizationText.trim() || !draft.taxProfileVersionId.trim() || !validDiscount || !draft.estimatePrefix.trim() || !draft.invoicePrefix.trim() || !validDigits(draft.estimateDigits) || !validDigits(draft.invoiceDigits) || !validValidityDays || TAX_TYPES.some(([key]) => !draft.lineTaxPolicy[key]);
+  async function publish(event) { event.preventDefault(); if (missing) return; setState("saving"); setError(""); try { const payload = { companyId, locationId: locationId || null, profileId: draft.profileId, expectedVersion: draft.expectedVersion, shopIdentity: { legalName: draft.legalName.trim(), tradeName: draft.tradeName.trim() || null, address: draft.address.trim() || null, phone: draft.phone.trim() || null, email: draft.email.trim() || null, registrationIdentifiers: draft.registrationIdentifiers, logoUrl: draft.logoUrl.trim() || null, accentColor: draft.accentColor.trim() || null }, documentTerms: { estimate: draft.estimateTerms, invoice: draft.invoiceTerms, warranty: draft.warrantyTerms, footer: draft.footerTerms }, authorizationText: draft.authorizationText.trim(), discountPolicy: { maxOfficePercentage: draft.maxOfficePercentage.trim(), reasonRequired: true }, lineTaxPolicy: draft.lineTaxPolicy, documentNumbering: { estimate: { prefix: draft.estimatePrefix.trim(), digits: Number(draft.estimateDigits) }, invoice: { prefix: draft.invoicePrefix.trim(), digits: Number(draft.invoiceDigits) } }, estimateValidityDays: draft.estimateValidityDays ? Number(draft.estimateValidityDays) : null, defaultCurrency: draft.currency, taxProfileVersionId: draft.taxProfileVersionId.trim() }; pendingPublish.current = taxRequestKey(pendingPublish.current, payload, commandKey); const result = await api("/api/admin/customer-document-profiles", { method: "POST", body: JSON.stringify({ ...payload, idempotencyKey: pendingPublish.current.key }) }); pendingPublish.current = null; setDraft(fromProfile(result.profileVersion || result.profile)); setState("ready"); setMessage("Commercial profile published. Existing documents keep their original version."); } catch (reason) { setState("ready"); setError(reason.message || "Commercial profile could not be published."); } }
   const advancedMissing = !validDiscount || !draft.estimatePrefix.trim() || !draft.invoicePrefix.trim() || !validDigits(draft.estimateDigits) || !validDigits(draft.invoiceDigits) || !validValidityDays;
   const projection = customerDocumentProjection({ document: { type: "estimate", state: "draft_projection" }, shop: { legalName: draft.legalName || "Your shop", tradeName: draft.tradeName || null, address: draft.address || null, phone: draft.phone || null, email: draft.email || null }, customer: { name: "Customer" }, unit: { label: "Unit" }, lines: [], totals: { currency: draft.currency, subtotal: "0", discountTotal: "0", tax: "0", total: "0" }, terms: draft.estimateTerms, authorizationText: draft.authorizationText, warrantyText: draft.warrantyTerms, footer: draft.footerTerms });
   const scopeLocations = locations.filter((location) => (location.company_id || location.companyId) === companyId);
-  const taxMissing = !draft.taxProfileVersionId.trim() || TAX_TYPES.some(([key]) => !draft.lineTaxPolicy[key]);
+  const taxMissing = !taxAvailable || !draft.taxProfileVersionId.trim() || TAX_TYPES.some(([key]) => !draft.lineTaxPolicy[key]);
   const numberingMissing = !draft.estimatePrefix.trim() || !draft.invoicePrefix.trim() || !validDigits(draft.estimateDigits) || !validDigits(draft.invoiceDigits) || !validValidityDays;
   const busy = state === "loading" || state === "saving";
   return (
@@ -78,9 +88,10 @@ export function CommercialProfileSettings({ locations = [] }) {
             </MenuTrigger>
           </header>
           <div className="commercial-profile-form-scroll" role="region" aria-label="Profile form" tabIndex={0}>
+            <fieldset className="commercial-profile-edit-fields" disabled={state === "saving"} aria-label="Profile settings">
             <div className="commercial-profile-scope">
-              {companies.length > 1 ? <label>Company<Dropdown aria-label="Profile company" value={companyId} onChange={(event) => { setCompanyId(event.target.value); setLocationId(""); }}>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</Dropdown></label> : null}
-              <label>Location<Dropdown aria-label="Profile location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Company default</option>{scopeLocations.map((location) => <option key={location.id || location.location?.id} value={location.id || location.location?.id}>{location.name || location.location?.name}</option>)}</Dropdown></label>
+              {companies.length > 1 ? <label>Company<Dropdown aria-label="Profile company" disabled={state === "saving" || taxSaving} value={companyId} onChange={(event) => { setCompanyId(event.target.value); setLocationId(""); }}>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</Dropdown></label> : null}
+              <label>Location<Dropdown aria-label="Profile location" disabled={state === "saving" || taxSaving} value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Company default</option>{scopeLocations.map((location) => <option key={location.id || location.location?.id} value={location.id || location.location?.id}>{location.name || location.location?.name}</option>)}</Dropdown></label>
             </div>
           <ProfileSection title="Shop details" summary={draft.tradeName || draft.legalName || "Not configured"} required={!draft.legalName.trim()} initiallyOpen>
             <label>Legal name<input required value={draft.legalName} onChange={(event) => update("legalName", event.target.value)} /></label>
@@ -91,13 +102,13 @@ export function CommercialProfileSettings({ locations = [] }) {
             <label>Authorization<textarea required rows="3" value={draft.authorizationText} onChange={(event) => update("authorizationText", event.target.value)} /></label>
           </ProfileSection>
           <ProfileSection title="Tax settings" summary={taxMissing ? "Required before publishing" : "Configured · edit tax treatment"} required={taxMissing} initiallyOpen={taxMissing}>
-            <label>Tax profile version<input required value={draft.taxProfileVersionId} onChange={(event) => update("taxProfileVersionId", event.target.value)} /></label>
+            <TaxProfileSetup key={taxScope} companyId={companyId} currency={draft.currency} selectedId={draft.taxProfileVersionId} onSelect={(value) => update("taxProfileVersionId", value)} onAvailabilityChange={updateTaxAvailability} onBusyChange={setTaxSaving} />
             {TAX_TYPES.map(([key, label]) => <label key={key}>{label}<Dropdown value={draft.lineTaxPolicy[key] || ""} onChange={(event) => update("lineTaxPolicy", { ...draft.lineTaxPolicy, [key]: event.target.value })}><option value="">Unconfigured — choose before publishing</option>{(key === "credit" ? ["zero_rated", "exempt", "out_of_scope"] : ["exclusive", "inclusive", "zero_rated", "exempt", "out_of_scope"]).map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</Dropdown></label>)}
           </ProfileSection>
           <div id="commercial-profile-advanced" hidden={!showAdvanced}>
           <h2 className="commercial-profile-advanced-title">Advanced settings</h2>
           <ProfileSection title="Pricing" summary={`${draft.currency} · Discount limit ${draft.maxOfficePercentage}%`} required={!validDiscount}>
-            <label>Currency<input required value={draft.currency} maxLength="3" onChange={(event) => update("currency", event.target.value.toUpperCase())} /></label>
+            <label>Currency<input required disabled={taxSaving || state === "saving"} value={draft.currency} maxLength="3" onChange={(event) => update("currency", event.target.value.toUpperCase())} /></label>
             <label>Maximum office discount %<input required inputMode="decimal" value={draft.maxOfficePercentage} aria-invalid={!validDiscount} onChange={(event) => update("maxOfficePercentage", event.target.value)} /></label>
           </ProfileSection>
           <ProfileSection title="Document numbering" summary={`${draft.estimatePrefix} / ${draft.invoicePrefix}`} required={numberingMissing}>
@@ -120,6 +131,7 @@ export function CommercialProfileSettings({ locations = [] }) {
           </div>
           {showReports ? <section className="commercial-profile-reports"><CustomerDocumentReports companyId={companyId} locationId={locationId} /></section> : null}
           {missing ? <p className="commercial-profile-feedback" role="status">Complete the required shop and tax settings.{advancedMissing ? <> <button type="button" onClick={() => setShowAdvanced(true)}>Review advanced settings</button></> : null}</p> : null}
+            </fieldset>
           </div>
         </form>
         <aside aria-label="Document preview">

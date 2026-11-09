@@ -66,3 +66,11 @@
   .commercial-profile-section-fields :is(input, textarea) { min-height: 44px; }
   .commercial-profile-preview-scroll { padding: 16px; }
 }
+.commercial-tax-creation { margin-top: 16px; padding: 12px; border: 1px solid #d0d5dd; border-radius: 8px; }
+.commercial-tax-creation h3 { margin: 0; font-size: var(--text-heading); }
+.commercial-tax-creation fieldset { margin: 16px 0; padding: 8px 12px 12px; border: 1px solid #d0d5dd; border-radius: 8px; }
+.commercial-profile-section-fields .commercial-tax-compound { display: flex; align-items: center; }
+.commercial-profile-section-fields .commercial-tax-compound input { width: auto; min-height: auto; }
+.commercial-tax-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.commercial-profile-edit-fields { display: contents; }
