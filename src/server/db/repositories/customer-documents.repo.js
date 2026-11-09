@@ -496,6 +496,17 @@ export async function issueCustomerDocumentRevision(input, dependencies = {}) {
           throw domainError("CUSTOMER_DOCUMENT_REVISION_CONFLICT", { documentId: existingInvoice.rows[0].id });
         }
       }
+      if (input.documentType === "estimate" && input.workorderId) {
+        const existingEstimate = await client.query(
+          `select id from customer_documents
+            where company_id=$1 and location_id=$2 and workorder_id=$3 and document_type='estimate'
+            limit 1 for update`,
+          [input.companyId, input.locationId, input.workorderId],
+        );
+        if (existingEstimate.rows[0]) {
+          throw domainError("CUSTOMER_DOCUMENT_REVISION_CONFLICT", { documentId: existingEstimate.rows[0].id });
+        }
+      }
       if (input.documentType === "estimate" && input.draftId) {
         const draft = await client.query(
           `select id from workorder_drafts
@@ -631,7 +642,9 @@ export async function createCustomerDocumentGrant(input, dependencies = {}) {
     }
     const revision = (await client.query(
       `select revision.*,document.document_type,document.workorder_id,
-          coalesce(auth_event.classification,draft.authorization_classification) as authorization_classification
+          coalesce(auth_event.classification,draft.authorization_classification,
+            case when document.document_type='estimate' and document.draft_id is null
+              and document.workorder_id is not null then 'required_external_customer' end) as authorization_classification
          from customer_document_revisions revision
          join customer_documents document
            on document.company_id=revision.company_id and document.id=revision.document_id
@@ -709,7 +722,9 @@ export async function recordCustomerDocumentResponse(input, dependencies = {}) {
     }
     const revision = (await client.query(
       `select revision.*,document.document_type,
-          coalesce(auth_event.classification,draft.authorization_classification) as authorization_classification
+          coalesce(auth_event.classification,draft.authorization_classification,
+            case when document.document_type='estimate' and document.draft_id is null
+              and document.workorder_id is not null then 'required_external_customer' end) as authorization_classification
          from customer_document_revisions revision
          join customer_documents document
            on document.company_id=revision.company_id and document.id=revision.document_id
@@ -1050,7 +1065,9 @@ export async function viewCustomerDocumentGrant(input, dependencies = {}) {
     );
     const revision = (await client.query(
       `select revision.*,document.document_type,document.document_number,
-              coalesce(auth_event.classification,draft.authorization_classification) as authorization_classification,
+              coalesce(auth_event.classification,draft.authorization_classification,
+                case when document.document_type='estimate' and document.draft_id is null
+                  and document.workorder_id is not null then 'required_external_customer' end) as authorization_classification,
               grant_row.id as grant_id,grant_row.revision_id as grant_revision_id,
               grant_row.token_hint,grant_row.allowed_actions,
               grant_row.workorder_id as grant_workorder_id,grant_row.issued_at as grant_issued_at,
@@ -1226,7 +1243,7 @@ export async function getCustomerDocumentSummaryByWorkorder(input, dependencies 
   const run = dependencies.query || query;
   const result = await run(
     `select document.id document_id,document.document_type,document.document_number,
-            document.draft_id,revision.*,response.event_type response_event_type,
+            document.draft_id,document.workorder_id,revision.*,response.event_type response_event_type,
             response.created_at response_created_at,response.metadata response_metadata,true is_latest
        from customer_documents document
        join lateral (

@@ -9,7 +9,7 @@ import {
   sendWorkorderCustomerChat,
 } from "./customer-estimate-api.js";
 
-export function WorkorderCustomerChat({ companyId, locationId, workorderId, document, canSend = false, repairScope = false }) {
+export function WorkorderCustomerChat({ companyId, locationId, workorderId, document, canSend = false, repairScope = false, onPrepareEstimate }) {
   const [messages, setMessages] = useState([]);
   const [state, setState] = useState({ loading: true, sending: false, error: "" });
   const messageKey = useRef(customerDocumentCommandKey("staff-customer-chat"));
@@ -81,6 +81,7 @@ export function WorkorderCustomerChat({ companyId, locationId, workorderId, docu
   if (!documentId || !revisionId || (repairScope && !document?.id)) return <section className="workorder-customer-chat" aria-label="Customer chat">
     <p className="workorder-customer-chat-audience">Visible to customer</p>
     <p className="workorder-customer-chat-empty">No issued customer document yet.</p>
+    {canSend && onPrepareEstimate ? <button type="button" className="button secondary" onClick={onPrepareEstimate}>Prepare Estimate</button> : null}
   </section>;
   return <section className="workorder-customer-chat" aria-label="Customer chat">
     <header>

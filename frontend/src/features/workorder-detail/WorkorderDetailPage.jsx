@@ -477,6 +477,7 @@ export function WorkorderDetailPage({
           locationId={activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
           workorderId={activeWorkorder.workorder.id}
           customerDocument={documentController.invoice || documentController.estimate}
+          onPrepareEstimate={() => setOfficeToolView("customer-documents")}
         />
       : <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
     ...(canReadCustomerDocuments ? [{

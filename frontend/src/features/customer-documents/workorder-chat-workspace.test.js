@@ -54,6 +54,14 @@ test("customer chat explains a missing issued document without exposing a compos
   assert.doesNotMatch(html, /Message to customer/);
 });
 
+test("authorized customer chat without a document offers a path to prepare its Estimate", () => {
+  const html = compiled.exports.render({ audience: "customer", canReadInternal: true, canReadCustomer: true, canSendCustomer: true, customerDocument: null, onPrepareEstimate: () => {} });
+  assert.match(html, />Prepare Estimate<\/button>/);
+  assert.doesNotMatch(html, /Message to customer/);
+  const readOnly = compiled.exports.render({ audience: "customer", canReadInternal: true, canReadCustomer: true, canSendCustomer: false, customerDocument: null, onPrepareEstimate: () => {} });
+  assert.doesNotMatch(readOnly, />Prepare Estimate<\/button>/);
+});
+
 test("both audiences render the shared chat thread and prompt, while customer composer stays text-only and bounded", () => {
   const html = compiled.exports.render({ audience: "customer", canReadInternal: true, canReadCustomer: true, canSendCustomer: true });
   assert.equal((html.match(/class="chat-thread /g) || []).length, 2);

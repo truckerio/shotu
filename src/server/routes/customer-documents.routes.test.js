@@ -14,6 +14,15 @@ function harness(body = {}, requestContext = { actor: { id: "actor", role: "offi
   };
 }
 
+test("malformed profile, preview and issue requests return validation errors instead of server failures", async () => {
+  for (const path of ["/api/admin/customer-document-profiles", "/api/customer-documents/previews", "/api/customer-documents/revisions"]) {
+    const h = harness({});
+    assert.equal(await handleCustomerDocumentsApi({ method: "POST", headers: {} }, {}, new URL(`http://x${path}`), h.helpers), true);
+    assert.equal(h.sent[0].status, 400, path);
+    assert.equal(h.sent[0].payload.code, "validation_error");
+  }
+});
+
 test("staff preview and issue routes delegate validated ownership to the service boundary", async () => {
   const preview = harness({ companyId: "company" });
   let previewCall;

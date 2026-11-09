@@ -100,7 +100,8 @@
   }
 }
 
-.workorder-tools-panel-view:has(> .chat-content) {
+.workorder-tools-panel-view:has(> .chat-content),
+.workorder-tools-panel-view:has(> .workorder-chat-workspace) {
   display: flex;
   flex-direction: column;
   padding-bottom: 24px;

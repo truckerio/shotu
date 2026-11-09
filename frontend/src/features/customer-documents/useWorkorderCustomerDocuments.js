@@ -178,7 +178,7 @@ export function useWorkorderCustomerDocuments({ companyId, locationId, workorder
     }
     if (!previewType || !projection?.financialFingerprint) return;
     const predecessor = summary?.documents?.estimate || null;
-    if (previewType === "estimate" && (!predecessor?.documentId || !predecessor?.id || !predecessor?.draftId)) {
+    if (previewType === "estimate" && predecessor && (!predecessor.documentId || !predecessor.id)) {
       setError("The original Estimate lineage is unavailable. Refresh this Workorder before issuing a revision.");
       return;
     }

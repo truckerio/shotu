@@ -8,21 +8,21 @@ const ids = {
   workorder: "33333333-3333-4333-8333-333333333333",
 };
 
-function client({ priceQuantity = "2.000", uomCode = "hr", snapshotUom = uomCode } = {}) {
+function client({ priceQuantity = "2.000", uomCode = "hr", snapshotUom = uomCode, laborHours = "1", status = "mechanic_done", missingPartPrice = false, noLaborSnapshot = false } = {}) {
   let call = 0;
   return {
     async query(sql) {
       call += 1;
       if (call === 1) return { rows: [{
         id: ids.workorder, company_id: ids.company, location_id: ids.location,
-        status: "mechanic_done", progress_version: 7, concern: "Repair", work_performed: "Installed",
-        form_data: { customerCompanyName: "Customer", laborHours: "1", laborProduct: { productId: "99999999-9999-4999-8999-999999999999", uomCode } }, unit_no: "T-1",
+        status, progress_version: 7, concern: "Repair", work_performed: "Installed",
+        form_data: { customerCompanyName: "Customer", laborHours, laborProduct: { productId: "99999999-9999-4999-8999-999999999999", uomCode } }, unit_no: "T-1",
       }] };
       if (call === 2) return { rows: [] };
       if (call === 3) return { rows: [{
         id: "44444444-4444-4444-8444-444444444444", status: "consumed", catalog_part_id: "55555555-5555-4555-8555-555555555555",
         uom_code: "ea", effective_quantity: "2.000", part_number: "P-1", description: "Part",
-        price_snapshot_id: "66666666-6666-4666-8666-666666666666", selection: "selling_price",
+        price_snapshot_id: missingPartPrice ? null : "66666666-6666-4666-8666-666666666666", selection: "selling_price",
         unit_price: "5.0000", price_quantity: priceQuantity, total_price: "10.0000", currency: "USD",
         selling_policy_version_id: "77777777-7777-4777-8777-777777777777",
       }] };
@@ -31,6 +31,7 @@ function client({ priceQuantity = "2.000", uomCode = "hr", snapshotUom = uomCode
         return { rows: [] };
       }
       assert.match(sql, /workorder_labor_price_snapshots/);
+      if (noLaborSnapshot) return { rows: [] };
       return { rows: [{
         id: "88888888-8888-4888-8888-888888888888", labor_product_id: "99999999-9999-4999-8999-999999999999",
         rate_version_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", selection: "selling_price", hours: "1.00",
@@ -40,6 +41,39 @@ function client({ priceQuantity = "2.000", uomCode = "hr", snapshotUom = uomCode
     },
   };
 }
+
+test("removed labor never projects or fingerprints a historical labor snapshot", async () => {
+  const input = { companyId: ids.company, locationId: ids.location, workorderId: ids.workorder };
+  for (const laborHours of ["", "0"]) {
+    const historical = await readLockedWorkorderFinancialSource(input, client({ laborHours }));
+    const absent = await readLockedWorkorderFinancialSource(input, client({ laborHours, noLaborSnapshot: true }));
+    assert.equal(historical.labor, null);
+    assert.equal(historical.pricingFingerprint, absent.pricingFingerprint);
+  }
+});
+
+test("missing part prices identify the usage and distinguish closed history from editable workorders", async () => {
+  const input = { companyId: ids.company, locationId: ids.location, workorderId: ids.workorder };
+  for (const [status, guidance] of [["mechanic_done", /select.*price/i], ["closed", /closed.*historical/i]]) {
+    await assert.rejects(readLockedWorkorderFinancialSource(input, client({ status, missingPartPrice: true })), (error) => {
+      assert.equal(error.code, "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+      assert.match(error.message, /P-1/);
+      assert.match(error.message, /44444444-4444-4444-8444-444444444444/);
+      assert.match(error.message, guidance);
+      return true;
+    });
+  }
+});
+
+test("missing labor and part prices are both identified without accepting incomplete pricing", async () => {
+  const input = { companyId: ids.company, locationId: ids.location, workorderId: ids.workorder };
+  await assert.rejects(readLockedWorkorderFinancialSource(input, client({ noLaborSnapshot: true, missingPartPrice: true })), (error) => {
+    assert.equal(error.code, "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+    assert.match(error.message, /Labor/);
+    assert.match(error.message, /P-1/);
+    return true;
+  });
+});
 
 test("transaction reader locks one exact Workorder source and fingerprints labor plus canonical usage prices", async () => {
   const source = await readLockedWorkorderFinancialSource({
@@ -92,4 +126,26 @@ test("removed no-stock lines retain audit snapshots without reappearing in custo
     companyId: ids.company, locationId: ids.location, workorderId: ids.workorder,
   }, historicalClient);
   assert.deepEqual(source.parts, []);
+});
+
+
+test("every current no-stock line requires its own exact snapshot", async () => {
+  const lineId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const catalogId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  for (const snapshot of [null, { quantity: "1" }, { quantity: "2", uom_code: "hr" }]) {
+    const base = client();
+    let call = 0;
+    const scopedClient = { async query(sql) {
+      const result = await base.query(sql);
+      call += 1;
+      if (call === 1) result.rows[0].form_data.parts = [{ noStockLineId: lineId, catalogPartId: catalogId, qty: "2", uomCode: "ea", partNo: "SERVICE" }];
+      if (call === 4 && snapshot) result.rows = [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", no_stock_line_id: lineId, catalog_part_id: catalogId, uom_code: "ea", selection: "selling_price", unit_price: "5", total_price: "10", currency: "USD", part_number: "SERVICE", ...snapshot }];
+      return result;
+    } };
+    await assert.rejects(readLockedWorkorderFinancialSource({ companyId: ids.company, locationId: ids.location, workorderId: ids.workorder }, scopedClient), error => {
+      assert.equal(error.code, "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+      assert.ok(error.message.includes(lineId));
+      return true;
+    });
+  }
 });

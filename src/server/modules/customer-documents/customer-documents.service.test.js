@@ -122,6 +122,62 @@ test("issue persists only the server-calculated projection and hashes the idempo
   assert.match(received.requestHash, /^[0-9a-f]{64}$/);
 });
 
+test("first Workorder Estimate issues with no draft lineage and keeps the trusted Workorder source", async () => {
+  const client = { query: async (sql) => {
+    if (/select id,company_id,location_id,status,progress_version/.test(sql)) {
+      return { rows: [{ id: workorderId, company_id: companyId, location_id: locationId, status: "active", progress_version: 7 }] };
+    }
+    throw new Error(`Unexpected SQL: ${sql}`);
+  } };
+  const dependencies = {
+    getProfile: async () => profile(),
+    buildSource: async () => workorderProjection(),
+    runIssueTransaction: async (work) => work(client),
+  };
+  const preview = await previewCustomerDocument(context(), {
+    companyId, locationId, documentType: "estimate",
+    source: { kind: "workorder", id: workorderId, expectedVersion: 7 }, adjustments: {},
+  }, { ...dependencies, readAcceptedEstimate: async () => null });
+  let command;
+  const issued = await issueCustomerDocument(context(), {
+    companyId, locationId, workorderId, documentType: "estimate",
+    source: { kind: "workorder", id: workorderId, expectedVersion: 7 }, adjustments: {},
+    expectedFinancialFingerprint: preview.projection.financialFingerprint,
+    recipient: { channel: "link" }, idempotencyKey: "first-workorder-estimate-001",
+  }, { ...dependencies, issueRevision: async (input) => (command = input, { revision: { id: revisionId } }) });
+  assert.equal(issued.revision.id, revisionId);
+  assert.equal(command.documentId, null);
+  assert.equal(command.predecessorRevisionId, null);
+  assert.equal(command.draftId, null);
+  assert.equal(command.workorderId, workorderId);
+  assert.deepEqual(command.snapshot.sourceEvidence.kind, "workorder");
+  await assert.rejects(issueCustomerDocument(context(), {
+    companyId, locationId, workorderId, documentType: "estimate",
+    source: { kind: "workorder", id: workorderId, expectedVersion: 7 }, adjustments: {},
+    expectedFinancialFingerprint: preview.projection.financialFingerprint,
+    recipient: { channel: "link" }, idempotencyKey: "first-workorder-estimate-conflict",
+  }, { ...dependencies, issueRevision: async () => {
+    throw Object.assign(new Error("duplicate"), { code: "23505", constraint: "customer_documents_type_workorder_uidx" });
+  } }), (error) => error.statusCode === 409 && error.code === "CUSTOMER_DOCUMENT_REVISION_CONFLICT");
+});
+
+test("native Workorder Estimate summary requires customer approval without an authorization event", async () => {
+  const dependencies = {
+    getProfile: async () => profile(),
+    runIssueTransaction: async (work) => work({ query: async () => ({ rows: [{ status: "active", progress_version: 7, classification: null }] }) }),
+    readSummary: async () => ({ estimate: { id: revisionId, draftId: null, workorderId }, invoice: null }),
+    buildSource: async () => workorderProjection(),
+    readAcceptedEstimate: async () => null,
+  };
+  const result = await readCustomerDocumentWorkorderSummary(context(), workorderId, { companyId, locationId }, dependencies);
+  assert.equal(result.authorizationClassification, "required_external_customer");
+  assert.equal(result.approvalRequired, true);
+  dependencies.runIssueTransaction = async (work) => work({ query: async () => ({ rows: [{ status: "active", progress_version: 7, classification: "exempt" }] }) });
+  const exempt = await readCustomerDocumentWorkorderSummary(context(), workorderId, { companyId, locationId }, dependencies);
+  assert.equal(exempt.authorizationClassification, "exempt");
+  assert.equal(exempt.approvalRequired, false);
+});
+
 test("Invoice preview and issue require mechanic-done actuals matching the current accepted revised Estimate", async () => {
   const client = { query: async (sql) => {
     if (/select id,company_id,location_id,status,progress_version/.test(sql)) {

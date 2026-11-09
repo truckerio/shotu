@@ -16,3 +16,16 @@ test('a pending Estimate with no customer facing changes needs approval rather t
 test('only backend-confirmed customer facing changes show update notice',()=>{assert.doesNotMatch(render({summary:{estimateChanges:{state:'current',requiresUpdate:false}},reconciliation:{requiresRevisedEstimate:true}}),/Estimate needs updating/);assert.match(render({summary:{estimateChanges:{state:'changed',requiresUpdate:true}}}),/Estimate needs updating/);assert.match(render(),/>Print<\/button>/);assert.match(render(),/>Download PDF<\/button>/);});
 test('displayed revision response wins over a newer summary response',()=>{const html=render({estimate:{id:'r2',response:{status:'pending'}},projection:{type:'estimate',number:'EST-001',revision:'R1',revisionId:'r1',response:{status:'accepted'},lines:[]}});assert.match(html,/>Accepted</);assert.doesNotMatch(html,/>Awaiting approval</);});
 test('an older pending revision never inherits the latest revision approval exemption',()=>{const html=render({summary:{approvalRequired:false},estimate:{id:'r2',response:{status:'not_applicable'}},projection:{type:'estimate',number:'EST-001',revision:'R1',revisionId:'r1',response:{status:'pending'},lines:[]}});assert.doesNotMatch(html,/>No approval required</);assert.match(html,/>Approval unavailable</);});
+
+test('an existing Workorder without documents offers its first Estimate preview', () => {
+  const state = { estimate: null, invoice: null, projection: null, previewType: '', canPreviewRevision: false };
+  assert.match(render(state), />Review Estimate<\/span><\/button>/);
+  assert.doesNotMatch(render(state, { canWrite: false }), />Review Estimate<\/span><\/button>/);
+  assert.match(render({ ...state, sourceDirty: true }), /Save changes to update estimate/);
+});
+
+test('first and revised Estimate previews use the matching issue action', () => {
+  const preview = { type: 'estimate', financialFingerprint: 'server-validated', lines: [] };
+  assert.match(render({ estimate: null, projection: preview, previewType: 'estimate' }), />Issue Estimate<\/span><\/button>/);
+  assert.match(render({ projection: preview, previewType: 'estimate' }), />Issue revised Estimate<\/span><\/button>/);
+});

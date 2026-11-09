@@ -12,6 +12,9 @@ import { checkWorkorderDocumentsWorkspace } from "./workorder-documents-workspac
 import { checkCommercialProfileCompact, checkCommercialProfileLayout } from "./commercial-profile-layout.browser-checks.js";
 import { checkWorkorderPanelDefaults } from "./workorder-panel-defaults.browser-checks.js";
 import { checkWorkorderOdooHandoff } from "./workorder-odoo-handoff.browser-checks.js";
+import { checkWorkorderChatLayout } from "./workorder-chat-layout.browser-checks.js";
+import { seedNormalCustomerFlowWorkorder } from "./customer-normal-flow-fixture.js";
+import { checkNormalCustomerFlow } from "./customer-normal-flow.browser-checks.js";
 
 const database = new URL(process.env.DATABASE_URL || "");
 if (!["localhost", "127.0.0.1", "[::1]"].includes(database.hostname)
@@ -51,6 +54,7 @@ for (const [role, profileId] of [["admin", fixture.otherOfficeId], ["office", fi
 }
 
 const documentsFixture = await seedWorkorderDocumentsFixture(pool, fixture);
+const normalCustomerFixture = await seedNormalCustomerFlowWorkorder(pool, fixture);
 
 const workorders = [
   { id: randomUUID(), serial: "WO-ROLE-MECHANIC-ONE", mechanicId: fixture.mechanicId, unit: "ROLE-ONE" },
@@ -201,6 +205,31 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
+    if ((account.role === "office" && !["QA_WORKORDER_PANEL_DEFAULTS_ONLY", "QA_WORKORDER_ODOO_HANDOFF_ONLY", "QA_WORKORDER_CHAT_LAYOUT_ONLY"].some(key => process.env[key] === "true")) || process.env.QA_CUSTOMER_NORMAL_FLOW_ONLY === "true") {
+      try {
+        if (account.role === "office") {
+          await checkNormalCustomerFlow({ page, browser, baseUrl, fixture: normalCustomerFixture, pool, artifacts });
+          console.log("PASS normal customer flow: first Estimate, retry safety, customer approval, two-way chat and immutable draft-less revision");
+          await page.goto(baseUrl);
+        }
+      } catch (error) {
+        errors.push(`${account.role}: ${error.stack || error}`);
+        await page.screenshot({ path: join(artifacts, `${account.role}-normal-flow-failure.png`), fullPage: true }).catch(() => {});
+      }
+      if (process.env.QA_CUSTOMER_NORMAL_FLOW_ONLY === "true") { await context.close(); continue; }
+    }
+    if ((account.role === "admin" && process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY !== "true" && process.env.QA_WORKORDER_ODOO_HANDOFF_ONLY !== "true") || process.env.QA_WORKORDER_CHAT_LAYOUT_ONLY === "true") {
+      try {
+        if (account.role === "admin") {
+          await checkWorkorderChatLayout({ page, baseUrl, workorderId: documentsFixture.workorderId, artifacts,
+            addHistory: () => pool.query("insert into chat_messages(workorder_id,sender_role,message_type,body) select $1,'office','normal','Chat layout regression message ' || n from generate_series(1,40) as n", [documentsFixture.workorderId]),
+          });
+          console.log("PASS Chat: bottom composers at desktop/tablet/phone widths, scrolling history and retained drafts");
+          await page.goto(`${baseUrl}/?adminView=operations`);
+        }
+      } catch (error) { errors.push(`${account.role}: ${error.stack || error}`); }
+      if (process.env.QA_WORKORDER_CHAT_LAYOUT_ONLY === "true") { await context.close(); continue; }
+    }
     for (const check of process.env.QA_WORKORDER_PANEL_DEFAULTS_ONLY === "true" || process.env.QA_WORKORDER_ODOO_HANDOFF_ONLY === "true" ? [] : [() => navigationPersistence(page, account.role), ...(account.role === 'office' ? [() => statusMenuGeometry(page)] : [])]) {
       try { await check(); } catch (error) { errors.push(`${account.role}: ${error.stack || error}`); }
       await page.setViewportSize({ width: 1440, height: 900 });

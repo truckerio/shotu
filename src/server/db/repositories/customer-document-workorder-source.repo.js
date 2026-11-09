@@ -1,8 +1,9 @@
 import { canonicalFinancialHash } from "../../modules/customer-documents/customer-financial-calculator.js";
 
-function sourceError(code) {
-  const error = new Error(code);
+function sourceError(code, priceDiagnostic) {
+  const error = new Error(priceDiagnostic || code);
   error.code = code;
+  if (priceDiagnostic) error.priceDiagnostic = priceDiagnostic;
   throw error;
 }
 
@@ -94,6 +95,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
   )).rows[0] || null;
 
   const formData = workorder.form_data || {};
+  const missingPrices = [];
   const currentNoStockParts = new Map((Array.isArray(formData.parts) ? formData.parts : [])
     .filter((part) => part?.noStockLineId)
     .map((part) => [part.noStockLineId, part]));
@@ -107,7 +109,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
     if (part.catalogPartId !== snapshot.catalog_part_id
       || (part.uomCode || "ea") !== snapshot.uom_code
       || Number(part.qty) !== Number(snapshot.quantity)) {
-      sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+      missingPrices.push(`Part ${snapshot.part_number || snapshot.description || "no-stock"} (line ${snapshot.no_stock_line_id})`);
     }
     noStock.push({
       ...snapshot,
@@ -120,14 +122,14 @@ export async function readLockedWorkorderFinancialSource(input, client) {
       sourceKind: "no_stock_line",
     });
   }
-  if (currentNoStockParts.size !== noStock.length) {
-    sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+  for (const [id, part] of currentNoStockParts) {
+    if (!seenNoStockLines.has(id)) missingPrices.push(`Part ${part.partNo || "no-stock"} (line ${id})`);
   }
   const expectedLaborHours = Number(formData.laborHours || 0);
   if (expectedLaborHours > 0 && (!labor || Number(labor.hours) !== expectedLaborHours
     || (formData.laborProduct?.productId && labor.labor_product_id !== formData.laborProduct.productId)
     || (labor.uom_code || labor.product_uom_code || "hr") !== (formData.laborProduct?.uomCode || "hr"))) {
-    sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+    missingPrices.push("Labor");
   }
   const partRows = [
     ...serialized.map((row) => ({ ...row, quantity: "1", sourceKind: "serialized_usage" })),
@@ -138,13 +140,20 @@ export async function readLockedWorkorderFinancialSource(input, client) {
     if (!row.price_snapshot_id || !["selling_price", "batch_cost", "internal_cost"].includes(row.selection)
       || (row.sourceKind === "no_stock_line" && row.selection === "batch_cost")
       || Number(row.price_quantity) !== Number(row.quantity)) {
-      sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+      missingPrices.push(`Part ${row.part_number || row.description || "usage"} (usage ${row.id})`);
     }
   }
-  if (labor && !["selling_price", "internal_cost"].includes(labor.selection)) sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+  if (expectedLaborHours > 0 && labor && !["selling_price", "internal_cost"].includes(labor.selection)) missingPrices.push("Labor");
+  if (missingPrices.length) {
+    const guidance = ["closed", "odoo_entered", "cancelled"].includes(workorder.status)
+      ? "This closed historical Workorder cannot be repriced through the normal selection flow."
+      : "Save the current lines and select a price source for each listed line.";
+    sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED", `${[...new Set(missingPrices)].join("; ")} requires an exact selected-price snapshot. ${guidance}`);
+  }
+  const currentLabor = expectedLaborHours > 0 ? labor : null;
 
   const pricingEvidence = [
-    ...(labor ? [{ kind: "labor", id: labor.id, sourceId: labor.labor_product_id, quantity: asText(labor.hours), unit: labor.uom_code || labor.product_uom_code || "hr", unitPrice: asText(labor.unit_price), total: asText(labor.total_price), currency: labor.currency }] : []),
+    ...(currentLabor ? [{ kind: "labor", id: currentLabor.id, sourceId: currentLabor.labor_product_id, quantity: asText(currentLabor.hours), unit: currentLabor.uom_code || currentLabor.product_uom_code || "hr", unitPrice: asText(currentLabor.unit_price), total: asText(currentLabor.total_price), currency: currentLabor.currency }] : []),
     ...partRows.map((row) => ({ kind: row.sourceKind, id: row.price_snapshot_id, sourceId: row.id, quantity: row.quantity, unitPrice: asText(row.unit_price), total: asText(row.total_price), currency: row.currency })),
   ];
   const pricingFingerprint = canonicalFinancialHash({ workorderId: workorder.id, pricingEvidence });
@@ -170,7 +179,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
         ownerName: workorder.owner_name || null,
       },
     },
-    labor: labor ? {
+    labor: currentLabor ? {
       id: labor.id,
       productId: labor.labor_product_id,
       description: labor.product_description || labor.product_name || "Labor",

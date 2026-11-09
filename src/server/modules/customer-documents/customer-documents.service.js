@@ -49,6 +49,9 @@ function mapDomainError(error) {
   if (error?.code === "23505" && error?.constraint === "customer_documents_invoice_workorder_uidx") {
     throw new AuthError(409, "CUSTOMER_DOCUMENT_REVISION_CONFLICT", "An Invoice already exists for this Workorder.");
   }
+  if (error?.code === "23505" && error?.constraint === "customer_documents_type_workorder_uidx") {
+    throw new AuthError(409, "CUSTOMER_DOCUMENT_REVISION_CONFLICT", "A customer document already exists for this Workorder. Refresh and issue a revision.");
+  }
   const conflicts = new Set([
     "CUSTOMER_DOCUMENT_IDEMPOTENCY_CONFLICT",
     "CUSTOMER_DOCUMENT_PROFILE_VERSION_CONFLICT",
@@ -604,12 +607,15 @@ export async function readCustomerDocumentWorkorderSummary(context, rawWorkorder
         workorderVersion: locked.progressVersion,
       };
     }
+    const authorizationClassification = workorder.classification
+      || (documents.estimate?.draftId === null && documents.estimate?.workorderId === workorderId
+        ? "required_external_customer" : null);
     return {
       workorderId,
       status: locked.status,
       workorderVersion: locked.progressVersion,
-      authorizationClassification: workorder.classification || null,
-      approvalRequired: workorder.classification ? workorder.classification === "required_external_customer" : null,
+      authorizationClassification,
+      approvalRequired: authorizationClassification ? authorizationClassification === "required_external_customer" : null,
       documents,
       reconciliation,
       estimateChanges,

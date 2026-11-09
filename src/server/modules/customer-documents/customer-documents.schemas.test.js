@@ -36,7 +36,7 @@ test("Workorder previews require an exact expected version and Invoice previews 
   }).success, false);
 });
 
-test("revised Estimate issue requires original draft/document/predecessor lineage", () => {
+test("Workorder Estimate issue accepts first issuance and exact revision lineage, including draft-less origins", () => {
   const input = {
     ...base,
     documentId: null,
@@ -50,9 +50,16 @@ test("revised Estimate issue requires original draft/document/predecessor lineag
     recipient: { channel: "link" },
     idempotencyKey: "revised-estimate-001",
   };
-  const result = issueCustomerDocumentSchema.safeParse(input);
-  assert.equal(result.success, false);
-  assert.match(result.error.issues[0].message, /exact original document/i);
+  assert.equal(issueCustomerDocumentSchema.safeParse(input).success, true);
+  assert.equal(issueCustomerDocumentSchema.safeParse({
+    ...input, documentId: id("4"), predecessorRevisionId: id("5"),
+  }).success, true);
+  assert.equal(issueCustomerDocumentSchema.safeParse({
+    ...input, documentId: id("4"), predecessorRevisionId: id("5"), draftId: id("6"),
+  }).success, true);
+  assert.equal(issueCustomerDocumentSchema.safeParse({ ...input, documentId: id("4") }).success, false);
+  assert.equal(issueCustomerDocumentSchema.safeParse({ ...input, predecessorRevisionId: id("5") }).success, false);
+  assert.equal(issueCustomerDocumentSchema.safeParse({ ...input, draftId: id("6") }).success, false);
 });
 
 test("Invoice issue requires exact reconciliation evidence and forbids draft lineage", () => {

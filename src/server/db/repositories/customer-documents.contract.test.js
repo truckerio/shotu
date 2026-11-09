@@ -80,6 +80,12 @@ test("existing documents require exact draft and Workorder lineage", () => {
   assert.equal(customerDocumentSourceLineageMatches(
     { draft_id: UUID.draft, workorder_id: UUID.document }, { draftId: null, workorderId: UUID.document },
   ), false);
+  assert.equal(customerDocumentSourceLineageMatches(
+    { draft_id: null, workorder_id: UUID.document }, { draftId: null, workorderId: UUID.document },
+  ), true);
+  assert.equal(customerDocumentSourceLineageMatches(
+    { draft_id: null, workorder_id: UUID.document }, { draftId: UUID.draft, workorderId: UUID.document },
+  ), false);
 });
 
 test("Invoice readiness accepts an unchanged activation-authorized R1 and rejects forged scope evidence", () => {
@@ -110,6 +116,13 @@ test("terminal responses disable response authority without disabling replacemen
   assert.match(grantCreation, /const responseEligible = revision\.authorization_classification === "required_external_customer"/);
   assert.match(grantCreation, /const actions = \["view_revision"/);
   assert.doesNotMatch(grantCreation, /if \(terminal\) throw domainError\("CUSTOMER_DOCUMENT_REVISION_NOT_RESPONSE_ELIGIBLE"\)/);
+});
+
+test("native Workorder Estimate approval fallback is limited to draft-less Estimates after explicit classification", async () => {
+  const source = await readFile(new URL("customer-documents.repo.js", import.meta.url), "utf8");
+  const fallback = /coalesce\(auth_event\.classification,draft\.authorization_classification,\s*case when document\.document_type='estimate' and document\.draft_id is null\s*and document\.workorder_id is not null then 'required_external_customer' end\)/g;
+  assert.equal([...source.matchAll(fallback)].length, 3,
+    "grant creation, customer response, and portal read use the same narrow approval fallback");
 });
 
 test("profile scope read returns canonical current tax evidence", async () => {
@@ -200,6 +213,31 @@ function mockPool(handler) {
     },
   };
 }
+
+test("first Workorder Estimate refuses an existing document before reserving a number", async () => {
+  const fingerprint = hash("workorder-estimate-financial");
+  const { pool, calls } = mockPool(async (text, params) => {
+    if (/^(begin|commit|rollback)$/.test(text) || /pg_advisory_xact_lock/.test(text)) return { rows: [] };
+    if (/from customer_document_revisions revision[\s\S]*idempotency_key=\$3/.test(text)) return { rows: [] };
+    if (/select version\.id,profile\.location_id/.test(text)) {
+      return { rows: [{ id: UUID.profile, location_id: null, default_currency: "USD", tax_currency: "USD", tax_state: "active" }] };
+    }
+    if (/from customer_documents[\s\S]*document_type='estimate'/.test(text)) {
+      assert.deepEqual(params, [UUID.company, UUID.location, UUID.draft]);
+      return { rows: [{ id: UUID.document }] };
+    }
+    throw new Error(`Unexpected SQL: ${text}`);
+  });
+  await assert.rejects(issueCustomerDocumentRevision({
+    companyId: UUID.company, locationId: UUID.location, workorderId: UUID.draft,
+    draftId: null, documentType: "estimate", profileVersionId: UUID.profile,
+    snapshot: { document: { type: "estimate" }, totals: { currency: "USD", subtotal: "100.00", discountTotal: "0.00", tax: "0.00", total: "100.00" }, financialFingerprint: fingerprint },
+    financialFingerprint: fingerprint, recipientSnapshot: { name: "Customer", channel: "link" },
+    currency: "USD", subtotal: "100.00", discountTotal: "0.00", taxTotal: "0.00", totalAmount: "100.00",
+    actorId: UUID.actor, idempotencyKey: "first-workorder-existing-001", requestHash: hash("first-workorder-existing-001"),
+  }, { pool }), (error) => error.code === "CUSTOMER_DOCUMENT_REVISION_CONFLICT");
+  assert.equal(calls.some(({ text }) => /insert into customer_document_number_series|update customer_document_number_series/.test(text)), false);
+});
 
 test("issuance stamps reserved identity then hashes and stores the exact finalized snapshot", async () => {
   let revisionInsert;
@@ -406,7 +444,9 @@ test("grant capabilities are derived from canonical approval and Workorder state
     (error) => error.code === "CUSTOMER_DOCUMENT_GRANT_NOT_READY",
   );
   assert.deepEqual(await derivedActions({ classification: "approval_not_required", workorderId: UUID.draft }), ["view_revision", "customer_chat"]);
+  assert.deepEqual(await derivedActions({ classification: "exempt", workorderId: UUID.draft }), ["view_revision", "customer_chat"]);
   assert.deepEqual(await derivedActions({ classification: "required_external_customer", workorderId: null }), ["view_revision", "respond_revision"]);
+  assert.deepEqual(await derivedActions({ classification: "required_external_customer", workorderId: UUID.draft }), ["view_revision", "respond_revision", "customer_chat"]);
   assert.deepEqual(await derivedActions({ classification: "required_external_customer", workorderId: UUID.draft, terminal: "accepted" }), ["view_revision", "customer_chat"]);
 });
 

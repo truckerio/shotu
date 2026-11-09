@@ -134,6 +134,17 @@ test("Workorder sources fail closed without a transaction-bound actuals reader",
   ), (error) => error.code === "CUSTOMER_DOCUMENT_WORKORDER_SOURCE_UNAVAILABLE");
 });
 
+test("Workorder source exposes actionable selected-price diagnostics", async () => {
+  const diagnostic = "Part P-1 needs a selected price. Select a price on the open Workorder.";
+  await assert.rejects(buildCustomerDocumentSource(
+    context(), { kind: "workorder", id: draftId, expectedVersion: 3 },
+    { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile,
+    { client: { query() {} }, companyId, readWorkorderFinancialSource: async () => {
+      const error = new Error(diagnostic); error.code = "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED"; error.priceDiagnostic = diagnostic; throw error;
+    } },
+  ), (error) => error.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED" && error.message === diagnostic);
+});
+
 test("primary admin cannot approve manual customer overrides in an office company", async () => {
   const mixed = { ...context("office"), sessionMode: "standard", actor: { id: "actor", role: "admin" },
     companyIds: new Set([companyId, "admin-company"]), companyRoles: new Map([[companyId, "office"], ["admin-company", "admin"]]) };

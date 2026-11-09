@@ -13,6 +13,7 @@ export function WorkorderChatWorkspace({
   locationId,
   workorderId,
   customerDocument,
+  onPrepareEstimate,
 }) {
   const id = useId();
   const selected = (audience === "customer" || !canReadInternal) && canReadCustomer
@@ -50,6 +51,7 @@ export function WorkorderChatWorkspace({
         workorderId={workorderId}
         document={customerDocument}
         canSend={canSendCustomer}
+        onPrepareEstimate={onPrepareEstimate}
       />
     </section> : null}
   </div>;

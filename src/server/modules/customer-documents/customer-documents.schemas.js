@@ -88,8 +88,9 @@ export const issueCustomerDocumentSchema = z.object({
     context.addIssue({ code: "custom", path: ["workorderId"], message: "Estimate Workorder identity must match its source." });
   }
   if (input.documentType === "estimate" && input.source.kind === "workorder"
-    && (!input.documentId || !input.predecessorRevisionId || !input.draftId)) {
-    context.addIssue({ code: "custom", path: ["documentId"], message: "Revised Estimates require exact original document, draft, and predecessor lineage." });
+    && (Boolean(input.documentId) !== Boolean(input.predecessorRevisionId)
+      || (!input.documentId && Boolean(input.draftId)))) {
+    context.addIssue({ code: "custom", path: ["documentId"], message: "Estimate revisions require a document and predecessor together; first Estimates cannot claim draft lineage." });
   }
   if (input.documentType === "invoice" && (input.source.kind !== "workorder" || input.workorderId !== input.source.id || input.draftId)) {
     context.addIssue({ code: "custom", path: ["workorderId"], message: "Invoice Workorder identity must match its source." });

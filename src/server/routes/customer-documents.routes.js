@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
 import {
   activateApprovedCustomerEstimate,
   createCustomerDocumentGrant,
@@ -33,6 +34,16 @@ function grantToken(req) {
 }
 
 export async function handleCustomerDocumentsApi(req, res, url, helpers, dependencies = {}) {
+  try {
+    return await handleCustomerDocumentsRequest(req, res, url, helpers, dependencies);
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    helpers.sendJson(res, 400, { error: "Invalid customer document request.", code: "validation_error", issues: error.issues });
+    return true;
+  }
+}
+
+async function handleCustomerDocumentsRequest(req, res, url, helpers, dependencies = {}) {
   const { readBody, requestContext, sendJson } = helpers;
   const preview = dependencies.preview || previewCustomerDocument;
   const publishProfile = dependencies.publishProfile || publishCustomerDocumentProfile;

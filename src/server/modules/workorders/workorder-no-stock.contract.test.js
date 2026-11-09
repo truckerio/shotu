@@ -43,7 +43,8 @@ test("Workorder creation derives no-stock behavior from canonical catalog policy
 
 test("customer documents require a current selling snapshot for every no-stock line", () => {
   assert.match(documentRepository, /snapshot\.no_stock_line_id is not null/);
-  assert.match(documentRepository, /currentNoStockParts\.size !== noStock\.length/);
+  assert.match(documentRepository, /for \(const \[id, part\] of currentNoStockParts\)[\s\S]*!seenNoStockLines\.has\(id\)[\s\S]*missingPrices\.push/);
+  assert.match(documentRepository, /if \(missingPrices\.length\)[\s\S]*sourceError\("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED"/);
   assert.match(documentRepository, /sourceKind: "no_stock_line"/);
 });
 

@@ -74,9 +74,10 @@ function DocumentsBody({ companyId, locationId, workorderId, actorRole, canWrite
       {projection ? <CustomerDocumentReview minimal projection={projection} previousRevision={previewType === "estimate" ? revisionProjection(estimate) : null} /> : null}
     </div>
     {(previewType || canWrite) ? <footer className="workorder-document-footer">
+      {canWrite && !estimate && !invoice && !previewType ? <Button variant="primary" type="button" disabled={busy || sourceDirty} onClick={() => preview("estimate")}>Review Estimate</Button> : null}
       {canWrite && !previewType && estimate ? <WorkorderCustomerLink key={`${companyId}:${locationId}:${workorderId}`} companyId={companyId} locationId={locationId} workorderId={workorderId} recipientEmail={projection?.customer?.email || ""} disabled={busy || sourceDirty} /> : null}
       {previewType && estimate ? <Button variant="secondary" type="button" disabled={busy} onClick={() => { selectIssuedDocument("estimate"); setEditing(false); }}>Back to Estimate</Button> : null}
-      {canWrite && previewType ? <Button variant="primary" type="button" onClick={issue} disabled={busy || !issueAvailable}>{busy ? "Issuing…" : previewType === "invoice" ? "Issue final Invoice" : "Issue revised Estimate"}</Button> : null}
+      {canWrite && previewType ? <Button variant="primary" type="button" onClick={issue} disabled={busy || !issueAvailable}>{busy ? "Issuing…" : previewType === "invoice" ? "Issue final Invoice" : estimate ? "Issue revised Estimate" : "Issue Estimate"}</Button> : null}
       {canWrite && canPreviewInvoice && previewType !== "invoice" ? <Button variant="primary" type="button" onClick={() => preview("invoice")} disabled={busy}>Review Invoice</Button> : null}
     </footer> : null}
   </section>;

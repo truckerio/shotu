@@ -211,7 +211,7 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
   } catch (error) {
     if (error?.code === "CUSTOMER_DOCUMENT_WORKORDER_NOT_FOUND") throw resourceNotFound("Workorder");
     if (error?.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED") {
-      conflict(error.code, "Every Workorder labor and part line must have an exact selected-price snapshot.");
+      conflict(error.code, error.priceDiagnostic || "Every Workorder labor and part line must have an exact selected-price snapshot.");
     }
     throw error;
   }
