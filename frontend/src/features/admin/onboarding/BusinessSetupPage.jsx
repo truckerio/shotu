@@ -90,10 +90,9 @@ export function BusinessSetupPage({ locations = [], onOpenBilling }) {
   const companies = [...new Map(locations.map(location => [location.company_id || location.companyId, location.company_name || location.companyName || "Company"])).entries()];
   const companyLocations = locations.filter(location => (location.company_id || location.companyId) === companyId);
   const [requestedLocation, setRequestedLocation] = useState(scope.locationId);
-  const locationId = companyLocations.some(location => location.id === requestedLocation) ? requestedLocation : companyLocations[0]?.id || "";
+  const locationId = companyLocations.some(location => location.id === requestedLocation) ? requestedLocation : "";
   function selectScope(nextCompanyId, nextLocationId = "") {
-    const nextLocations = locations.filter(location => (location.company_id || location.companyId) === nextCompanyId);
-    const nextLocation = nextLocationId || nextLocations[0]?.id || "";
+    const nextLocation = nextLocationId;
     setCompanyId(nextCompanyId); setRequestedLocation(nextLocation);
     window.history.replaceState(window.history.state, "", businessSetupUrl(nextCompanyId, nextLocation));
   }
@@ -107,7 +106,8 @@ export function BusinessSetupPage({ locations = [], onOpenBilling }) {
   }, [locations]);
   return <section className="admin-content business-setup-page" aria-label="Business setup workspace">
     <PageHeader title="Business setup" subtitle="A few details to get your shop or fleet ready." />
-    {companies.length > 1 || companyLocations.length > 1 ? <div className="business-setup-scope">{companies.length > 1 ? <FormField label="Company"><Dropdown aria-label="Setup company" value={companyId} disabled={saving} onChange={event => selectScope(event.target.value)}>{companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Dropdown></FormField> : null}{companyLocations.length > 1 ? <FormField label="Location"><Dropdown aria-label="Setup location" value={locationId} disabled={saving} onChange={event => selectScope(companyId, event.target.value)}>{companyLocations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></FormField> : null}</div> : null}
+    {companies.length > 1 || companyLocations.length > 0 ? <div className="business-setup-scope">{companies.length > 1 ? <FormField label="Company"><Dropdown aria-label="Setup company" value={companyId} disabled={saving} onChange={event => selectScope(event.target.value)}>{companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</Dropdown></FormField> : null}{companyLocations.length > 0 ? <FormField label="Location"><Dropdown aria-label="Setup location" value={locationId} disabled={saving} onChange={event => selectScope(companyId, event.target.value)}><option value="">All locations</option>{companyLocations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></FormField> : null}</div> : null}
+    {companyId && !locationId ? <p className="business-setup-note">Company-wide setup. Billing defaults apply to all locations unless a location has its own settings.</p> : null}
     {companyId ? <SetupForm key={`${companyId}:${locationId}`} companyId={companyId} locationId={locationId} onOpenBilling={onOpenBilling} onSavingChange={setSaving} /> : <FormCard title="Add a location first"><p>Create your first location to start business setup.</p><Button onClick={() => window.location.assign("/?adminView=locations")}>Open locations</Button></FormCard>}
   </section>;
 }

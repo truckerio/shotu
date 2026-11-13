@@ -13,7 +13,7 @@ export function BusinessSetupPrompt({ locations = [] }) {
       if (!companyId) return null;
       try {
         const data = await api(`/api/admin/business-setup?${new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) })}`, { signal: controller.signal });
-        return data.setup?.status !== "completed" && !data.billing.ready ? { companyId, locationId } : null;
+        return data.setup?.status !== "completed" && !data.billing.ready ? { companyId, locationId: "" } : null;
       } catch { return null; }
     })).then(results => { if (!controller.signal.aborted) setPending({ scope, target: results.find(Boolean) }); });
     return () => controller.abort();

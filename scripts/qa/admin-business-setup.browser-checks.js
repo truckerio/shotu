@@ -15,11 +15,15 @@ export async function checkAdminBusinessSetup({ page, baseUrl, fixture, pool, ar
   for (const [mode, label] of [["fleet_only", "Our own fleet"], ["customer_repairs", "Outside customers"], ["both", "Both"]]) {
     const companyId = randomUUID();
     const locationId = randomUUID();
+    const secondLocationId = randomUUID();
     await pool.query("insert into companies(id,slug,name) values($1,$2,$3)", [companyId, `onboarding-${companyId}`, `Onboarding ${mode}`]);
     await pool.query("insert into locations(id,company_id,name,address) values($1,$2,'Setup shop','100 Test Road, Test City')", [locationId, companyId]);
     await pool.query("insert into user_company_memberships(user_id,company_id,role) values($1,$2,'admin')", [fixture.otherOfficeId, companyId]);
     await pool.query("insert into user_location_memberships(user_id,location_id,company_id) values($1,$2,$3)", [fixture.otherOfficeId, locationId, companyId]);
-    const setupUrl = `${baseUrl}/?adminView=settings&settingsTab=business&commercialCompany=${companyId}&commercialLocation=${locationId}`;
+    await pool.query("insert into locations(id,company_id,name,address) values($1,$2,'Second setup shop','200 Test Road, Test City')", [secondLocationId, companyId]);
+    await pool.query("insert into user_location_memberships(user_id,location_id,company_id) values($1,$2,$3)", [fixture.otherOfficeId, secondLocationId, companyId]);
+    const companyUrl = `${baseUrl}/?adminView=settings&settingsTab=business&commercialCompany=${companyId}`;
+    const setupUrl = mode === "customer_repairs" ? companyUrl : `${companyUrl}&commercialLocation=${locationId}`;
     const taxRequests = [];
     const observe = request => { if (/\/api\/(office\/inventory\/tax-profiles|customer-documents\/profile|admin\/customer-document-profiles)/.test(request.url())) taxRequests.push(request.url()); };
     page.on("request", observe);
@@ -34,6 +38,13 @@ export async function checkAdminBusinessSetup({ page, baseUrl, fixture, pool, ar
     const setupBox = await page.getByRole("region", { name: "Business setup workspace", exact: true }).boundingBox();
     assert.ok(setupBox.width <= 761, "Short onboarding stays within a readable desktop form width");
     assert.ok((await page.locator('button[aria-label="Setup company"]').innerText()).includes(`Onboarding ${mode}`), "Company selector shows the real company name");
+    const locationControl = page.locator('button[aria-label="Setup location"]');
+    await choose(page, locationControl, "All locations");
+    assert.equal(new URL(page.url()).searchParams.has("commercialLocation"), false, "Company-wide selection omits location from navigation");
+    await page.reload();
+    await page.getByRole("heading", { name: "Who do you maintain vehicles for?", exact: true }).waitFor();
+    assert.ok((await locationControl.innerText()).includes("All locations"), "All locations survives refresh");
+    if (mode !== "customer_repairs") await choose(page, locationControl, "Setup shop");
     await choose(page, page.locator('button[aria-label="Maintenance work"]'), label);
     let failedResponse = mode === "fleet_only";
     const firstSaves = [];
@@ -54,6 +65,7 @@ export async function checkAdminBusinessSetup({ page, baseUrl, fixture, pool, ar
       await page.getByRole("button", { name: "Continue", exact: true }).click();
     }
     await page.getByRole("heading", { name: "Business details", exact: true }).waitFor();
+    if (mode === "customer_repairs") assert.equal(firstSaves[0].locationId, undefined, "Company-wide saves omit location");
     if (mode === "fleet_only") assert.equal(firstSaves[0].idempotencyKey, firstSaves[1].idempotencyKey, "Uncertain setup save reuses its command key");
     await page.reload();
     await page.getByRole("heading", { name: "Business details", exact: true }).waitFor();
@@ -95,8 +107,32 @@ export async function checkAdminBusinessSetup({ page, baseUrl, fixture, pool, ar
           const control = page.locator("label").filter({ hasText: new RegExp(`^${category}`) }).filter({ has: page.getByRole("button") }).getByRole("button");
           await choose(page, control, category === "Credits" ? "out of scope" : "exempt");
         }
+        const publishRequest = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === "/api/admin/customer-document-profiles");
+        await page.getByRole("button", { name: "Publish profile", exact: true }).click();
+        const companyPayload = (await publishRequest).postDataJSON();
+        assert.equal(companyPayload.locationId, null, "All locations publishes a company default profile");
+        await page.getByText("Commercial profile published. Existing documents keep their original version.", { exact: true }).waitFor();
+        const profiles = await pool.query("select id,location_id,current_version_id from customer_document_profiles where company_id=$1", [companyId]);
+        assert.equal(profiles.rows.length, 1);
+        assert.equal(profiles.rows[0].location_id, null);
+        for (const id of [locationId, secondLocationId]) {
+          const inherited = await page.request.get(`${baseUrl}/api/admin/business-setup?companyId=${companyId}&locationId=${id}`);
+          const inheritedData = await inherited.json();
+          assert.equal(inheritedData.billing.ready, true, "Both locations inherit company billing");
+          assert.equal(inheritedData.billing.profileVersionId, profiles.rows[0].current_version_id);
+        }
+        const override = await page.request.post(`${baseUrl}/api/admin/customer-document-profiles`, { data: { ...companyPayload, locationId, profileId: null, expectedVersion: 0, idempotencyKey: randomUUID(), shopIdentity: { ...companyPayload.shopIdentity, legalName: "Location-specific shop" } } });
+        assert.equal(override.status(), 201, await override.text());
+        const overrideBefore = await pool.query("select current_version_id from customer_document_profiles where company_id=$1 and location_id=$2", [companyId, locationId]);
+        // A second company-wide publish must leave the location override intact.
+        const republish = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/admin/customer-document-profiles");
         await page.getByRole("button", { name: "Publish profile", exact: true }).click();
         await page.getByText("Commercial profile published. Existing documents keep their original version.", { exact: true }).waitFor();
+        assert.equal((await republish).status(), 201);
+        const overrideAfter = await pool.query("select current_version_id from customer_document_profiles where company_id=$1 and location_id=$2", [companyId, locationId]);
+        assert.deepEqual(overrideAfter.rows, overrideBefore.rows);
+        const specific = await page.request.get(`${baseUrl}/api/admin/business-setup?companyId=${companyId}&locationId=${locationId}`);
+        assert.equal((await specific.json()).billing.profileVersionId, overrideBefore.rows[0].current_version_id, "Location override keeps precedence");
         await page.getByRole("button", { name: "Back to business setup", exact: true }).click();
         await page.getByText("Customer billing ready. Your saved document and tax settings are unchanged.", { exact: true }).waitFor();
         await page.getByRole("button", { name: "Finish setup", exact: true }).click();
