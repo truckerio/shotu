@@ -5,6 +5,7 @@ import { WorkspaceCreateActions } from "../../../components/layout/WorkspaceCrea
 import { api } from "../../../lib/api.js";
 import { CreateInspectionPage, InspectionExperience } from "../../inspections/index.js";
 import { inspectionQueueRequested, inspectionReturnContext } from "../../../app/routes/route-state.js";
+import { BusinessSetupPrompt } from "../onboarding/BusinessSetupPrompt.jsx";
 import "./operations-page.css";
 
 export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, onCreateWorkorder, inspectionAccess = { canRead: false, canWrite: false }, workorderAccess = { canRead: true, canWrite: true }, requestedProduct = "", onProductChange }) {
@@ -13,7 +14,7 @@ export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, 
   const [product, setProduct] = useState(() => requestedProduct || (initialInspectionId || (inspectionAccess.canRead && inspectionQueueRequested()) || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders"));
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");
-  const createAction = <WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} />;
+  const createAction = <><BusinessSetupPrompt locations={locations} /><WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} /></>;
 
   useEffect(() => {
     if (requestedProduct && requestedProduct !== product) changeProduct(requestedProduct);

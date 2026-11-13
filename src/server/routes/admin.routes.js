@@ -1,3 +1,4 @@
+import { handleBusinessSetupApi } from "./business-setup.routes.js";
 import { fromNodeHeaders } from "better-auth/node";
 import {
   acceptInvitation,
@@ -132,6 +133,8 @@ export async function handleAdminApi(req, res, url, helpers, dependencies = {}) 
     sendJson(res, 200, { accepted: await acceptInvitation(acceptToken, input) });
     return true;
   }
+
+  if (url.pathname === "/api/admin/business-setup" && await handleBusinessSetupApi(req, res, url, helpers, dependencies)) return true;
 
   if (!url.pathname.startsWith("/api/admin/")) return false;
   const actor = requestContext.actor;

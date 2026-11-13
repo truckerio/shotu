@@ -39,6 +39,7 @@ jobs:
       - run: npm run build
       - run: npm run test:customer-repair:db
       - run: node scripts/qa/inventory-price-presentation.browser.js
+      - run: npm run test:business-setup:db
       - run: npm run test:role-filters:browser
       - run: node scripts/qa/run-inspection-maintenance-integration.js --browser-script scripts/qa/batch-navigation.browser.js
       - run: node scripts/qa/run-inspection-maintenance-integration.js --browser-script scripts/qa/stock-page-efficiency.integration.test.js

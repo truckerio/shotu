@@ -26,7 +26,13 @@ function ProfileSection({ title, summary, required = false, initiallyOpen = fals
   </details>;
 }
 
-export function CommercialProfileSettings({ locations = [] }) {
+function seedProfile(profile, identity) {
+  const result = fromProfile(profile || undefined);
+  if (!identity || (profile && !profile.informationalOnly)) return result;
+  return { ...result, legalName: identity.legalName || result.legalName, address: identity.address || result.address, phone: identity.phone || result.phone, email: identity.email || result.email };
+}
+
+export function CommercialProfileSettings({ locations = [], initialShopIdentity = null, scopeLocked = false }) {
   const pendingPublish = useRef(null);
   const [taxSaving, setTaxSaving] = useState(false);
   const [taxAvailability, setTaxAvailability] = useState({ scope: "", available: false });
@@ -43,7 +49,7 @@ export function CommercialProfileSettings({ locations = [] }) {
       setLocationId(initialScope.locationId);
     }
   }, [companyId, initialScope.companyId, initialScope.locationId]);
-  useEffect(() => { if (!companyId) { setState("blocked"); return; } let active = true; setState("loading"); setError(""); const params = new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) }); api(`/api/customer-documents/profile?${params}`).then(({ profile }) => { if (active) { setDraft(fromProfile(profileForScope(profile, locationId))); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } }).catch((reason) => { if (!active) return; if (reason.status === 404) { setDraft(blank()); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } else { setError(reason.message || "Commercial profile could not be loaded."); setState("error"); } }); return () => { active = false; }; }, [companyId, locationId]);
+  useEffect(() => { if (!companyId) { setState("blocked"); return; } let active = true; setState("loading"); setError(""); const params = new URLSearchParams({ companyId, ...(locationId ? { locationId } : {}) }); api(`/api/customer-documents/profile?${params}`).then(({ profile }) => { if (active) { setDraft(seedProfile(profileForScope(profile, locationId), initialShopIdentity)); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } }).catch((reason) => { if (!active) return; if (reason.status === 404) { setDraft(seedProfile(null, initialShopIdentity)); setLoadedScope(`${companyId}:${locationId}`); setState("ready"); } else { setError(reason.message || "Commercial profile could not be loaded."); setState("error"); } }); return () => { active = false; }; }, [companyId, locationId, initialShopIdentity]);
   const taxScope = `${companyId}:${draft.currency}`;
   const updateTaxAvailability = useCallback((available, id) => setTaxAvailability({ scope: taxScope, available, id }), [taxScope]);
   const taxAvailable = taxAvailability.scope === taxScope && taxAvailability.id === draft.taxProfileVersionId && taxAvailability.available;
@@ -89,10 +95,10 @@ export function CommercialProfileSettings({ locations = [] }) {
           </header>
           <div className="commercial-profile-form-scroll" role="region" aria-label="Profile form" tabIndex={0}>
             <fieldset className="commercial-profile-edit-fields" disabled={state === "saving"} aria-label="Profile settings">
-            <div className="commercial-profile-scope">
+            {!scopeLocked ? <div className="commercial-profile-scope">
               {companies.length > 1 ? <label>Company<Dropdown aria-label="Profile company" disabled={state === "saving" || taxSaving} value={companyId} onChange={(event) => { setCompanyId(event.target.value); setLocationId(""); }}>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</Dropdown></label> : null}
               <label>Location<Dropdown aria-label="Profile location" disabled={state === "saving" || taxSaving} value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Company default</option>{scopeLocations.map((location) => <option key={location.id || location.location?.id} value={location.id || location.location?.id}>{location.name || location.location?.name}</option>)}</Dropdown></label>
-            </div>
+            </div> : null}
           <ProfileSection title="Shop details" summary={draft.tradeName || draft.legalName || "Not configured"} required={!draft.legalName.trim()} initiallyOpen>
             <label>Legal name<input required value={draft.legalName} onChange={(event) => update("legalName", event.target.value)} /></label>
             <label>Trade name<input value={draft.tradeName} onChange={(event) => update("tradeName", event.target.value)} /></label>

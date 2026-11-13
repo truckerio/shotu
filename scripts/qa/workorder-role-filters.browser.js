@@ -15,6 +15,7 @@ import { checkWorkorderOdooHandoff } from "./workorder-odoo-handoff.browser-chec
 import { checkWorkorderChatLayout } from "./workorder-chat-layout.browser-checks.js";
 import { seedNormalCustomerFlowWorkorder } from "./customer-normal-flow-fixture.js";
 import { checkCommercialProfileSetup } from "./commercial-profile-setup.browser-checks.js";
+import { checkAdminBusinessSetup } from "./admin-business-setup.browser-checks.js";
 import { checkNormalCustomerFlow } from "./customer-normal-flow.browser-checks.js";
 
 const database = new URL(process.env.DATABASE_URL || "");
@@ -208,6 +209,26 @@ try {
   browser = await chromium.launch({ headless: true });
   for (const account of accounts) {
     const { context, page } = await signIn(account);
+    if (process.env.QA_ADMIN_ONBOARDING_ONLY === "true" || (account.role === "admin" && !Object.entries(process.env).some(([key, value]) => key.startsWith("QA_") && key.endsWith("_ONLY") && value === "true"))) {
+      try {
+        if (account.role === "admin") {
+          await checkAdminBusinessSetup({ page, baseUrl, fixture, pool, artifacts });
+          console.log("PASS Admin onboarding: fleet-only, customer billing, both deferred, resume and tenant/retry guards");
+          await page.goto(baseUrl);
+        }
+      } catch (error) {
+        errors.push(`${account.role}: ${error.stack || error}`);
+        console.error(await page.locator('main').ariaSnapshot().catch(() => 'No page snapshot'));
+        await page.screenshot({ path: join(artifacts, `${account.role}-onboarding-failure.png`), fullPage: true }).catch(() => {});
+      }
+      if (account.role !== "admin") {
+        const denied = await page.request.get(`${baseUrl}/api/admin/business-setup?companyId=${fixture.companyId}&locationId=${fixture.locationId}`);
+        assert.equal(denied.status(), 403, `${account.role} cannot read Admin business setup`);
+        const deniedWrite = await page.request.put(`${baseUrl}/api/admin/business-setup`, { data: { companyId: fixture.companyId, expectedVersion: 0, idempotencyKey: randomUUID(), operatingMode: "fleet_only", shopIdentity: { legalName: "Unauthorized", address: "Test", phone: "", email: "" }, step: 2, status: "completed" } });
+        assert.equal(deniedWrite.status(), 403, `${account.role} cannot write Admin business setup`);
+      }
+      if (process.env.QA_ADMIN_ONBOARDING_ONLY === "true") { await context.close(); continue; }
+    }
     if (process.env.QA_COMMERCIAL_PROFILE_SETUP_ONLY === "true" || (account.role === "admin" && !Object.entries(process.env).some(([key,value]) => key.startsWith("QA_") && key.endsWith("_ONLY") && value === "true"))) {
       try {
         if (account.role === "admin") {

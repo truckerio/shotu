@@ -1,0 +1,10 @@
+.admin-content.business-setup-page { max-width: 760px; width: 100%; box-sizing: border-box; margin-inline: auto; }
+.business-setup-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.business-setup-scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.business-setup-contact { margin-top: 16px; }
+.business-setup-note { color: #667085; font-size: 13px; }
+.business-setup-summary { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; }
+.business-setup-summary dd { margin: 0; overflow-wrap: anywhere; }
+.business-setup-billing-back { padding-bottom: 0; }
+.business-setup-page .operational-action-footer-actions { flex-wrap: wrap; }
+@media (max-width: 640px) { .business-setup-page .operational-action-footer { align-items: stretch; } .business-setup-page .operational-action-footer-actions { width: 100%; } }

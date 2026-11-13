@@ -79,6 +79,7 @@ export async function listLocationsWithAdminCounts(companyIds) {
     select
       location.id,
       location.company_id,
+      company.name as company_name,
       location.name,
       location.type,
       location.address,
@@ -90,6 +91,7 @@ export async function listLocationsWithAdminCounts(companyIds) {
       coalesce(invitation_counts.pending_invite_count, 0) as pending_invite_count,
       (template_locations.location_id is not null) as has_template
     from locations location
+    join companies company on company.id=location.company_id
     left join assigned_active_user_counts on assigned_active_user_counts.location_id = location.id
     left join workorder_counts on workorder_counts.location_id = location.id
     left join invitation_counts on invitation_counts.location_id = location.id
